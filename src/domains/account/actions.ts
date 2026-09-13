@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { passwordSchema, profileSchema } from "./schemas";
-import { updateOwnPassword, updateOwnProfile } from "./services";
+import { getAuthCallbackOrigin } from "@/lib/auth/redirects";
+import { EmailReauthenticationError, EmailUnchangedError } from "./account-operations";
+import { emailChangeSchema, passwordSchema, profileSchema } from "./schemas";
+import { requestOwnEmailChange, updateOwnPassword, updateOwnProfile } from "./services";
 import type { AccountActionState } from "./state";
 
 function validationError(fieldErrors: Record<string, string[] | undefined>): AccountActionState {
@@ -41,5 +43,44 @@ export async function updatePasswordAction(_state: AccountActionState, formData:
     return { status: "success", message: "Mot de passe modifié." };
   } catch {
     return { status: "error", message: "Votre session n’est plus valide. Reconnectez-vous puis réessayez." };
+  }
+}
+
+export async function requestEmailChangeAction(_state: AccountActionState, formData: FormData): Promise<AccountActionState> {
+  const parsed = emailChangeSchema.safeParse({
+    currentPassword: formData.get("currentPassword"),
+    newEmail: formData.get("newEmail"),
+    emailConfirmation: formData.get("emailConfirmation"),
+  });
+  if (!parsed.success) return validationError(parsed.error.flatten().fieldErrors);
+
+  try {
+    const origin = await getAuthCallbackOrigin();
+    const emailRedirectTo = `${origin}/auth/callback?next=${encodeURIComponent("/parametres/compte")}`;
+    const result = await requestOwnEmailChange(parsed.data, emailRedirectTo);
+    revalidatePath("/parametres/compte");
+    if (result.status === "pending") {
+      return {
+        status: "success",
+        message: "Votre demande de changement d’adresse e-mail a été enregistrée. Consultez les messages de confirmation envoyés par PatriGest pour terminer la modification.",
+      };
+    }
+    return { status: "success", message: "Votre adresse e-mail a été mise à jour." };
+  } catch (error) {
+    if (error instanceof EmailUnchangedError) {
+      return {
+        status: "error",
+        message: "Vérifiez la nouvelle adresse e-mail.",
+        fieldErrors: { newEmail: ["La nouvelle adresse doit être différente de l’adresse actuelle."] },
+      };
+    }
+    if (error instanceof EmailReauthenticationError) {
+      return {
+        status: "error",
+        message: "Le mot de passe actuel est incorrect ou n’a pas pu être vérifié.",
+        fieldErrors: { currentPassword: ["Vérifiez votre mot de passe actuel."] },
+      };
+    }
+    return { status: "error", message: "Impossible d’enregistrer la demande de changement d’adresse e-mail. Réessayez ultérieurement." };
   }
 }

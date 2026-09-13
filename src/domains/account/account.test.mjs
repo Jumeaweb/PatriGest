@@ -4,21 +4,33 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  EmailReauthenticationError,
+  EmailUnchangedError,
   loadAccountDataForUser,
+  requestOwnEmailChangeWithAuth,
   updateOwnPasswordWithAuth,
   updateOwnProfileRow,
 } from "./account-operations.ts";
-import { passwordSchema, profileSchema } from "./schemas.ts";
+import { emailChangeSchema, emailChangeSchemaForCurrentEmail, passwordSchema, profileSchema } from "./schemas.ts";
 
 function accountClient({
+  userId = randomUUID(),
   email = "personne@example.test",
+  newEmail = null,
   firstName = "Marie",
   lastName = "Durand",
   administrator = null,
   profileUpdateResult = { data: { id: randomUUID() }, error: null },
   passwordResult = { data: { user: {} }, error: null },
+  reauthenticationResult,
+  emailChangeResult,
 } = {}) {
   const calls = [];
+  const defaultReauthenticationResult = { data: { user: { id: userId } }, error: null };
+  const defaultEmailChangeResult = {
+    data: { user: { id: userId, email, new_email: "nouvelle@example.test" } },
+    error: null,
+  };
 
   function selection(table) {
     const query = {
@@ -67,11 +79,15 @@ function accountClient({
       auth: {
         async getUser() {
           calls.push(["auth.getUser"]);
-          return { data: { user: { email } }, error: null };
+          return { data: { user: { id: userId, email, new_email: newEmail } }, error: null };
         },
-        async updateUser(attributes) {
-          calls.push(["auth.updateUser", attributes]);
-          return passwordResult;
+        async signInWithPassword(credentials) {
+          calls.push(["auth.signInWithPassword", credentials]);
+          return reauthenticationResult ?? defaultReauthenticationResult;
+        },
+        async updateUser(attributes, options) {
+          calls.push(["auth.updateUser", attributes, options]);
+          return attributes.email ? emailChangeResult ?? defaultEmailChangeResult : passwordResult;
         },
       },
       from(table) {
@@ -96,10 +112,17 @@ test("charge le profil et l’e-mail de l’utilisateur courant", async () => {
     firstName: "Marie",
     lastName: "Durand",
     email: "personne@example.test",
+    pendingEmail: null,
     isPlatformAdmin: false,
   });
   assert.ok(calls.some((call) => call[0] === "auth.getUser"));
   assert.ok(calls.some((call) => call[0] === "eq" && call[1] === "profiles" && call[2] === "id" && call[3] === userId));
+});
+
+test("charge et expose une adresse e-mail en attente distincte", async () => {
+  const userId = randomUUID();
+  const { client } = accountClient({ userId, newEmail: "nouvelle@example.test" });
+  assert.equal((await loadAccountDataForUser(client, userId)).pendingEmail, "nouvelle@example.test");
 });
 
 test("charge aussi le compte d’un administrateur de plateforme", async () => {
@@ -164,20 +187,186 @@ test("transmet le mot de passe actuel et le nouveau à Supabase Auth", async () 
   assert.deepEqual(calls.at(-1), ["auth.updateUser", {
     password: "nouveau-secret",
     current_password: "ancien-secret",
-  }]);
+  }, undefined]);
+});
+
+test("valide, normalise et confirme la nouvelle adresse e-mail", () => {
+  assert.deepEqual(emailChangeSchema.parse({
+    currentPassword: "secret",
+    newEmail: "  NOUVELLE@EXAMPLE.TEST ",
+    emailConfirmation: "nouvelle@example.test",
+  }), {
+    currentPassword: "secret",
+    newEmail: "nouvelle@example.test",
+    emailConfirmation: "nouvelle@example.test",
+  });
+  assert.equal(emailChangeSchema.safeParse({ currentPassword: "secret", newEmail: "incorrecte", emailConfirmation: "incorrecte" }).success, false);
+  assert.equal(emailChangeSchema.safeParse({ currentPassword: "secret", newEmail: "a@example.test", emailConfirmation: "b@example.test" }).success, false);
+});
+
+test("rejette une adresse identique à l’adresse Auth actuelle", async () => {
+  assert.equal(emailChangeSchemaForCurrentEmail("Personne@Example.Test").safeParse({
+    currentPassword: "secret",
+    newEmail: " personne@example.test ",
+    emailConfirmation: "personne@example.test",
+  }).success, false);
+
+  const userId = randomUUID();
+  const { client, calls } = accountClient({ userId });
+  await assert.rejects(
+    requestOwnEmailChangeWithAuth(client, userId, {
+      currentPassword: "secret",
+      newEmail: "personne@example.test",
+      emailConfirmation: "personne@example.test",
+    }, "https://patrigest.fr/auth/callback?next=%2Fparametres%2Fcompte"),
+    EmailUnchangedError,
+  );
+  assert.equal(calls.some((call) => call[0] === "auth.signInWithPassword"), false);
+});
+
+test("réauthentifie l’utilisateur de session avant de demander le changement", async () => {
+  const userId = randomUUID();
+  const redirect = "https://patrigest.fr/auth/callback?next=%2Fparametres%2Fcompte";
+  const { client, calls } = accountClient({ userId });
+  const result = await requestOwnEmailChangeWithAuth(client, userId, {
+    currentPassword: "secret-actuel",
+    newEmail: "nouvelle@example.test",
+    emailConfirmation: "nouvelle@example.test",
+  }, redirect);
+
+  assert.deepEqual(result, { status: "pending", pendingEmail: "nouvelle@example.test" });
+  assert.deepEqual(calls.filter((call) => call[0].startsWith("auth.")), [
+    ["auth.getUser"],
+    ["auth.signInWithPassword", { email: "personne@example.test", password: "secret-actuel" }],
+    ["auth.updateUser", { email: "nouvelle@example.test" }, { emailRedirectTo: redirect }],
+  ]);
+});
+
+test("une réauthentification échouée interrompt le changement d’adresse", async () => {
+  const userId = randomUUID();
+  const { client, calls } = accountClient({
+    userId,
+    reauthenticationResult: { data: { user: null }, error: { code: "invalid_credentials", message: "raw" } },
+  });
+  await assert.rejects(
+    requestOwnEmailChangeWithAuth(client, userId, {
+      currentPassword: "incorrect",
+      newEmail: "nouvelle@example.test",
+      emailConfirmation: "nouvelle@example.test",
+    }, "https://patrigest.fr/auth/callback?next=%2Fparametres%2Fcompte"),
+    EmailReauthenticationError,
+  );
+  assert.equal(calls.some((call) => call[0] === "auth.updateUser"), false);
+});
+
+test("refuse une réauthentification qui ne correspond pas à l’utilisateur de session", async () => {
+  const userId = randomUUID();
+  const { client, calls } = accountClient({
+    userId,
+    reauthenticationResult: { data: { user: { id: randomUUID() } }, error: null },
+  });
+  await assert.rejects(
+    requestOwnEmailChangeWithAuth(client, userId, {
+      currentPassword: "secret",
+      newEmail: "nouvelle@example.test",
+      emailConfirmation: "nouvelle@example.test",
+    }, "https://patrigest.fr/auth/callback?next=%2Fparametres%2Fcompte"),
+    EmailReauthenticationError,
+  );
+  assert.equal(calls.some((call) => call[0] === "auth.updateUser"), false);
+});
+
+test("reconnaît uniquement une adresse immédiatement effective prouvée par Auth", async () => {
+  const userId = randomUUID();
+  const { client } = accountClient({
+    userId,
+    emailChangeResult: { data: { user: { id: userId, email: "nouvelle@example.test", new_email: null } }, error: null },
+  });
+  assert.deepEqual(await requestOwnEmailChangeWithAuth(client, userId, {
+    currentPassword: "secret",
+    newEmail: "nouvelle@example.test",
+    emailConfirmation: "nouvelle@example.test",
+  }, "https://patrigest.fr/auth/callback?next=%2Fparametres%2Fcompte"), { status: "updated" });
+});
+
+test("ne déduit pas un changement effectif de la seule absence d’erreur", async () => {
+  const userId = randomUUID();
+  const { client } = accountClient({
+    userId,
+    emailChangeResult: { data: { user: { id: userId, email: "personne@example.test", new_email: null } }, error: null },
+  });
+  await assert.rejects(
+    requestOwnEmailChangeWithAuth(client, userId, {
+      currentPassword: "secret",
+      newEmail: "nouvelle@example.test",
+      emailConfirmation: "nouvelle@example.test",
+    }, "https://patrigest.fr/auth/callback?next=%2Fparametres%2Fcompte"),
+    /indéterminé/,
+  );
+});
+
+test("masque une erreur Auth indiquant qu’une adresse est déjà utilisée", async () => {
+  const userId = randomUUID();
+  const { client } = accountClient({
+    userId,
+    emailChangeResult: {
+      data: { user: null },
+      error: { code: "email_exists", message: "A user with this email address has already been registered" },
+    },
+  });
+  await assert.rejects(
+    requestOwnEmailChangeWithAuth(client, userId, {
+      currentPassword: "secret",
+      newEmail: "nouvelle@example.test",
+      emailConfirmation: "nouvelle@example.test",
+    }, "https://patrigest.fr/auth/callback?next=%2Fparametres%2Fcompte"),
+    (error) => error.message === "Impossible de demander le changement d’adresse e-mail.",
+  );
 });
 
 test("conserve les erreurs Auth internes dans la couche serveur", () => {
   const source = readFileSync(new URL("./actions.ts", import.meta.url), "utf8");
   assert.match(source, /Impossible de modifier le mot de passe\. Reconnectez-vous puis réessayez\./);
   assert.match(source, /Votre session n’est plus valide\. Reconnectez-vous puis réessayez\./);
+  assert.match(source, /Impossible d’enregistrer la demande de changement d’adresse e-mail\. Réessayez ultérieurement\./);
   assert.doesNotMatch(source, /message:\s*error\.message/);
 });
 
-test("affiche l’e-mail en lecture seule sans action de changement", () => {
-  const source = readFileSync(new URL("./components/profile-form.tsx", import.meta.url), "utf8");
-  assert.match(source, /id="accountEmail"[^>]*type="email"[^>]*value=\{email\}[^>]*readOnly/);
-  assert.doesNotMatch(source, /name="accountEmail"|name="email"/);
+test("affiche les adresses actuelle et pending dans un formulaire sans identifiant métier", () => {
+  const source = readFileSync(new URL("./components/email-form.tsx", import.meta.url), "utf8");
+  assert.match(source, /Adresse e-mail actuelle/);
+  assert.match(source, /Changement en attente/);
+  assert.match(source, /\{pendingEmail\}/);
+  assert.doesNotMatch(source, /name="(?:userId|profileId|dossierId)"/);
+});
+
+test("ne duplique ni ne propage l’adresse Auth dans les tables métier", () => {
+  const operations = readFileSync(new URL("./account-operations.ts", import.meta.url), "utf8");
+  const actions = readFileSync(new URL("./actions.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(operations, /from\("(?:protected_person_invitations|account_requests)"\)/);
+  assert.doesNotMatch(actions, /protected_person_invitations|account_requests/);
+  assert.doesNotMatch(operations, /update\(\{[^}]*email/);
+});
+
+test("retourne des messages distincts pour les états pending et immédiat sans erreur brute", () => {
+  const source = readFileSync(new URL("./actions.ts", import.meta.url), "utf8");
+  assert.match(source, /Votre demande de changement d’adresse e-mail a été enregistrée\./);
+  assert.match(source, /Votre adresse e-mail a été mise à jour\./);
+  assert.doesNotMatch(source, /error\.message/);
+});
+
+test("construit le redirect Auth vers la route canonique sans domaine codé en dur", () => {
+  const source = readFileSync(new URL("./actions.ts", import.meta.url), "utf8");
+  assert.match(source, /getAuthCallbackOrigin\(\)/);
+  assert.match(source, /\/auth\/callback\?next=\$\{encodeURIComponent\("\/parametres\/compte"\)\}/);
+  assert.doesNotMatch(source, /https:\/\/patrigest\.fr\/auth\/callback/);
+});
+
+test("le changement d’adresse ne dépend d’aucun rôle dossier ou privilège service", () => {
+  const source = readFileSync(new URL("./services.ts", import.meta.url), "utf8");
+  assert.match(source, /requestOwnEmailChange\(input: EmailChangeInput, emailRedirectTo: string\)/);
+  assert.match(source, /const \{ supabase, userId \} = await getAuthenticatedUser\(\)/);
+  assert.doesNotMatch(source, /can_manage|protected_person|service.?role/i);
 });
 
 test("expose la route canonique et redirige l’ancienne route côté serveur", () => {

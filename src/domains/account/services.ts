@@ -1,9 +1,10 @@
 import "server-only";
 
 import { getAuthenticatedUser } from "@/domains/protected-persons/services/authenticated-user";
-import type { PasswordInput, ProfileInput } from "./schemas";
+import type { EmailChangeInput, PasswordInput, ProfileInput } from "./schemas";
 import {
   loadAccountDataForUser,
+  requestOwnEmailChangeWithAuth,
   updateOwnPasswordWithAuth,
   updateOwnProfileRow,
 } from "./account-operations";
@@ -21,4 +22,9 @@ export async function updateOwnProfile(input: ProfileInput) {
 export async function updateOwnPassword(input: PasswordInput) {
   const { supabase } = await getAuthenticatedUser();
   return updateOwnPasswordWithAuth(supabase, input);
+}
+
+export async function requestOwnEmailChange(input: EmailChangeInput, emailRedirectTo: string) {
+  const { supabase, userId } = await getAuthenticatedUser();
+  return requestOwnEmailChangeWithAuth(supabase, userId, input, emailRedirectTo);
 }

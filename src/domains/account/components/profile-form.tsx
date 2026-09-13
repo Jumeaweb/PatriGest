@@ -5,7 +5,7 @@ import { FieldError, FormMessage, SubmitButton } from "@/components/auth/form-co
 import { updateProfileAction } from "../actions";
 import { initialAccountState } from "../state";
 
-export function ProfileForm({ firstName: initialFirstName, lastName: initialLastName, email }: { firstName: string; lastName: string; email: string }) {
+export function ProfileForm({ firstName: initialFirstName, lastName: initialLastName }: { firstName: string; lastName: string }) {
   const [state, action] = useActionState(updateProfileAction, initialAccountState);
   const [firstName, setFirstName] = useState(initialFirstName);
   const [lastName, setLastName] = useState(initialLastName);
@@ -15,7 +15,6 @@ export function ProfileForm({ firstName: initialFirstName, lastName: initialLast
       <div><label className="auth-label" htmlFor="firstName">Prénom</label><input className="auth-input" id="firstName" name="firstName" autoComplete="given-name" required maxLength={80} value={firstName} onChange={(event) => setFirstName(event.target.value)} aria-invalid={Boolean(state.fieldErrors?.firstName)} /><FieldError messages={state.fieldErrors?.firstName} /></div>
       <div><label className="auth-label" htmlFor="lastName">Nom</label><input className="auth-input" id="lastName" name="lastName" autoComplete="family-name" required maxLength={80} value={lastName} onChange={(event) => setLastName(event.target.value)} aria-invalid={Boolean(state.fieldErrors?.lastName)} /><FieldError messages={state.fieldErrors?.lastName} /></div>
     </div>
-    <div><label className="auth-label" htmlFor="accountEmail">Adresse e-mail</label><input className="auth-input bg-slate-50 text-[#475569]" id="accountEmail" type="email" value={email} readOnly /><p className="mt-1.5 text-xs text-[#64748B]">L’adresse e-mail de connexion ne peut pas encore être modifiée depuis PatriGest.</p></div>
     <FormMessage state={state} />
     <div className="w-full [&_.auth-submit]:whitespace-nowrap [&_.auth-submit]:px-5 sm:w-auto sm:[&_.auth-submit]:w-auto"><SubmitButton pendingLabel="Enregistrement…">Enregistrer le profil</SubmitButton></div>
   </form>;

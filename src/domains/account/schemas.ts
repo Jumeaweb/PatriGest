@@ -17,5 +17,25 @@ export const passwordSchema = z.object({
   path: ["newPassword"],
 });
 
+export const emailChangeSchema = z.object({
+  currentPassword: z.string().min(1, "Saisissez votre mot de passe actuel."),
+  newEmail: z.string().trim().toLowerCase().pipe(z.email("Saisissez une adresse e-mail valide.")),
+  emailConfirmation: z.string().trim().toLowerCase().pipe(z.email("Saisissez une adresse e-mail valide.")),
+}).refine((data) => data.newEmail === data.emailConfirmation, {
+  message: "Les adresses e-mail ne correspondent pas.",
+  path: ["emailConfirmation"],
+});
+
+export function emailChangeSchemaForCurrentEmail(currentEmail: string) {
+  return emailChangeSchema.refine(
+    (data) => data.newEmail !== currentEmail.trim().toLowerCase(),
+    {
+      message: "La nouvelle adresse doit être différente de l’adresse actuelle.",
+      path: ["newEmail"],
+    },
+  );
+}
+
 export type ProfileInput = z.infer<typeof profileSchema>;
 export type PasswordInput = z.infer<typeof passwordSchema>;
+export type EmailChangeInput = z.infer<typeof emailChangeSchema>;

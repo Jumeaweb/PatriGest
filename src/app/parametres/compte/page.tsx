@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ShieldCheck } from "lucide-react";
 import { PrivateShell } from "@/components/layout/private-shell";
 import { AppBreadcrumb } from "@/components/ui/app-breadcrumb";
+import { EmailForm } from "@/domains/account/components/email-form";
 import { PasswordForm } from "@/domains/account/components/password-form";
 import { ProfileForm } from "@/domains/account/components/profile-form";
 import { getAccountData } from "@/domains/account/services";
@@ -16,7 +17,8 @@ export default async function AccountPage() {
       <AppBreadcrumb items={[{ label: "Tableau de bord", href: "/tableau-de-bord" }, { label: "Mon compte" }]} />
       <header><p className="text-xs font-bold uppercase tracking-[0.12em] text-[#2563EB]">Espace personnel</p><h1 className="mt-1 font-bold tracking-tight">Mon compte</h1><p className="mt-1 text-sm text-[#64748B]">Gérez vos informations personnelles et la sécurité de votre compte.</p></header>
       <div className="mt-5 space-y-4">
-        <AccountCard title="Profil" description="Vos informations personnelles utilisées dans PatriGest."><ProfileForm firstName={account.firstName} lastName={account.lastName} email={account.email} /></AccountCard>
+        <AccountCard title="Profil" description="Vos informations personnelles utilisées dans PatriGest."><ProfileForm firstName={account.firstName} lastName={account.lastName} /></AccountCard>
+        <AccountCard title="Modifier mon adresse e-mail" description="Modifiez l’adresse utilisée pour vous connecter à PatriGest."><EmailForm currentEmail={account.email} pendingEmail={account.pendingEmail} /></AccountCard>
         <AccountCard title="Sécurité" description="Choisissez un nouveau mot de passe pour votre compte."><PasswordForm /></AccountCard>
         <AccountCard title="Compte" description="Informations relatives à votre accès PatriGest.">
           <dl className="mt-4 grid gap-3 sm:grid-cols-2"><div className="rounded-xl bg-slate-50 px-3.5 py-3"><dt className="text-xs font-semibold text-[#64748B]">Statut</dt><dd className="mt-1 text-sm font-bold text-[#166534]">Compte actif</dd></div>{account.isPlatformAdmin && <div className="rounded-xl bg-blue-50 px-3.5 py-3"><dt className="text-xs font-semibold text-[#64748B]">Rôle</dt><dd className="mt-1 flex items-center gap-2 text-sm font-bold text-[#1D4ED8]"><ShieldCheck aria-hidden="true" size={16} />Administrateur PatriGest</dd></div>}</dl>
