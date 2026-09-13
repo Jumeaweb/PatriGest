@@ -14,7 +14,7 @@ export async function updateProfileAction(_state: AccountActionState, formData: 
   if (!parsed.success) return validationError(parsed.error.flatten().fieldErrors);
   try {
     await updateOwnProfile(parsed.data);
-    revalidatePath("/mon-compte");
+    revalidatePath("/parametres/compte");
     return { status: "success", message: "Profil modifié." };
   } catch {
     return { status: "error", message: "Impossible de modifier le profil. Réessayez." };
