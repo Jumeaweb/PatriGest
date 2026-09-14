@@ -1,17 +1,23 @@
 import "server-only";
 
 import { getAuthenticatedUser } from "@/domains/protected-persons/services/authenticated-user";
-import type { EmailChangeInput, PasswordInput, ProfileInput } from "./schemas";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { AccountDeletionInput, EmailChangeInput, PasswordInput, ProfileInput } from "./schemas";
 import {
   loadAccountDataForUser,
   requestOwnEmailChangeWithAuth,
   updateOwnPasswordWithAuth,
   updateOwnProfileRow,
 } from "./account-operations";
+import { deleteAccountWithVerifiedDependencies, getAccountDeletionEligibility } from "./account-deletion-operations";
 
 export async function getAccountData() {
   const { supabase, userId } = await getAuthenticatedUser();
-  return loadAccountDataForUser(supabase, userId);
+  const [account, deletionEligibility] = await Promise.all([
+    loadAccountDataForUser(supabase, userId),
+    getAccountDeletionEligibility(supabase, userId),
+  ]);
+  return { ...account, deletionEligibility };
 }
 
 export async function updateOwnProfile(input: ProfileInput) {
@@ -27,4 +33,9 @@ export async function updateOwnPassword(input: PasswordInput) {
 export async function requestOwnEmailChange(input: EmailChangeInput, emailRedirectTo: string) {
   const { supabase, userId } = await getAuthenticatedUser();
   return requestOwnEmailChangeWithAuth(supabase, userId, input, emailRedirectTo);
+}
+
+export async function deleteOwnAccount(input: AccountDeletionInput) {
+  const { supabase, userId } = await getAuthenticatedUser();
+  await deleteAccountWithVerifiedDependencies(supabase, createAdminClient(), userId, input);
 }

@@ -3,6 +3,7 @@ import { ShieldCheck } from "lucide-react";
 import { PrivateShell } from "@/components/layout/private-shell";
 import { AppBreadcrumb } from "@/components/ui/app-breadcrumb";
 import { EmailForm } from "@/domains/account/components/email-form";
+import { AccountDeletionForm } from "@/domains/account/components/account-deletion-form";
 import { PasswordForm } from "@/domains/account/components/password-form";
 import { ProfileForm } from "@/domains/account/components/profile-form";
 import { getAccountData } from "@/domains/account/services";
@@ -23,6 +24,12 @@ export default async function AccountPage() {
         <AccountCard title="Compte" description="Informations relatives à votre accès PatriGest.">
           <dl className="mt-4 grid gap-3 sm:grid-cols-2"><div className="rounded-xl bg-slate-50 px-3.5 py-3"><dt className="text-xs font-semibold text-[#64748B]">Statut</dt><dd className="mt-1 text-sm font-bold text-[#166534]">Compte actif</dd></div>{account.isPlatformAdmin && <div className="rounded-xl bg-blue-50 px-3.5 py-3"><dt className="text-xs font-semibold text-[#64748B]">Rôle</dt><dd className="mt-1 flex items-center gap-2 text-sm font-bold text-[#1D4ED8]"><ShieldCheck aria-hidden="true" size={16} />Administrateur PatriGest</dd></div>}</dl>
         </AccountCard>
+        <section className="rounded-2xl border border-red-200 bg-white p-4 shadow-[0_8px_24px_rgba(127,29,29,0.05)] sm:p-5">
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#B91C1C]">Zone dangereuse</p>
+          <h2 className="mt-1 text-lg font-bold">Supprimer mon compte</h2>
+          <div className="mt-2 space-y-1 text-xs leading-5 text-[#64748B]"><p>Cette suppression est irréversible : votre compte et vos données personnelles associées seront supprimés.</p><p>Les données métier et historiques nécessaires, notamment les rapports, snapshots, PDF et fichiers justificatifs, sont conservées.</p><p>La suppression est impossible tant que vous possédez encore un dossier ou si vous êtes administrateur PatriGest.</p></div>
+          <AccountDeletionForm eligibility={account.deletionEligibility} />
+        </section>
       </div>
     </div>
   </PrivateShell>;

@@ -289,6 +289,7 @@ export type Database = {
       declare_management_report_transmission: { Args: { p_report_id: string; p_transmission_date: string; p_transmission_method: string; p_recipient: string; p_note?: string | null }; Returns: string };
       declare_management_report_approval: { Args: { p_report_id: string; p_approval_date: string; p_reviewer_name: string; p_reviewer_role?: string | null; p_note?: string | null }; Returns: string };
       declare_management_report_difficulty: { Args: { p_report_id: string; p_difficulty_date: string; p_reason: string; p_recipient?: string | null; p_note?: string | null }; Returns: string };
+      list_current_user_owned_storage_objects: { Args: Record<string, never>; Returns: Array<{ bucket_id: string; name: string; metadata: Json; user_metadata: Json }> };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

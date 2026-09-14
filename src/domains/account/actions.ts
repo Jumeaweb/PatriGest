@@ -1,10 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { getAuthCallbackOrigin } from "@/lib/auth/redirects";
 import { EmailReauthenticationError, EmailUnchangedError } from "./account-operations";
-import { emailChangeSchema, passwordSchema, profileSchema } from "./schemas";
-import { requestOwnEmailChange, updateOwnPassword, updateOwnProfile } from "./services";
+import { AccountDeletionBlockedError, AccountDeletionReauthenticationError } from "./account-deletion-operations";
+import { accountDeletionSchema, emailChangeSchema, passwordSchema, profileSchema } from "./schemas";
+import { deleteOwnAccount, requestOwnEmailChange, updateOwnPassword, updateOwnProfile } from "./services";
 import type { AccountActionState } from "./state";
 
 function validationError(fieldErrors: Record<string, string[] | undefined>): AccountActionState {
@@ -83,4 +85,35 @@ export async function requestEmailChangeAction(_state: AccountActionState, formD
     }
     return { status: "error", message: "Impossible d’enregistrer la demande de changement d’adresse e-mail. Réessayez ultérieurement." };
   }
+}
+
+export async function deleteOwnAccountAction(_state: AccountActionState, formData: FormData): Promise<AccountActionState> {
+  const parsed = accountDeletionSchema.safeParse({
+    currentPassword: formData.get("currentPassword"),
+    confirmation: formData.get("confirmation"),
+  });
+  if (!parsed.success) return validationError(parsed.error.flatten().fieldErrors);
+
+  try {
+    await deleteOwnAccount(parsed.data);
+  } catch (error) {
+    if (error instanceof AccountDeletionReauthenticationError) {
+      return {
+        status: "error",
+        message: "Le mot de passe actuel est incorrect ou n’a pas pu être vérifié.",
+        fieldErrors: { currentPassword: ["Vérifiez votre mot de passe actuel."] },
+      };
+    }
+    if (error instanceof AccountDeletionBlockedError) {
+      return {
+        status: "error",
+        message: error.reason === "blocked_owned_dossiers"
+          ? "Transférez ou supprimez les dossiers dont vous êtes propriétaire avant de supprimer votre compte."
+          : "Un administrateur PatriGest ne peut pas supprimer son propre compte.",
+      };
+    }
+    return { status: "error", message: "Impossible de supprimer votre compte. Réessayez ultérieurement." };
+  }
+
+  redirect("/");
 }
