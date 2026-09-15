@@ -4,10 +4,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { managementPeriodSchema } from "./schemas/management-period-schema";
+import { ManagementPeriodWriteError, managementPeriodUserMessage } from "./services/management-period-feedback";
 import { protectedPersonSchema } from "./schemas/protected-person-schema";
 import { protectionMeasureSchema } from "./schemas/protection-measure-schema";
 import {
   createManagementPeriod,
+  getProtectedPerson,
   closeManagementPeriod,
   createProtectedPerson,
   createProtectionMeasure,
@@ -130,12 +132,14 @@ export async function addManagementPeriodAction(
   if (!parsed.success) return validationError(parsed.error);
 
   try {
+    const person = await getProtectedPerson(protectedPersonId);
+    if (person?.accessRole === "read_only") throw new ManagementPeriodWriteError("permission");
     await createManagementPeriod(protectedPersonId, parsed.data);
     revalidatePath(`/dossiers/${protectedPersonId}`);
     revalidatePath(`/dossiers/${protectedPersonId}/exercices`);
     return { status: "success", message: "L’exercice de gestion a été créé." };
-  } catch {
-    return { status: "error", message: "Impossible de créer l’exercice. Vérifiez qu’il n’existe pas déjà." };
+  } catch (error) {
+    return { status: "error", message: managementPeriodUserMessage(error, "create") };
   }
 }
 
@@ -143,8 +147,8 @@ export async function updateManagementPeriodAction(protectedPersonId: string, pe
   if (![protectedPersonId, periodId].every((id) => z.uuid().safeParse(id).success)) return { status: "error", message: "Exercice invalide." };
   const parsed = managementPeriodSchema.safeParse({ startDate: formData.get("startDate"), endDate: formData.get("endDate") });
   if (!parsed.success) return validationError(parsed.error);
-  try { await updateManagementPeriod(protectedPersonId, periodId, parsed.data); revalidatePath(`/dossiers/${protectedPersonId}`); revalidatePath(`/dossiers/${protectedPersonId}/exercices`); return { status: "success", message: "L’exercice a été modifié." }; }
-  catch { return { status: "error", message: "Impossible de modifier cet exercice." }; }
+  try { const person = await getProtectedPerson(protectedPersonId); if (person?.accessRole === "read_only") throw new ManagementPeriodWriteError("permission"); await updateManagementPeriod(protectedPersonId, periodId, parsed.data); revalidatePath(`/dossiers/${protectedPersonId}`); revalidatePath(`/dossiers/${protectedPersonId}/exercices`); return { status: "success", message: "L’exercice a été modifié." }; }
+  catch (error) { return { status: "error", message: managementPeriodUserMessage(error, "update") }; }
 }
 
 export async function closeManagementPeriodAction(protectedPersonId: string, periodId: string) {

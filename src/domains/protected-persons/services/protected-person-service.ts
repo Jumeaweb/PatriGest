@@ -2,6 +2,7 @@ import type { DossierAccessRole, ManagementPeriod, ProtectedPerson, ProtectionMe
 import type { ProtectedPersonInput } from "../schemas/protected-person-schema";
 import type { ManagementPeriodInput } from "../schemas/management-period-schema";
 import type { ProtectionMeasureInput } from "../schemas/protection-measure-schema";
+import { classifyManagementPeriodWriteFailure, ManagementPeriodWriteError } from "./management-period-feedback";
 import { getAuthenticatedUser } from "./authenticated-user";
 
 export type ProtectedPersonDetail = ProtectedPerson & {
@@ -187,7 +188,8 @@ export async function createManagementPeriod(protectedPersonId: string, input: M
     end_date: input.endDate,
   }).select("*").single();
 
-  if (error) throw new Error("Impossible de créer l’exercice.");
+  if (error) throw classifyManagementPeriodWriteFailure(error);
+  if (!data) throw new ManagementPeriodWriteError("generic");
   return data;
 }
 
@@ -196,7 +198,8 @@ export async function updateManagementPeriod(protectedPersonId: string, periodId
   const { data: person } = await supabase.from("protected_persons").select("id").eq("id", protectedPersonId).maybeSingle();
   if (!person) throw new Error("Dossier introuvable.");
   const { data, error } = await supabase.from("management_periods").update({ start_date: input.startDate, end_date: input.endDate }).eq("id", periodId).eq("protected_person_id", protectedPersonId).eq("status", "open").select("*").maybeSingle();
-  if (error || !data) throw new Error("Exercice ouvert introuvable.");
+  if (error) throw classifyManagementPeriodWriteFailure(error);
+  if (!data) throw new ManagementPeriodWriteError("unavailable");
   return data;
 }
 
