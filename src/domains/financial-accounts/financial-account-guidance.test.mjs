@@ -3,12 +3,16 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { getCurrentValuationValue } from "./utils/account-valuation-utils.ts";
+import { financialAccountSchema, financialAccountTypes } from "./schemas/financial-account-schema.ts";
 
 const form = readFileSync(new URL("./components/financial-account-form.tsx", import.meta.url), "utf8");
 const detail = readFileSync(new URL("../../app/dossiers/[protectedPersonId]/comptes/[accountId]/page.tsx", import.meta.url), "utf8");
 const newPage = readFileSync(new URL("../../app/dossiers/[protectedPersonId]/comptes/nouveau/page.tsx", import.meta.url), "utf8");
 const actions = readFileSync(new URL("./actions.ts", import.meta.url), "utf8");
 const accountUtils = readFileSync(new URL("./utils/financial-account-utils.ts", import.meta.url), "utf8");
+const service = readFileSync(new URL("./services/financial-account-service.ts", import.meta.url), "utf8");
+const calculations = readFileSync(new URL("../management-reports/calculations.ts", import.meta.url), "utf8");
+const input = (accountType, initialBalanceDate) => ({ accountType, accountName: "Compte test", institutionName: "Banque test", accountReference: "", initialBalance: "100", initialBalanceDate, openingDate: "", notes: "" });
 
 test("le solde initial est expliqué comme valeur réelle au point de départ", () => {
   assert.match(form, /valeur réelle du compte à la date du solde initial/);
@@ -21,9 +25,32 @@ test("la valeur 0,00 reste proposée mais n'est pas présentée comme calculée"
 });
 
 test("la date et le solde sont explicitement liés sans changer leurs champs", () => {
-  assert.match(form, /id="initialBalanceDate"[^\n]+date à laquelle correspond le solde initial/);
-  assert.match(form, /ensemble, ils décrivent le point de départ du compte/);
-  assert.match(form, /defaultValue=\{account\?\.initial_balance_date \?\? new Date\(\)\.toISOString\(\)\.slice\(0, 10\)\}/);
+  assert.match(form, /id="initialBalanceDate"[^\n]+date réelle à laquelle correspond ce solde/);
+  assert.match(form, /date historique du solde connu/);
+  assert.match(form, /id="initialBalanceDate"[^\n]+required defaultValue=\{account\?\.initial_balance_date\}/);
+  assert.match(form, /defaultValue=\{defaultValue \?\? ""\}/);
+  assert.doesNotMatch(form, /new Date\(\)\.toISOString\(\)\.slice\(0, 10\)/);
+});
+
+test("la création exige une date choisie et le serveur n'injecte aucune date implicite", () => {
+  for (const accountType of financialAccountTypes) {
+    assert.equal(financialAccountSchema.safeParse(input(accountType, "")).success, false);
+    assert.equal(financialAccountSchema.safeParse(input(accountType, null)).success, false);
+    const selected = financialAccountSchema.safeParse(input(accountType, "2023-06-15"));
+    assert.equal(selected.success, true);
+    if (selected.success) assert.equal(selected.data.initialBalanceDate, "2023-06-15");
+  }
+  assert.match(actions, /initialBalanceDate: formData\.get\("initialBalanceDate"\)/);
+  assert.match(actions, /financialAccountSchema\.safeParse\(accountValues\(formData\)\)/);
+  assert.match(service, /initial_balance_date: input\.initialBalanceDate/);
+  assert.doesNotMatch(actions, /initialBalanceDate[^\n]*new Date/);
+});
+
+test("l'édition conserve la date enregistrée et les calculs de solde restent inchangés", () => {
+  assert.match(form, /defaultValue=\{account\?\.initial_balance_date\}/);
+  assert.match(calculations, /account\.initial_balance_date <= start/);
+  assert.match(calculations, /account\.initial_balance_date <= endDate/);
+  assert.match(accountUtils, /getCurrentValuationValue\(account\.initial_balance, valuations\)/);
 });
 
 test("la création conserve la redirection vers la fiche du nouveau compte", () => {
