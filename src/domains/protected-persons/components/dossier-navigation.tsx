@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarRange, ClipboardList, LayoutDashboard, LayoutGrid, Users, WalletCards } from "lucide-react";
+import { ClipboardList, LayoutDashboard, LayoutGrid, Users, WalletCards } from "lucide-react";
 import { getAuthenticatedUser } from "@/domains/protected-persons/services/authenticated-user";
 
 export async function DossierNavigation({ protectedPersonId, current }: { protectedPersonId: string; current: "dashboard" | "overview" | "measure" | "accounts" | "operations" | "periods" | "properties" | "debts" | "reports" }) {
@@ -12,7 +12,6 @@ export async function DossierNavigation({ protectedPersonId, current }: { protec
   const items = [
     { key: "dashboard", label: "Tableau de bord", href: `/dossiers/${protectedPersonId}/tableau-de-bord`, icon: LayoutDashboard },
     { key: "accounts", label: "Gestion financière", href: `/dossiers/${protectedPersonId}/comptes`, icon: WalletCards },
-    { key: "periods", label: "Exercices de gestion", href: `/dossiers/${protectedPersonId}/exercices`, icon: CalendarRange },
     { key: "reports", label: "Comptes de gestion", href: `/dossiers/${protectedPersonId}/comptes-de-gestion`, icon: ClipboardList },
     { key: "overview", label: "Informations du dossier", href: `/dossiers/${protectedPersonId}`, icon: LayoutGrid },
     ...(accessRole === "owner" || accessRole === "manager" ? [{ key: "access", label: "Partage du dossier", href: `/dossiers/${protectedPersonId}/acces`, icon: Users }] : []),

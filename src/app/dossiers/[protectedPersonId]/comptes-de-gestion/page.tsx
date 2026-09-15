@@ -72,6 +72,14 @@ export default async function Page({
         protectedPersonId={protectedPersonId}
         current="reports"
       />
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E2E8F0] bg-white p-4">
+        <p className="text-sm text-[#475569]">
+          Vérifiez les exercices du dossier avant de préparer un compte de gestion.
+        </p>
+        <Link href={`/dossiers/${protectedPersonId}/exercices`} className="button button-secondary">
+          Gérer les exercices
+        </Link>
+      </div>
       {canManage && (
         <ManagementReportCreateForm
           personId={protectedPersonId}
