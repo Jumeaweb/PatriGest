@@ -51,3 +51,14 @@ export function getManagementReportAccountSelection<TAccount extends FinancialAc
     };
   });
 }
+
+export function getIncludedReportAccountIds(
+  accounts: FinancialAccount[],
+  selections: ManagementReportAccountSelection[],
+  periodStart: string,
+  periodEnd: string,
+) {
+  return getManagementReportAccountSelection(accounts, selections, periodStart, periodEnd)
+    .filter((selection) => selection.included)
+    .map((selection) => selection.account.id);
+}

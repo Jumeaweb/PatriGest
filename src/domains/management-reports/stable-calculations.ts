@@ -18,6 +18,47 @@ export type StableReportAggregation = {
   needsPrecision: number;
 };
 
+export type StableClassificationIssue = "unclassified" | "needs_precision";
+
+export function getStableOfficialCategoriesById(categories: Category[]) {
+  return new Map(categories.filter((category) =>
+    category.is_system
+    && category.owner_id === null
+    && category.official_code !== null
+    && category.official_category_id === null,
+  ).map((category) => [category.id, category]));
+}
+
+export function getStableClassificationIssue(
+  transaction: Transaction,
+  officialById: ReadonlyMap<string, Category>,
+): StableClassificationIssue | null {
+  if (transaction.transaction_type === "transfer_in" || transaction.transaction_type === "transfer_out") return null;
+  if (transaction.accounting_nature === "capital_movement") return null;
+  if (transaction.accounting_nature !== "ordinary" || !transaction.official_category_id) return "unclassified";
+  const category = officialById.get(transaction.official_category_id);
+  if (!category || category.usage !== transaction.transaction_type) return "unclassified";
+  return category.requires_precision && !transaction.classification_precision?.trim() ? "needs_precision" : null;
+}
+
+export function filterReportClassificationIssues<T extends Transaction>(
+  transactions: T[],
+  categories: Category[],
+  includedAccountIds: readonly string[],
+  periodStart: string,
+  periodEnd: string,
+  issue: StableClassificationIssue,
+): T[] {
+  const included = new Set(includedAccountIds);
+  const officialById = getStableOfficialCategoriesById(categories);
+  return transactions.filter((transaction) =>
+    included.has(transaction.financial_account_id)
+    && transaction.transaction_date >= periodStart
+    && transaction.transaction_date <= periodEnd
+    && getStableClassificationIssue(transaction, officialById) === issue,
+  );
+}
+
 const placementAccountTypes: readonly FinancialAccount["account_type"][] = [
   "life_insurance",
   "other_investment",
@@ -68,9 +109,7 @@ export function aggregateStableReportOperations(
       && category.official_code !== null
       && category.official_category_id === null,
   );
-  const officialById = new Map(
-    officialCategories.map((category) => [category.id, category]),
-  );
+  const officialById = getStableOfficialCategoriesById(categories);
   const officialByCode = new Map(
     officialCategories.map((category) => [category.official_code!, category]),
   );
@@ -93,29 +132,16 @@ export function aggregateStableReportOperations(
       continue;
     }
 
+    const issue = getStableClassificationIssue(transaction, officialById);
     if (transaction.accounting_nature === "capital_movement") continue;
-
-    if (
-      transaction.accounting_nature !== "ordinary"
-      || !transaction.official_category_id
-    ) {
+    if (issue === "unclassified") {
       unclassified += 1;
       continue;
     }
-
-    const category = officialById.get(transaction.official_category_id);
-    if (!category || category.usage !== transaction.transaction_type) {
-      unclassified += 1;
-      continue;
-    }
-
+    const category = officialById.get(transaction.official_category_id!);
+    if (!category) continue;
     addLine(lines, category, transaction.amount);
-    if (
-      category.requires_precision
-      && !transaction.classification_precision?.trim()
-    ) {
-      needsPrecision += 1;
-    }
+    if (issue === "needs_precision") needsPrecision += 1;
   }
 
   const reportLines = ordered(lines);

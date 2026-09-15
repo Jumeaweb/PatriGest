@@ -37,8 +37,8 @@ test("la page de saisie ouvre directement recette, dépense et virement", () => 
 });
 
 test("l'état vide est actionnable, sans doubler les actions dans l'en-tête", () => {
-  assert.match(journal, /if \(!items\.length\)[^\n]+<TransactionQuickActions/);
-  assert.match(globalPage, /items\.length > 0 && <TransactionQuickActions/);
+  assert.match(journal, /if \(!items\.length\)[^\n]+!correctiveMode &&[^\n]+<TransactionQuickActions/);
+  assert.match(globalPage, /!corrective && items\.length > 0 && <TransactionQuickActions/);
   assert.match(accountPage, /items\.length > 0 && <TransactionQuickActions/);
   assert.doesNotMatch(globalPage + accountPage, /Ajouter une opération/);
 });

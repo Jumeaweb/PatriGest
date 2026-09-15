@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const FILTER_KEYS = new Set(["start", "end", "account", "category", "type", "q"]);
+const FILTER_KEYS = new Set(["start", "end", "account", "category", "type", "q", "reportId", "classificationIssue"]);
 
 export function getSafeTransactionReturnTo(personId: string, value: string | undefined, fallbackAccountId?: string) {
   const globalPath = `/dossiers/${personId}/operations`;
@@ -18,6 +18,14 @@ export function getSafeTransactionReturnTo(personId: string, value: string | und
   const validPath = url.pathname === globalPath || Boolean(accountMatch && z.uuid().safeParse(accountMatch[1]).success);
   if (!validPath) return fallback;
   if ([...url.searchParams.keys()].some((key) => !FILTER_KEYS.has(key))) return fallback;
+  const reportIds = url.searchParams.getAll("reportId");
+  const issues = url.searchParams.getAll("classificationIssue");
+  if (reportIds.length || issues.length) {
+    if (url.pathname !== globalPath || reportIds.length !== 1 || issues.length !== 1
+      || !z.uuid().safeParse(reportIds[0]).success
+      || (issues[0] !== "unclassified" && issues[0] !== "needs_precision")
+      || [...url.searchParams.keys()].some((key) => key !== "reportId" && key !== "classificationIssue")) return fallback;
+  }
   return `${url.pathname}${url.search}`;
 }
 

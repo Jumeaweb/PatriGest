@@ -420,6 +420,7 @@ export async function getManagementReportSnapshot(
     placementAccounts,
     relevantDebts,
     aggregation,
+    classificationIssueCounts: { unclassified: aggregation.unclassified, needsPrecision },
     officialCategories: categoryResult.data.filter(
       (category) => category.is_system && Boolean(category.official_code),
     ),

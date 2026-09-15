@@ -8,6 +8,7 @@ import { ReportStatusActions } from "./report-status-actions";
 import { AccountSelectionManager } from "./account-selection-manager";
 import { ManagementReportUpdateForm } from "./management-report-update-form";
 import type { getManagementReportSnapshot } from "./services";
+import { getClassificationIssueActions } from "./classification-issue-actions";
 type Snapshot = NonNullable<
   Awaited<ReturnType<typeof getManagementReportSnapshot>>
 >;
@@ -44,6 +45,7 @@ export function ManagementReportDashboard({
   canManage: boolean;
 }) {
   const { report, completeness } = snapshot;
+  const issueActions = getClassificationIssueActions(report.protected_person_id, report.id, report.status, snapshot.classificationIssueCounts, canManage);
   const totals = {
     resources: snapshot.aggregation.resources.reduce(
       (sum, line) => sum + line.amount,
@@ -217,6 +219,15 @@ export function ManagementReportDashboard({
               title="Dépenses"
               lines={snapshot.aggregation.expenses}
             />
+            {issueActions.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {issueActions.map((action) => (
+                  <Link key={action.issue} className="button button-secondary text-xs" href={action.href}>
+                    {action.label} ({action.count})
+                  </Link>
+                ))}
+              </div>
+            )}
           </section>
           <section id="accounts" className="rounded-xl border bg-white p-4">
             <h2 className="font-bold">Comptes et placements</h2>

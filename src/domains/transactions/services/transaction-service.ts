@@ -18,7 +18,11 @@ export async function getTransactions(personId: string, filters: TransactionFilt
   const { data: accounts, error: ae } = await supabase.from("financial_accounts").select("*").eq("protected_person_id", personId);
   if (ae) throw new Error("Impossible de charger les comptes.");
   if (!accounts.length) return [];
-  let query = supabase.from("transactions").select("*").in("financial_account_id", accounts.map((a) => a.id)).order("transaction_date", { ascending: false }).order("created_at", { ascending: false }).order("id", { ascending: false });
+  const accessibleAccountIds = accounts.map((a) => a.id);
+  const accountIds = filters.reportAccountIds ? accessibleAccountIds.filter((id) => filters.reportAccountIds!.includes(id)) : accessibleAccountIds;
+  if (!accountIds.length) return [];
+  let query = supabase.from("transactions").select("*").in("financial_account_id", accountIds);
+  if (!filters.reportAccountIds) query = query.order("transaction_date", { ascending: false }).order("created_at", { ascending: false }).order("id", { ascending: false });
   if (filters.startDate) query = query.gte("transaction_date", filters.startDate);
   if (filters.endDate) query = query.lte("transaction_date", filters.endDate);
   if (filters.accountId) query = query.eq("financial_account_id", filters.accountId);
