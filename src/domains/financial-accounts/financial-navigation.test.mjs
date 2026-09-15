@@ -67,8 +67,8 @@ test("les menus dossier affichent Gestion financière sur la route Comptes", () 
   assert.match(mobile, /label: "Gestion financière", href: `\/dossiers\/\$\{protectedPersonId\}\/comptes`/);
   assert.doesNotMatch(desktop, /label: "Comptes et patrimoine"|label: "Opérations", href: `\/dossiers/);
   assert.doesNotMatch(mobile, /label: "Comptes et patrimoine"|label: "Opérations", href: `\/dossiers/);
-  assert.match(desktop, /label: "Exercices de gestion"/);
-  assert.match(mobile, /label: "Exercices de gestion"/);
+  assert.doesNotMatch(desktop, /label: "Exercices de gestion"/);
+  assert.doesNotMatch(mobile, /label: "Exercices de gestion"/);
 });
 
 test("les pages globales et de compte insèrent la navigation au bon contexte", () => {

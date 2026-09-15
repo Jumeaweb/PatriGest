@@ -8,6 +8,9 @@ import { createTransfer, deleteTransfer } from "@/domains/transfers/services/tra
 import { isClosedPeriodError } from "./errors";
 import { transactionSchema } from "./schemas/transaction-schema";
 import { createTransaction, deleteTransaction, updateTransaction } from "./services/transaction-service";
+import { prepareProofFile, ProofFileError } from "./services/transaction-proof-file";
+import { createTransactionWithOptionalProof } from "./services/transaction-proof-create";
+import { saveTransactionProof } from "./services/transaction-proof-service";
 import { ClassificationPrecisionRequiredError } from "./services/transaction-classification";
 import type { TransactionActionState } from "./state";
 import { getSafeTransactionReturnTo } from "./return-to";
@@ -18,11 +21,22 @@ const transferValues = (formData: FormData) => ({ sourceAccountId: formData.get(
 function refresh(personId: string) { revalidatePath(`/dossiers/${personId}`); revalidatePath(`/dossiers/${personId}/operations`); revalidatePath(`/dossiers/${personId}/comptes`); }
 
 export async function createTransactionAction(personId: string, _state: TransactionActionState, formData: FormData): Promise<TransactionActionState> {
+  if (_state.proofUploadFailed) return { status: "error", message: "Cette dépense a déjà été créée. Accédez à sa fiche pour ajouter le justificatif." };
   if (!idsValid(personId)) return { status: "error", message: "Dossier invalide." };
   const parsed = transactionSchema.safeParse(txValues(formData));
   if (!parsed.success) return { status: "error", message: "Vérifiez les informations saisies.", fieldErrors: parsed.error.flatten().fieldErrors };
-  try { await createTransaction(personId, parsed.data); }
+  let proof;
+  try {
+    proof = await prepareProofFile(formData.get("proofFile"), true);
+    if (proof && parsed.data.transactionType !== "expense") throw new ProofFileError("Un justificatif ne peut être joint qu’à une dépense.");
+  } catch (error) { return { status: "error", message: "Vérifiez le justificatif sélectionné.", fieldErrors: { proofFile: [error instanceof ProofFileError ? error.message : "Fichier invalide."] } }; }
+  let result;
+  try { result = await createTransactionWithOptionalProof(() => createTransaction(personId, parsed.data), proof, (transactionId, prepared) => saveTransactionProof(personId, transactionId, prepared)); }
   catch (error) { if (error instanceof ClassificationPrecisionRequiredError) return { status: "error", message: "Vérifiez les informations saisies.", fieldErrors: { classificationPrecision: [error.message] } }; return { status: "error", message: isClosedPeriodError(error) ? "Impossible d’ajouter une opération dans un exercice clôturé." : error instanceof Error ? error.message : "Impossible d’enregistrer l’opération." }; }
+  if (!result.proofSaved) {
+    refresh(personId);
+    return { status: "success", proofUploadFailed: true, message: "La dépense a bien été enregistrée, mais le justificatif n’a pas pu être ajouté. Vous pouvez l’ajouter depuis la fiche de l’opération.", redirectTo: `/dossiers/${personId}/operations/${result.transaction.id}/modifier` };
+  }
   refresh(personId);
   return { status: "success", message: "L’opération a été créée." };
 }
