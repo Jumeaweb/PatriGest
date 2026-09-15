@@ -7,6 +7,7 @@ import { DossierNavigation } from "@/domains/protected-persons/components/dossie
 import { getProtectedPerson } from "@/domains/protected-persons/services/protected-person-service";
 import { getManagementReports } from "@/domains/management-reports/services";
 import { ManagementReportCreateForm } from "@/domains/management-reports/management-report-create-form";
+import { getReportPreparationGuidance } from "@/domains/management-reports/report-preparation-guidance";
 import { formatFinancialDate } from "@/domains/financial-accounts/utils/financial-account-utils";
 export const dynamic = "force-dynamic";
 export default async function Page({
@@ -22,15 +23,9 @@ export default async function Page({
   ]);
   if (!person) notFound();
   const canManage = person.accessRole !== "read_only";
-  const suggested = person.managementPeriods.find(
-    (period) =>
-      period.start_date.slice(0, 4) === period.end_date.slice(0, 4) &&
-      period.end_date.endsWith("-12-31") &&
-      !reports.some(
-        (report) =>
-          report.period_start === period.start_date &&
-          report.period_end === period.end_date,
-      ),
+  const { suggested, state: preparationState } = getReportPreparationGuidance(
+    person.managementPeriods,
+    reports,
   );
   return (
     <PrivateShell
@@ -73,12 +68,38 @@ export default async function Page({
         current="reports"
       />
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E2E8F0] bg-white p-4">
-        <p className="text-sm text-[#475569]">
-          Vérifiez les exercices du dossier avant de préparer un compte de gestion.
-        </p>
-        <Link href={`/dossiers/${protectedPersonId}/exercices`} className="button button-secondary">
-          Gérer les exercices
-        </Link>
+        <div className="text-sm text-[#475569]">
+          {preparationState === "no_period" ? (
+            <>
+              <p className="font-semibold">Aucun exercice de gestion n&apos;est actuellement disponible.</p>
+              <p className="mt-1">
+                {canManage
+                  ? "Vous pouvez créer un exercice pour définir la période du compte de gestion, ou continuer en renseignant les dates manuellement ci-dessous."
+                  : "Les comptes de gestion déjà préparés restent consultables ci-dessous."}
+              </p>
+            </>
+          ) : preparationState === "manual" ? (
+            <>
+              <p className="font-semibold">Aucun exercice ne peut préremplir la période d&apos;un nouveau compte de gestion.</p>
+              <p className="mt-1">
+                {canManage
+                  ? "Vous pouvez gérer les exercices ou renseigner les dates manuellement ci-dessous."
+                  : "Les comptes de gestion déjà préparés restent consultables ci-dessous."}
+              </p>
+            </>
+          ) : (
+            <p>
+              {canManage
+                ? "Les dates du formulaire reprennent un exercice de gestion. Vérifiez-les avant de préparer le compte de gestion."
+                : "Un exercice de gestion est disponible. Les comptes de gestion préparés restent consultables ci-dessous."}
+            </p>
+          )}
+        </div>
+        {canManage && (
+          <Link href={`/dossiers/${protectedPersonId}/exercices`} className="button button-secondary">
+            Gérer les exercices
+          </Link>
+        )}
       </div>
       {canManage && (
         <ManagementReportCreateForm
