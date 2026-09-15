@@ -11,7 +11,7 @@ export type MeasureType =
   | "family_authorization"
   | "judicial_support_measure";
 type ManagementPeriodStatus = "open" | "closed";
-export type FinancialAccountType = "checking" | "livret_a" | "ldds" | "csl" | "lep" | "pel" | "term_account" | "life_insurance" | "other_investment";
+export type FinancialAccountType = "checking" | "livret_a" | "ldds" | "csl" | "lep" | "pel" | "term_account" | "life_insurance" | "other_investment" | "securities_account";
 type FinancialAccountStatus = "active" | "closed";
 export type CategoryUsage = "income" | "expense" | "both";
 export type TransactionType = "income" | "expense" | "transfer_in" | "transfer_out";

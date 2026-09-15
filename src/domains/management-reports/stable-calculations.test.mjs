@@ -10,6 +10,7 @@ const preciseExpenseId = "33333333-3333-4333-8333-333333333333";
 const placementExpenseId = "44444444-4444-4444-8444-444444444444";
 const accountId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const placementAccountId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const securitiesAccountId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 
 function category(overrides = {}) {
   return {
@@ -67,6 +68,7 @@ function account(overrides = {}) {
 const accounts = [
   account(),
   account({ id: placementAccountId, account_type: "life_insurance" }),
+  account({ id: securitiesAccountId, account_type: "securities_account" }),
 ];
 
 function transaction(overrides = {}) {
@@ -163,6 +165,29 @@ test("conserve la règle transfert entrant vers placement en DEP-8-01", () => {
   ]);
   assert.equal(result.expenses[0].officialCode, "DEP-8-01");
   assert.equal(result.expenses[0].amount, 75);
+  assert.equal(result.unclassified, 0);
+});
+
+test("applique DEP-8-01 au transfert entrant vers un compte-titres", () => {
+  const result = aggregate([
+    transaction({
+      financial_account_id: securitiesAccountId,
+      transaction_type: "transfer_in",
+      transfer_id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      accounting_nature: null,
+      official_category_id: null,
+      amount: 120,
+    }),
+    transaction({
+      transaction_type: "transfer_out",
+      transfer_id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      accounting_nature: null,
+      official_category_id: null,
+      amount: 120,
+    }),
+  ]);
+  assert.equal(result.expenses[0].officialCode, "DEP-8-01");
+  assert.equal(result.expenses[0].amount, 120);
   assert.equal(result.unclassified, 0);
 });
 

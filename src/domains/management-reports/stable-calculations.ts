@@ -21,6 +21,7 @@ export type StableReportAggregation = {
 const placementAccountTypes: readonly FinancialAccount["account_type"][] = [
   "life_insurance",
   "other_investment",
+  "securities_account",
 ];
 
 function transferOfficialCode(

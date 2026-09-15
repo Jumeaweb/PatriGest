@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const financialAccountTypes = ["checking", "livret_a", "ldds", "csl", "lep", "pel", "term_account", "life_insurance", "other_investment"] as const;
+export const financialAccountTypes = ["checking", "livret_a", "ldds", "csl", "lep", "pel", "term_account", "life_insurance", "other_investment", "securities_account"] as const;
 
 const optionalText = (maximum: number) => z.string().trim().max(maximum).optional().transform((value) => value || null);
 const optionalDate = z.string().optional().transform((value) => value || null).refine((value) => value === null || /^\d{4}-\d{2}-\d{2}$/.test(value), "Saisissez une date valide.");

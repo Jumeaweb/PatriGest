@@ -5,10 +5,11 @@ import { getCurrentValuationValue } from "./account-valuation-utils";
 export const financialAccountLabels: Record<FinancialAccountType, string> = {
   checking: "Compte courant", livret_a: "Livret A", ldds: "LDDS", csl: "CSL", lep: "LEP",
   pel: "PEL", term_account: "Compte à terme", life_insurance: "Assurance-vie", other_investment: "Autre placement",
+  securities_account: "Compte-titres",
 };
 
 export function isValuationAccount(type: FinancialAccountType) {
-  return type === "life_insurance" || type === "other_investment";
+  return type === "life_insurance" || type === "other_investment" || type === "securities_account";
 }
 
 export function formatCurrency(value: number) {

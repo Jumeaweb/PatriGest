@@ -13,7 +13,7 @@ export function resolveCategoryReference(category: Category, officialCategories:
   return { personalCategory: category.is_system ? null : category, officialCategory, officialCode: officialCategory.official_code };
 }
 
-const placementAccountTypes: readonly FinancialAccountType[] = ["life_insurance", "other_investment"];
+const placementAccountTypes: readonly FinancialAccountType[] = ["life_insurance", "other_investment", "securities_account"];
 
 export function resolveTransferOfficialCodeForFutureReport(input: {
   transactionType: TransactionType;

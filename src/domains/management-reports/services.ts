@@ -306,7 +306,8 @@ export async function getManagementReportSnapshot(
   const placementAccounts = includedAccounts.filter(
     (account) =>
       account.account_type === "life_insurance" ||
-      account.account_type === "other_investment",
+      account.account_type === "other_investment" ||
+      account.account_type === "securities_account",
   );
   const relevantDebts = debts
     .filter(
