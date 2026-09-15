@@ -25,7 +25,8 @@ test("Informations du dossier conserve le lien existant vers les exercices", () 
 
 test("le listing des comptes de gestion donne un accès explicite à la même route", () => {
   assert.match(reportList, /<Link href=\{`\/dossiers\/\$\{protectedPersonId\}\/exercices`\}[^>]*>\s*Gérer les exercices\s*<\/Link>/);
-  assert.match(reportList, /Vérifiez les exercices du dossier avant de préparer un compte de gestion/);
+  assert.match(reportList, /Aucun exercice de gestion n&apos;est actuellement disponible/);
+  assert.match(reportList, /Les dates du formulaire reprennent un exercice de gestion/);
 });
 
 test("la route des exercices, le breadcrumb et les droits restent présents", () => {

@@ -3,6 +3,7 @@ import { getProtectedPerson } from "@/domains/protected-persons/services/protect
 import { getFinancialAccounts } from "@/domains/financial-accounts/services/financial-account-service";
 import { getTransactions } from "@/domains/transactions/services/transaction-service";
 import { getManagementReports } from "@/domains/management-reports/services";
+import { getDashboardActions, getDashboardActionCounts } from "../action-engine";
 
 export async function getDossierDashboardData(protectedPersonId: string) {
   const person = await getProtectedPerson(protectedPersonId);
@@ -32,49 +33,11 @@ export async function getDossierDashboardData(protectedPersonId: string) {
     ["draft", "ready", "generated"].includes(report.status),
   );
   const relevantReport = activeReport ?? reports[0] ?? null;
-  const reportPeriodIds = new Set(
-    reports.flatMap((report) =>
-      report.management_period_id ? [report.management_period_id] : [],
-    ),
-  );
-  const tasks = [
-    ...person.managementPeriods
-      .filter(
-        (period) =>
-          period.status === "closed" && !reportPeriodIds.has(period.id),
-      )
-      .map((period) => ({
-        id: `report-${period.id}`,
-        label: "Préparer le compte de gestion",
-        detail: `Exercice clos le ${period.end_date}`,
-        href: `/dossiers/${protectedPersonId}/comptes-de-gestion`,
-        priority: 0,
-        dueDate: period.end_date,
-      })),
-    ...person.managementPeriods
-      .filter((period) => period.status === "open")
-      .map((period) => ({
-        id: `period-${period.id}`,
-        label: "Exercice en cours",
-        detail: `Échéance le ${period.end_date}`,
-        href: `/dossiers/${protectedPersonId}/exercices`,
-        priority: 1,
-        dueDate: period.end_date,
-      })),
-    ...reports
-      .filter((report) => report.status === "draft")
-      .map((report) => ({
-        id: `draft-${report.id}`,
-        label: `Compte de gestion ${report.report_year} en préparation`,
-        detail: `Période se terminant le ${report.period_end}`,
-        href: `/dossiers/${protectedPersonId}/comptes-de-gestion/${report.id}`,
-        priority: 2,
-        dueDate: report.period_end,
-      })),
-  ].sort(
-    (first, second) =>
-      first.priority - second.priority ||
-      first.dueDate.localeCompare(second.dueDate),
+  const tasks = getDashboardActions(
+    protectedPersonId,
+    person.accessRole,
+    person.managementPeriods,
+    reports,
   );
 
   return {
@@ -83,6 +46,7 @@ export async function getDossierDashboardData(protectedPersonId: string) {
     relevantReport,
     recentTransactions,
     tasks,
+    actionCounts: getDashboardActionCounts(tasks),
     propertyCount: propertiesResult.count ?? 0,
     activeDebtCount: debtsResult.count ?? 0,
   };

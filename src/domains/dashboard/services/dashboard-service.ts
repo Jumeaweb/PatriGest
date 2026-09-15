@@ -3,6 +3,7 @@ import type {
   ManagementReportStatus,
 } from "@/types/database";
 import { getAuthenticatedUser } from "@/domains/protected-persons/services/authenticated-user";
+import { compareDashboardActions, getDashboardActions, getDashboardActionCounts, type DashboardAction } from "../action-engine";
 
 export type DashboardReportSummary = {
   id: string;
@@ -10,16 +11,7 @@ export type DashboardReportSummary = {
   status: ManagementReportStatus;
 };
 
-export type DashboardTask = {
-  id: string;
-  protectedPersonId: string;
-  personName: string;
-  label: string;
-  startDate: string;
-  dueDate: string;
-  href: string;
-  kind: "report_to_prepare" | "period_deadline";
-};
+export type DashboardTask = DashboardAction & { personName: string };
 
 export type DashboardDossier = {
   id: string;
@@ -56,7 +48,7 @@ export async function getDashboardData() {
       dossiers: [] as DashboardDossier[],
       tasks: [] as DashboardTask[],
       activeDossierCount: 0,
-      reportToPrepareCount: 0,
+      reportActionCount: 0,
       actionCount: 0,
     };
 
@@ -73,7 +65,7 @@ export async function getDashboardData() {
       .order("end_date", { ascending: true }),
     supabase
       .from("management_reports")
-      .select("id,protected_person_id,management_period_id,report_year,period_end,status,created_at")
+      .select("id,protected_person_id,management_period_id,report_year,period_start,period_end,status,created_at")
       .in("protected_person_id", personIds)
       .order("period_end", { ascending: false })
       .order("created_at", { ascending: false }),
@@ -81,7 +73,6 @@ export async function getDashboardData() {
   if (accountsResult.error || periodsResult.error || reportsResult.error)
     throw new Error("Impossible de charger le tableau de bord.");
 
-  const personById = new Map(persons.map((person) => [person.id, person]));
   const accessRoleByPersonId = new Map(
     accessResult.data.map((access) => [access.protected_person_id, access.role]),
   );
@@ -95,9 +86,7 @@ export async function getDashboardData() {
   }
 
   const latestReportByPersonId = new Map<string, DashboardReportSummary>();
-  const reportPeriodIds = new Set<string>();
   for (const report of reportsResult.data) {
-    if (report.management_period_id) reportPeriodIds.add(report.management_period_id);
     if (!latestReportByPersonId.has(report.protected_person_id)) {
       latestReportByPersonId.set(report.protected_person_id, {
         id: report.id,
@@ -108,43 +97,23 @@ export async function getDashboardData() {
   }
 
   const tasks: DashboardTask[] = [];
-  for (const period of periodsResult.data) {
-    const person = personById.get(period.protected_person_id);
-    if (!person) continue;
+  for (const person of persons) {
+    const accessRole = person.owner_id === userId
+      ? "owner"
+      : accessRoleByPersonId.get(person.id) ?? "read_only";
     const personName = `${person.first_name} ${person.last_name}`;
-    if (period.status === "closed" && !reportPeriodIds.has(period.id)) {
-      tasks.push({
-        id: `report-${period.id}`,
-        protectedPersonId: person.id,
-        personName,
-        label: "Compte de gestion à préparer",
-        startDate: period.start_date,
-        dueDate: period.end_date,
-        href: `/dossiers/${person.id}/comptes-de-gestion`,
-        kind: "report_to_prepare",
-      });
-    } else if (period.status === "open") {
-      tasks.push({
-        id: `period-${period.id}`,
-        protectedPersonId: person.id,
-        personName,
-        label: "Échéance de l’exercice de gestion",
-        startDate: period.start_date,
-        dueDate: period.end_date,
-        href: `/dossiers/${person.id}/exercices`,
-        kind: "period_deadline",
-      });
-    }
+    tasks.push(...getDashboardActions(
+      person.id,
+      accessRole,
+      periodsResult.data.filter((period) => period.protected_person_id === person.id),
+      reportsResult.data.filter((report) => report.protected_person_id === person.id),
+    ).map((action) => ({ ...action, personName })));
   }
-  tasks.sort(
-    (first, second) =>
-      Number(first.kind !== "report_to_prepare") - Number(second.kind !== "report_to_prepare") ||
-      first.dueDate.localeCompare(second.dueDate),
-  );
+  tasks.sort(compareDashboardActions);
 
   const nextActionByPersonId = new Map<string, DashboardTask>();
   for (const task of tasks) {
-    if (!nextActionByPersonId.has(task.protectedPersonId))
+    if (task.actionable && !nextActionByPersonId.has(task.protectedPersonId))
       nextActionByPersonId.set(task.protectedPersonId, task);
   }
 
@@ -166,7 +135,6 @@ export async function getDashboardData() {
     dossiers,
     tasks,
     activeDossierCount: dossiers.length,
-    reportToPrepareCount: tasks.filter((task) => task.kind === "report_to_prepare").length,
-    actionCount: tasks.length,
+    ...getDashboardActionCounts(tasks),
   };
 }
