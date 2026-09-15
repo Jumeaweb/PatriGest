@@ -7,7 +7,8 @@ import { getProtectedPersons } from "@/domains/protected-persons/services/protec
 export const metadata: Metadata = { title: "Dossiers" };
 export const dynamic = "force-dynamic";
 
-export default async function ProtectedPersonsPage() {
+export default async function ProtectedPersonsPage({ searchParams }: { searchParams: Promise<{ deleted?: string | string[] }> }) {
+  const deletionConfirmed = (await searchParams).deleted === "1";
   const [persons, { isPlatformAdmin }] = await Promise.all([getProtectedPersons(), getPrivateAccessContext()]);
-  return <PrivateShell current="dossiers"><ProtectedPersonList persons={persons} canCreate={!isPlatformAdmin} /></PrivateShell>;
+  return <PrivateShell current="dossiers">{deletionConfirmed && <p role="status" aria-live="polite" className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-800">Le dossier a bien été supprimé.</p>}<ProtectedPersonList persons={persons} canCreate={!isPlatformAdmin} /></PrivateShell>;
 }

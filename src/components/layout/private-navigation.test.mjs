@@ -38,7 +38,7 @@ test("la suppression d'un dossier revient à la liste unique", () => {
   const action = dossierActions.match(/export async function deleteProtectedPersonAction[\s\S]*?\n}/)?.[0];
   assert.ok(action);
   assert.match(action, /revalidatePath\("\/dossiers"\)/);
-  assert.match(action, /redirect\("\/dossiers"\)/);
+  assert.match(action, /redirect\("\/dossiers\?deleted=1"\)/);
   assert.doesNotMatch(action, /\/dossiers\/gestion/);
 });
 
