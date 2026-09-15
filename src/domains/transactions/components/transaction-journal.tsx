@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { formatCurrency, formatFinancialDate, isValuationAccount } from "@/domains/financial-accounts/utils/financial-account-utils";
 import type { DossierAccessRole, ManagementPeriod } from "@/types/database";
 import type { TransactionJournalItem } from "../services/transaction-service";
+import { TransactionQuickActions } from "./transaction-quick-actions";
 import { isDateInClosedPeriod, transactionTypeLabels } from "../utils/transaction-utils";
 import { withTransactionReturnTo } from "../return-to";
 
@@ -14,13 +15,16 @@ type Props = {
   items: TransactionJournalItem[];
   periods: ManagementPeriod[];
   accessRole: DossierAccessRole;
+  accountId?: string;
+  ordinaryAllowed: boolean;
+  transferAllowed: boolean;
   accountRegister?: boolean;
   balances?: ReadonlyMap<string, number>;
   returnTo?: string;
 };
 
-export function TransactionJournal({ personId, items, periods, accountRegister = false, balances, returnTo }: Props) {
-  if (!items.length) return <section className="mt-4 rounded-xl border border-dashed border-[#CBD5E1] bg-white p-6 text-center"><h2 className="text-lg font-bold">Aucune opération</h2><p className="mt-1 text-xs text-[#64748B]">Aucune opération ne correspond à cette vue.</p></section>;
+export function TransactionJournal({ personId, items, periods, accessRole, accountId, ordinaryAllowed, transferAllowed, accountRegister = false, balances, returnTo }: Props) {
+  if (!items.length) return <section className="mt-4 rounded-xl border border-dashed border-[#CBD5E1] bg-white p-6 text-center"><h2 className="text-lg font-bold">Aucune opération</h2><p className="mt-1 text-xs text-[#64748B]">Aucune opération ne correspond à cette vue.</p><div className="mt-4 flex justify-center"><TransactionQuickActions personId={personId} accountId={accountId} accessRole={accessRole} ordinaryAllowed={ordinaryAllowed} transferAllowed={transferAllowed} /></div></section>;
   const ordered = [...items].sort((left, right) =>
     right.transaction_date.localeCompare(left.transaction_date)
     || right.created_at.localeCompare(left.created_at)

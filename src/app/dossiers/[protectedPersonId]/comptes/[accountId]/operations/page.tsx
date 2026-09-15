@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeftRight, FileText, Info, Plus } from "lucide-react";
+import { FileText, Info } from "lucide-react";
 import { z } from "zod";
 import { PrivateShell } from "@/components/layout/private-shell";
 import { AppBreadcrumb } from "@/components/ui/app-breadcrumb";
@@ -16,6 +16,7 @@ import {
 import { DossierNavigation } from "@/domains/protected-persons/components/dossier-navigation";
 import { getProtectedPerson } from "@/domains/protected-persons/services/protected-person-service";
 import { TransactionJournal } from "@/domains/transactions/components/transaction-journal";
+import { TransactionQuickActions } from "@/domains/transactions/components/transaction-quick-actions";
 import type { TransactionFilters as TransactionFilterValues } from "@/domains/transactions/schemas/transaction-schema";
 import { getTransactions } from "@/domains/transactions/services/transaction-service";
 import { calculateRunningBalances } from "@/domains/transactions/utils/transaction-utils";
@@ -81,6 +82,7 @@ export default async function AccountOperationsPage({
   );
   const canManage =
     person.accessRole !== "read_only" && account.status === "active" && !valuationAccount;
+  const canTransfer = person.accessRole !== "read_only" && account.status === "active";
   return (
     <PrivateShell
       current="dossiers"
@@ -120,24 +122,7 @@ export default async function AccountOperationsPage({
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {canManage && (
-            <>
-              <Link
-                href={`/dossiers/${protectedPersonId}/operations/nouvelle?account=${accountId}`}
-                className="button button-primary min-h-8 gap-1.5 px-2.5 text-xs"
-              >
-                <Plus size={14} />
-                Ajouter une opération
-              </Link>
-              <Link
-                href={`/dossiers/${protectedPersonId}/operations/nouvelle?account=${accountId}&mode=transfer`}
-                className="button button-secondary min-h-8 gap-1.5 px-2.5 text-xs"
-              >
-                <ArrowLeftRight size={14} />
-                Virement
-              </Link>
-            </>
-          )}
+          {items.length > 0 && <TransactionQuickActions personId={protectedPersonId} accountId={accountId} accessRole={person.accessRole} ordinaryAllowed={canManage} transferAllowed={canTransfer} />}
           <Link
             href={`/dossiers/${protectedPersonId}/comptes/${accountId}/releves`}
             className="button button-secondary min-h-8 gap-1.5 px-2.5 text-xs"
@@ -165,6 +150,9 @@ export default async function AccountOperationsPage({
         items={items}
         periods={person.managementPeriods}
         accessRole={person.accessRole}
+        accountId={accountId}
+        ordinaryAllowed={canManage}
+        transferAllowed={canTransfer}
         accountRegister
         balances={balances}
         returnTo={returnTo}

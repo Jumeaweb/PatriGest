@@ -21,13 +21,13 @@ export default async function NewOperationPage({ params, searchParams }: { param
   const [accounts, categories] = await Promise.all([getFinancialAccounts(protectedPersonId), getCategories(false)]);
   const search = await searchParams;
   const requestedAccountId = typeof search.account === "string" && accounts.some((account) => account.id === search.account) ? search.account : undefined;
-  const requestedMode = search.mode === "transfer" ? "transfer" : undefined;
+  const requestedMode = search.mode === "income" || search.mode === "expense" || search.mode === "transfer" ? search.mode : undefined;
   return <PrivateShell current="dossiers" dossier={{ id: protectedPersonId, name: `${person.first_name} ${person.last_name}`, current: "operations" }}>
     <AppBreadcrumb items={[{ label: "Dossiers", href: "/dossiers" }, { label: `${person.first_name} ${person.last_name}`, href: `/dossiers/${protectedPersonId}/comptes` }, { label: "Opérations", href: `/dossiers/${protectedPersonId}/operations` }, { label: "Nouvelle opération" }]} />
     <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#2563EB]">{person.first_name} {person.last_name}</p>
     <h1 className="mt-1 text-2xl font-bold sm:text-[28px]">Ajouter une opération</h1>
     <DossierNavigation protectedPersonId={protectedPersonId} current="operations" />
     <FinancialNavigation protectedPersonId={protectedPersonId} accountId={requestedAccountId} current="operations" />
-    <section className="mt-5 max-w-4xl rounded-xl border border-[#E2E8F0] bg-white p-4 sm:p-5"><TransactionForm personId={protectedPersonId} accounts={accounts} categories={categories} defaultAccountId={requestedAccountId} defaultMode={requestedMode} /></section>
+    <section className="mt-5 max-w-4xl rounded-xl border border-[#E2E8F0] bg-white p-4 sm:p-5"><TransactionForm key={`${requestedAccountId ?? "global"}:${requestedMode ?? "default"}`} personId={protectedPersonId} accounts={accounts} categories={categories} defaultAccountId={requestedAccountId} defaultMode={requestedMode} /></section>
   </PrivateShell>;
 }
