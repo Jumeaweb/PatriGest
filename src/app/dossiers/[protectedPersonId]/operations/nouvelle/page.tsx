@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { PrivateShell } from "@/components/layout/private-shell";
 import { AppBreadcrumb } from "@/components/ui/app-breadcrumb";
+import { FinancialNavigation } from "@/domains/financial-accounts/components/financial-navigation";
 import { getCategories } from "@/domains/categories/services/category-service";
 import { getFinancialAccounts } from "@/domains/financial-accounts/services/financial-account-service";
 import { DossierNavigation } from "@/domains/protected-persons/components/dossier-navigation";
@@ -26,6 +27,7 @@ export default async function NewOperationPage({ params, searchParams }: { param
     <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#2563EB]">{person.first_name} {person.last_name}</p>
     <h1 className="mt-1 text-2xl font-bold sm:text-[28px]">Ajouter une opération</h1>
     <DossierNavigation protectedPersonId={protectedPersonId} current="operations" />
+    <FinancialNavigation protectedPersonId={protectedPersonId} accountId={requestedAccountId} current="operations" />
     <section className="mt-5 max-w-4xl rounded-xl border border-[#E2E8F0] bg-white p-4 sm:p-5"><TransactionForm personId={protectedPersonId} accounts={accounts} categories={categories} defaultAccountId={requestedAccountId} defaultMode={requestedMode} /></section>
   </PrivateShell>;
 }

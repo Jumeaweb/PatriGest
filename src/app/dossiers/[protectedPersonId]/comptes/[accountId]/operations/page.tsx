@@ -5,6 +5,7 @@ import { ArrowLeftRight, FileText, Info, Plus } from "lucide-react";
 import { z } from "zod";
 import { PrivateShell } from "@/components/layout/private-shell";
 import { AppBreadcrumb } from "@/components/ui/app-breadcrumb";
+import { FinancialNavigation } from "@/domains/financial-accounts/components/financial-navigation";
 import { getCategories } from "@/domains/categories/services/category-service";
 import { getFinancialAccount } from "@/domains/financial-accounts/services/financial-account-service";
 import {
@@ -157,6 +158,7 @@ export default async function AccountOperationsPage({
         protectedPersonId={protectedPersonId}
         current="accounts"
       />
+      <FinancialNavigation protectedPersonId={protectedPersonId} accountId={accountId} current="operations" />
       <AccountFilters categories={categories} values={filterValues} />
       <TransactionJournal
         personId={protectedPersonId}

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { PrivateShell } from "@/components/layout/private-shell";
 import { AppBreadcrumb } from "@/components/ui/app-breadcrumb";
+import { FinancialNavigation } from "@/domains/financial-accounts/components/financial-navigation";
 import { FinancialAccountForm } from "@/domains/financial-accounts/components/financial-account-form";
 import { getFinancialAccount } from "@/domains/financial-accounts/services/financial-account-service";
 import { DossierNavigation } from "@/domains/protected-persons/components/dossier-navigation";
@@ -21,6 +22,7 @@ export default async function EditFinancialAccountPage({ params }: { params: Pro
     <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#2563EB]">{person.first_name} {person.last_name}</p>
     <h1 className="mt-1 text-2xl font-bold sm:text-[28px]">Modifier le compte</h1>
     <DossierNavigation protectedPersonId={protectedPersonId} current="accounts" />
+    <FinancialNavigation protectedPersonId={protectedPersonId} accountId={accountId} current="details" />
     <section className="mt-5 max-w-4xl rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-sm sm:p-5"><FinancialAccountForm protectedPersonId={protectedPersonId} account={account} /></section>
   </PrivateShell>;
 }

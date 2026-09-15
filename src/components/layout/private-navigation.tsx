@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeftRight, CalendarRange, ClipboardList, FolderOpen, History, LayoutDashboard, LayoutGrid, LogOut, Menu, Settings, ShieldCheck, UserRound, Users, WalletCards, X, type LucideIcon } from "lucide-react";
+import { CalendarRange, ClipboardList, FolderOpen, History, LayoutDashboard, LayoutGrid, LogOut, Menu, Settings, ShieldCheck, UserRound, Users, WalletCards, X, type LucideIcon } from "lucide-react";
 import { logoutAction } from "@/app/(auth)/actions";
 import { APP_NAME, APP_VERSION } from "@/lib/app";
 
@@ -27,8 +27,7 @@ export function PrivateNavigation({ current, dossier, isPlatformAdmin = false }:
   ];
   const dossierItems: NavigationItem[] = dossier ? [
     { label: "Tableau de bord", href: `/dossiers/${dossier.id}/tableau-de-bord`, icon: LayoutDashboard, active: dossier.current === "dashboard" },
-    { label: "Comptes et patrimoine", href: `/dossiers/${dossier.id}/comptes`, icon: WalletCards, active: dossier.current === "accounts" },
-    { label: "Opérations", href: `/dossiers/${dossier.id}/operations`, icon: ArrowLeftRight, active: dossier.current === "operations" },
+    { label: "Gestion financière", href: `/dossiers/${dossier.id}/comptes`, icon: WalletCards, active: dossier.current === "accounts" || dossier.current === "operations" },
     { label: "Exercices de gestion", href: `/dossiers/${dossier.id}/exercices`, icon: CalendarRange, active: dossier.current === "periods" },
     { label: "Comptes de gestion", href: `/dossiers/${dossier.id}/comptes-de-gestion`, icon: ClipboardList, active: dossier.current === "reports" },
     { label: "Informations du dossier", href: `/dossiers/${dossier.id}`, icon: LayoutGrid, active: dossier.current === "overview" },
