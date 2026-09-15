@@ -19,7 +19,7 @@ export function TransactionForm({ personId, accounts, categories, transaction, d
   const [categoryId, setCategoryId] = useState(initialCategoryId);
   const [classificationPrecision, setClassificationPrecision] = useState(transaction?.classification_precision ?? "");
   const returnHref = returnTo ?? (defaultAccountId ? `/dossiers/${personId}/comptes/${defaultAccountId}/operations` : `/dossiers/${personId}/operations`);
-  const action = transaction ? updateTransactionAction.bind(null, personId, transaction.id, returnHref) : mode === "transfer" ? createTransferAction.bind(null, personId) : createTransactionAction.bind(null, personId);
+  const action = transaction ? updateTransactionAction.bind(null, personId, transaction.id, returnHref) : mode === "transfer" ? createTransferAction.bind(null, personId, returnHref) : createTransactionAction.bind(null, personId);
   const [state, formAction] = useActionState(action, initialTransactionState);
   const activeAccounts = accounts.filter((account) => account.status === "active");
   const transactionalAccounts = activeAccounts.filter((account) => !isValuationAccount(account.account_type));

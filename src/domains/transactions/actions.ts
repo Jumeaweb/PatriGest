@@ -37,14 +37,14 @@ export async function updateTransactionAction(personId: string, transactionId: s
   redirect(getSafeTransactionReturnTo(personId, returnTo));
 }
 
-export async function createTransferAction(personId: string, _state: TransactionActionState, formData: FormData): Promise<TransactionActionState> {
+export async function createTransferAction(personId: string, returnHref: string, _state: TransactionActionState, formData: FormData): Promise<TransactionActionState> {
   if (!idsValid(personId)) return { status: "error", message: "Dossier invalide." };
   const parsed = transferSchema.safeParse(transferValues(formData));
   if (!parsed.success) return { status: "error", message: "Vérifiez les informations saisies.", fieldErrors: parsed.error.flatten().fieldErrors };
   try { await createTransfer(personId, parsed.data); }
   catch (error) { return { status: "error", message: isClosedPeriodError(error) ? "Impossible d’ajouter un virement dans un exercice clôturé." : "Impossible de créer le virement. Vérifiez les comptes et la date." }; }
   refresh(personId);
-  redirect(`/dossiers/${personId}/operations`);
+  redirect(getSafeTransactionReturnTo(personId, returnHref));
 }
 
 export async function deleteTransactionAction(personId: string, id: string, returnHref: string, _state: TransactionActionState, _formData: FormData): Promise<TransactionActionState> {
