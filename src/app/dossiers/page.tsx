@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import { PrivateShell } from "@/components/layout/private-shell";
 import { ProtectedPersonList } from "@/domains/protected-persons/components/protected-person-list";
 import { getProtectedPersons } from "@/domains/protected-persons/services/protected-person-service";
@@ -9,6 +8,5 @@ export const dynamic = "force-dynamic";
 
 export default async function ProtectedPersonsPage() {
   const persons = await getProtectedPersons();
-  if (persons.length === 1 && persons[0].status === "active") redirect(`/dossiers/${persons[0].id}/comptes`);
   return <PrivateShell current="dossiers"><ProtectedPersonList persons={persons} /></PrivateShell>;
 }

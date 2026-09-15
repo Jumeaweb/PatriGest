@@ -8,5 +8,5 @@ export const dynamic = "force-dynamic";
 
 export default async function ManageProtectedPersonsPage() {
   const persons = await getProtectedPersons();
-  return <PrivateShell current="dossier-management"><ProtectedPersonList persons={persons} /></PrivateShell>;
+  return <PrivateShell current="dossiers"><ProtectedPersonList persons={persons} /></PrivateShell>;
 }

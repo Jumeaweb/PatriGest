@@ -116,9 +116,8 @@ export async function deleteProtectedPersonAction(protectedPersonId: string, _st
   try { await deleteProtectedPerson(protectedPersonId); }
   catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Impossible de supprimer ce dossier." }; }
   revalidatePath("/dossiers");
-  revalidatePath("/dossiers/gestion");
   revalidatePath("/tableau-de-bord");
-  redirect("/dossiers/gestion");
+  redirect("/dossiers");
 }
 
 export async function addManagementPeriodAction(
