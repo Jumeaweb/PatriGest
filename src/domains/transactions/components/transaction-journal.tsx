@@ -24,7 +24,7 @@ type Props = {
 };
 
 export function TransactionJournal({ personId, items, periods, accessRole, accountId, ordinaryAllowed, transferAllowed, accountRegister = false, balances, returnTo }: Props) {
-  if (!items.length) return <section className="mt-4 rounded-xl border border-dashed border-[#CBD5E1] bg-white p-6 text-center"><h2 className="text-lg font-bold">Aucune opération</h2><p className="mt-1 text-xs text-[#64748B]">Aucune opération ne correspond à cette vue.</p><div className="mt-4 flex justify-center"><TransactionQuickActions personId={personId} accountId={accountId} accessRole={accessRole} ordinaryAllowed={ordinaryAllowed} transferAllowed={transferAllowed} /></div></section>;
+  if (!items.length) return <section className="mt-4 rounded-xl border border-dashed border-[#CBD5E1] bg-white p-6 text-center"><h2 className="text-lg font-bold">Aucune opération</h2><p className="mt-1 text-xs text-[#64748B]">Aucune opération ne correspond à cette vue.</p><div className="mt-4 flex justify-center"><TransactionQuickActions personId={personId} accountId={accountId} accessRole={accessRole} ordinaryAllowed={ordinaryAllowed} transferAllowed={transferAllowed} returnTo={returnTo} /></div></section>;
   const ordered = [...items].sort((left, right) =>
     right.transaction_date.localeCompare(left.transaction_date)
     || right.created_at.localeCompare(left.created_at)

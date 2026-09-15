@@ -122,7 +122,7 @@ export default async function AccountOperationsPage({
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {items.length > 0 && <TransactionQuickActions personId={protectedPersonId} accountId={accountId} accessRole={person.accessRole} ordinaryAllowed={canManage} transferAllowed={canTransfer} />}
+          {items.length > 0 && <TransactionQuickActions personId={protectedPersonId} accountId={accountId} accessRole={person.accessRole} ordinaryAllowed={canManage} transferAllowed={canTransfer} returnTo={returnTo} />}
           <Link
             href={`/dossiers/${protectedPersonId}/comptes/${accountId}/releves`}
             className="button button-secondary min-h-8 gap-1.5 px-2.5 text-xs"
