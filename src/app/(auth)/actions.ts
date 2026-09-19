@@ -12,6 +12,7 @@ import { getDossierInvitationPath } from "@/lib/auth/invitation-destination";
 import type { AuthActionState } from "@/lib/auth/state";
 import { createClient } from "@/lib/supabase/server";
 import { markSignupInvitationUsed, validateSignupInvitation } from "@/domains/access/actions";
+import { hasRecoverableDossierInvitations } from "@/domains/access/services";
 
 const emailSchema = z.email("Saisissez une adresse email valide.").trim();
 const passwordSchema = z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères.").max(72, "Le mot de passe ne peut pas dépasser 72 caractères.");
@@ -44,11 +45,23 @@ export async function loginAction(_state: AuthActionState, formData: FormData): 
   if (!parsed.success) return validationError(parsed.error);
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
+  const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
   if (error) {
     return { status: "error", message: getAuthErrorMessage(error, "Connexion impossible. Vérifiez vos informations et réessayez.") };
   }
-  redirect(getSafeNextPath(typeof formData.get("next") === "string" ? String(formData.get("next")) : null, "/tableau-de-bord"));
+  const requestedNext = typeof formData.get("next") === "string" ? String(formData.get("next")) : null;
+  const safeNext = getSafeNextPath(requestedNext, "");
+  if (safeNext) redirect(safeNext);
+  let hasInvitationRecovery = false;
+  if (data.user) {
+    try {
+      hasInvitationRecovery = await hasRecoverableDossierInvitations(data.user.id);
+    } catch {
+      // Le parcours Auth normal reste disponible si la reprise d’invitation est indisponible.
+    }
+  }
+  if (hasInvitationRecovery) redirect("/invitations");
+  redirect("/tableau-de-bord");
 }
 
 export async function signupAction(_state: AuthActionState, formData: FormData): Promise<AuthActionState> {

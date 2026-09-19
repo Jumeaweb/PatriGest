@@ -4,8 +4,81 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getProtectedPerson } from "@/domains/protected-persons/services/protected-person-service";
-import { authUserExistsByEmail } from "./auth-user-lookup";
 import { getDossierInvitationStatus } from "./invitation-status";
+import { canRecoverDossierInvitations } from "./invitation-recovery-policy";
+
+export type RecoverableDossierInvitation = {
+  id: string;
+  protectedPersonId: string;
+  dossierName: string;
+  role: "manager" | "read_only";
+  inviterName: string | null;
+  expiresAt: string;
+};
+
+async function getVerifiedInvitationIdentity(userId: string) {
+  const admin = createAdminClient();
+  const [{ data: userData, error: userError }, { data: authorization, error: authorizationError }, { data: administrator, error: administratorError }] = await Promise.all([
+    admin.auth.admin.getUserById(userId),
+    admin.from("application_user_authorizations").select("status").eq("user_id", userId).maybeSingle(),
+    admin.from("platform_administrators").select("user_id").eq("user_id", userId).maybeSingle(),
+  ]);
+  const user = userData.user;
+  const status = authorization?.status;
+  if (userError || authorizationError || administratorError) throw new Error("Impossible de vérifier les invitations en attente.");
+  if (!user?.email || !canRecoverDossierInvitations({
+    emailConfirmed: Boolean(user.email_confirmed_at),
+    authorizationStatus: status ?? null,
+    platformAdministrator: Boolean(administrator),
+  })) return null;
+  return { email: user.email.trim().toLowerCase(), status };
+}
+
+export async function getRecoverableDossierInvitations(userId: string): Promise<RecoverableDossierInvitation[]> {
+  const identity = await getVerifiedInvitationIdentity(userId);
+  if (!identity) return [];
+
+  const admin = createAdminClient();
+  const { data: invitations, error } = await admin
+    .from("protected_person_invitations")
+    .select("id,protected_person_id,role,invited_by,expires_at")
+    .eq("email", identity.email)
+    .is("accepted_at", null)
+    .is("revoked_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: true });
+  if (error) throw new Error("Impossible de vérifier les invitations en attente.");
+  if (!invitations.length) return [];
+
+  const protectedPersonIds = [...new Set(invitations.map((invitation) => invitation.protected_person_id))];
+  const inviterIds = [...new Set(invitations.flatMap((invitation) => invitation.invited_by ? [invitation.invited_by] : []))];
+  const [{ data: people, error: peopleError }, profilesResult] = await Promise.all([
+    admin.from("protected_persons").select("id,first_name,last_name").in("id", protectedPersonIds),
+    inviterIds.length
+      ? admin.from("profiles").select("id,first_name,last_name").in("id", inviterIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (peopleError || profilesResult.error) throw new Error("Impossible de charger les invitations en attente.");
+
+  const peopleById = new Map((people ?? []).map((person) => [person.id, `${person.first_name} ${person.last_name}`.trim()]));
+  const profilesById = new Map((profilesResult.data ?? []).map((profile) => [profile.id, `${profile.first_name} ${profile.last_name}`.trim()]));
+  return invitations.flatMap((invitation) => {
+    const dossierName = peopleById.get(invitation.protected_person_id);
+    if (!dossierName) return [];
+    return [{
+      id: invitation.id,
+      protectedPersonId: invitation.protected_person_id,
+      dossierName,
+      role: invitation.role,
+      inviterName: invitation.invited_by ? profilesById.get(invitation.invited_by) || null : null,
+      expiresAt: invitation.expires_at,
+    }];
+  });
+}
+
+export async function hasRecoverableDossierInvitations(userId: string) {
+  return (await getRecoverableDossierInvitations(userId)).length > 0;
+}
 
 export async function getInvitationPreview(token: string) {
   const admin = createAdminClient();
@@ -25,16 +98,6 @@ export async function getInvitationPreview(token: string) {
   const inviterResult = data.invited_by
     ? await admin.from("profiles").select("first_name,last_name").eq("id", data.invited_by).maybeSingle()
     : { data: null, error: null };
-  let accountExists: boolean;
-  try {
-    accountExists = await authUserExistsByEmail(admin.auth.admin, data.email);
-  } catch {
-    console.error("[PatriGest] Échec du chargement d’une invitation valide", {
-      ownerCode: inviterResult.error?.code,
-      userCode: "lookup_failed",
-    });
-    return { status: "error" as const };
-  }
   if (inviterResult.error) {
     console.error("[PatriGest] Échec du chargement d’une invitation valide", {
       ownerCode: inviterResult.error.code,
@@ -48,7 +111,6 @@ export async function getInvitationPreview(token: string) {
       ownerName: data.invited_by
         ? [inviterResult.data?.first_name, inviterResult.data?.last_name].filter(Boolean).join(" ") || "Un utilisateur PatriGest"
         : "Utilisateur supprimé",
-      accountExists,
     },
   };
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { logoutAction } from "@/app/(auth)/actions";
+import { hasRecoverableDossierInvitations } from "@/domains/access/services";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Accès en attente" };
@@ -17,6 +18,15 @@ export default async function AccessWaitingPage() {
     supabase.from("platform_administrators").select("user_id").eq("user_id", userId).maybeSingle(),
   ]);
   if (administrator || authorization?.status === "active") redirect("/tableau-de-bord");
+  let hasInvitationRecovery = false;
+  if (authorization?.status === "pending") {
+    try {
+      hasInvitationRecovery = await hasRecoverableDossierInvitations(userId);
+    } catch {
+      // L’écran d’attente reste le repli sûr si la reprise est indisponible.
+    }
+  }
+  if (hasInvitationRecovery) redirect("/invitations");
 
   const rejected = authorization?.status === "rejected";
 

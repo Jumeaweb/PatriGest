@@ -8,6 +8,7 @@ import { getDossierInvitationPath } from "@/lib/auth/invitation-destination";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { sendDossierInvitationEmail } from "./invitation-email";
+import { getInvitationPreview, getRecoverableDossierInvitations } from "./services";
 import type { AccessActionState } from "./state";
 
 const requestSchema = z.object({ firstName: z.string().trim().min(1).max(80), lastName: z.string().trim().min(1).max(80), email: z.email().trim().toLowerCase(), message: z.string().trim().max(1000).optional() });
@@ -216,6 +217,47 @@ export async function acceptDossierInvitationAction(token: string): Promise<void
   revalidatePath("/dossiers");
   const { redirect } = await import("next/navigation");
   redirect(`/dossiers/${data}/tableau-de-bord`);
+}
+
+export async function acceptRecoveredDossierInvitationAction(invitationId: string): Promise<void> {
+  const parsedInvitationId = z.uuid().parse(invitationId);
+  const supabase = await createClient();
+  const { data: claims } = await supabase.auth.getClaims();
+  const userId = claims?.claims?.sub;
+  if (!userId) throw new Error("Authentification requise.");
+
+  const recoverableInvitations = await getRecoverableDossierInvitations(userId);
+  if (!recoverableInvitations.some((invitation) => invitation.id === parsedInvitationId)) {
+    throw new Error("Invitation invalide ou expirée.");
+  }
+
+  const admin = createAdminClient();
+  const { data: invitation, error: invitationError } = await admin
+    .from("protected_person_invitations")
+    .select("token_hash")
+    .eq("id", parsedInvitationId)
+    .is("accepted_at", null)
+    .is("revoked_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+  if (invitationError || !invitation) throw new Error("Invitation invalide ou expirée.");
+
+  const { data, error } = await supabase.rpc("accept_protected_person_invitation", { p_token_hash: invitation.token_hash });
+  if (error || !data) throw new Error("Invitation invalide ou expirée.");
+  revalidatePath("/dossiers");
+  const { redirect } = await import("next/navigation");
+  redirect(`/dossiers/${data}/tableau-de-bord`);
+}
+
+export async function continueDossierInvitationAsIntendedUserAction(token: string): Promise<void> {
+  const parsedToken = z.string().min(32).max(512).parse(token);
+  const preview = await getInvitationPreview(parsedToken);
+  if (preview.status !== "pending") throw new Error("Invitation invalide ou expirée.");
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signOut({ scope: "local" });
+  if (error) throw new Error("Impossible de changer de compte pour le moment.");
+  const { redirect } = await import("next/navigation");
+  redirect(getDossierInvitationPath(parsedToken));
 }
 
 export async function updateCollaboratorRoleAction(protectedPersonId: string, formData: FormData) {

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { hasRecoverableDossierInvitations } from "@/domains/access/services";
 import { getSafeAuthCallbackNextPath } from "@/lib/auth/callback-destination";
 import { createClient } from "@/lib/supabase/server";
 
@@ -25,7 +26,15 @@ export async function GET(request: NextRequest) {
       const hasApplicationAccess = Boolean(administrator || authorization?.status === "active");
       const authFlowPath = nextPath?.startsWith("/invitation/") || nextPath?.startsWith("/nouveau-mot-de-passe") ? nextPath : null;
       const accountPath = nextPath === "/parametres/compte" && hasApplicationAccess ? nextPath : null;
-      const destination = authFlowPath ?? accountPath ?? (hasApplicationAccess ? "/tableau-de-bord" : "/acces-en-attente");
+      let invitationRecoveryPath: string | null = null;
+      if (!authFlowPath && !accountPath) {
+        try {
+          invitationRecoveryPath = await hasRecoverableDossierInvitations(userId) ? "/invitations" : null;
+        } catch {
+          invitationRecoveryPath = null;
+        }
+      }
+      const destination = authFlowPath ?? accountPath ?? invitationRecoveryPath ?? (hasApplicationAccess ? "/tableau-de-bord" : "/acces-en-attente");
       const response = NextResponse.redirect(new URL(destination, request.url));
       response.headers.set("Cache-Control", "private, no-store");
       return response;

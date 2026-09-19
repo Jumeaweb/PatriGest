@@ -6,6 +6,7 @@ import { getSafeAuthCallbackNextPath } from "./callback-destination.ts";
 
 test("accepte les destinations internes prévues pour les parcours Auth", () => {
   assert.equal(getSafeAuthCallbackNextPath("/parametres/compte"), "/parametres/compte");
+  assert.equal(getSafeAuthCallbackNextPath("/invitations"), "/invitations");
   assert.equal(getSafeAuthCallbackNextPath("/nouveau-mot-de-passe"), "/nouveau-mot-de-passe");
   assert.equal(
     getSafeAuthCallbackNextPath("/nouveau-mot-de-passe?next=%2Finvitation%2Fjeton"),
@@ -37,4 +38,5 @@ test("le callback conserve ses destinations par défaut selon l’accès applica
   assert.match(source, /hasApplicationAccess \? "\/tableau-de-bord" : "\/acces-en-attente"/);
   assert.match(source, /nextPath\?\.startsWith\("\/invitation\/"\) \|\| nextPath\?\.startsWith\("\/nouveau-mot-de-passe"\)/);
   assert.match(source, /nextPath === "\/parametres\/compte" && hasApplicationAccess/);
+  assert.match(source, /invitationRecoveryPath/);
 });

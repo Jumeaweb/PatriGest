@@ -12,7 +12,7 @@ export function getSafeInternalPath(value: string | null | undefined) {
   }
 }
 
-const directlyAllowedCallbackPaths = new Set(["/parametres/compte"]);
+const directlyAllowedCallbackPaths = new Set(["/parametres/compte", "/invitations"]);
 
 export function getSafeAuthCallbackNextPath(value: string | null) {
   const safePath = getSafeInternalPath(value);
