@@ -4,6 +4,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getApplicationOrigin } from "@/lib/auth/redirects";
+import { getDossierInvitationPath } from "@/lib/auth/invitation-destination";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { sendDossierInvitationEmail } from "./invitation-email";
@@ -116,7 +117,7 @@ export async function inviteCollaboratorAction(protectedPersonId: string, _state
       p_expires_at: invitation.expiresAt,
     });
     if (error) return { status: "error", message: "Impossible de créer cette invitation." };
-    const invitationUrl = `${await getApplicationOrigin()}/invitation/${encodeURIComponent(invitation.token)}`;
+    const invitationUrl = `${await getApplicationOrigin()}${getDossierInvitationPath(invitation.token)}`;
     revalidatePath(`/dossiers/${actor.protectedPersonId}/acces`);
     try {
       await sendDossierInvitationEmail({ email: input.email, role: input.role, invitationUrl, expiresAt: invitation.expiresAt });
@@ -155,7 +156,7 @@ export async function reissueDossierInvitationAction(protectedPersonId: string, 
     });
     if (error) return { status: "error", message: "Impossible de renvoyer cette invitation." };
 
-    const invitationUrl = `${await getApplicationOrigin()}/invitation/${encodeURIComponent(invitation.token)}`;
+    const invitationUrl = `${await getApplicationOrigin()}${getDossierInvitationPath(invitation.token)}`;
     revalidatePath(`/dossiers/${actor.protectedPersonId}/acces`);
     try {
       await sendDossierInvitationEmail({ email: source.email, role: source.role, invitationUrl, expiresAt: invitation.expiresAt });
@@ -214,7 +215,7 @@ export async function acceptDossierInvitationAction(token: string): Promise<void
   if (error || !data) throw new Error("Invitation invalide ou expirée.");
   revalidatePath("/dossiers");
   const { redirect } = await import("next/navigation");
-  redirect(`/dossiers/${data}/comptes`);
+  redirect(`/dossiers/${data}/tableau-de-bord`);
 }
 
 export async function updateCollaboratorRoleAction(protectedPersonId: string, formData: FormData) {

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getProtectedPerson } from "@/domains/protected-persons/services/protected-person-service";
+import { authUserExistsByEmail } from "./auth-user-lookup";
 import { getDossierInvitationStatus } from "./invitation-status";
 
 export async function getInvitationPreview(token: string) {
@@ -21,16 +22,22 @@ export async function getInvitationPreview(token: string) {
   const status = getDossierInvitationStatus(data);
   if (status !== "pending") return { status };
 
-  const [inviterResult, userResult] = await Promise.all([
-    data.invited_by
-      ? admin.from("profiles").select("first_name,last_name").eq("id", data.invited_by).maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
-    admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
-  ]);
-  if (inviterResult.error || userResult.error) {
+  const inviterResult = data.invited_by
+    ? await admin.from("profiles").select("first_name,last_name").eq("id", data.invited_by).maybeSingle()
+    : { data: null, error: null };
+  let accountExists: boolean;
+  try {
+    accountExists = await authUserExistsByEmail(admin.auth.admin, data.email);
+  } catch {
     console.error("[PatriGest] Échec du chargement d’une invitation valide", {
       ownerCode: inviterResult.error?.code,
-      userCode: userResult.error?.code,
+      userCode: "lookup_failed",
+    });
+    return { status: "error" as const };
+  }
+  if (inviterResult.error) {
+    console.error("[PatriGest] Échec du chargement d’une invitation valide", {
+      ownerCode: inviterResult.error.code,
     });
     return { status: "error" as const };
   }
@@ -41,7 +48,7 @@ export async function getInvitationPreview(token: string) {
       ownerName: data.invited_by
         ? [inviterResult.data?.first_name, inviterResult.data?.last_name].filter(Boolean).join(" ") || "Un utilisateur PatriGest"
         : "Utilisateur supprimé",
-      accountExists: userResult.data.users.some((user) => user.email?.toLowerCase() === data.email.toLowerCase()),
+      accountExists,
     },
   };
 }

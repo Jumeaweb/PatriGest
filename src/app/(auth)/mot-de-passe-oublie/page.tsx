@@ -4,6 +4,7 @@ import { ForgotPasswordForm } from "@/components/auth/auth-forms";
 
 export const metadata: Metadata = { title: "Mot de passe oublié" };
 
-export default function ForgotPasswordPage() {
-  return <AuthShell title="Mot de passe oublié" description="Recevez un lien sécurisé pour choisir un nouveau mot de passe."><ForgotPasswordForm /></AuthShell>;
+export default async function ForgotPasswordPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+  const { next } = await searchParams;
+  return <AuthShell title="Mot de passe oublié" description="Recevez un lien sécurisé pour choisir un nouveau mot de passe."><ForgotPasswordForm nextPath={next} /></AuthShell>;
 }

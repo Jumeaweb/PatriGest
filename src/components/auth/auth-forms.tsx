@@ -9,6 +9,7 @@ import {
   signupAction,
   updatePasswordAction,
 } from "@/app/(auth)/actions";
+import { getDossierInvitationLoginPath, getDossierInvitationPath } from "@/lib/auth/invitation-destination";
 import { initialAuthState, type AuthActionState } from "@/lib/auth/state";
 import { FieldError, FormMessage, SubmitButton } from "./form-controls";
 
@@ -41,12 +42,13 @@ function Field({
 
 export function LoginForm({ initialState = initialAuthState, nextPath }: { initialState?: AuthActionState; nextPath?: string }) {
   const [state, action] = useActionState(loginAction, initialState);
+  const recoveryHref = nextPath ? `/mot-de-passe-oublie?next=${encodeURIComponent(nextPath)}` : "/mot-de-passe-oublie";
   return (
     <form action={action} className="space-y-4">
       {nextPath && <input type="hidden" name="next" value={nextPath} />}
       <Field id="email" label="Adresse email" type="email" autoComplete="email" errors={state.fieldErrors?.email} />
       <Field id="password" label="Mot de passe" type="password" autoComplete="current-password" errors={state.fieldErrors?.password} />
-      <div className="flex justify-end"><Link className="auth-link text-sm" href="/mot-de-passe-oublie">Mot de passe oublié ?</Link></div>
+      <div className="flex justify-end"><Link className="auth-link text-sm" href={recoveryHref}>Mot de passe oublié ?</Link></div>
       <FormMessage state={state} />
       <SubmitButton pendingLabel="Connexion…">Se connecter</SubmitButton>
       <p className="text-center text-sm text-[#64748B]">Pas encore de compte ? <Link className="auth-link" href="/inscription">Créer un compte</Link></p>
@@ -57,11 +59,13 @@ export function LoginForm({ initialState = initialAuthState, nextPath }: { initi
 
 export function SignupForm({ invitationToken, email, firstName, lastName }: { invitationToken?: string; email?: string; firstName?: string; lastName?: string }) {
   const [state, action] = useActionState(signupAction, initialAuthState);
+  const loginHref = invitationToken ? getDossierInvitationLoginPath(invitationToken) : "/connexion";
+  const recoveryHref = invitationToken ? `/mot-de-passe-oublie?next=${encodeURIComponent(getDossierInvitationPath(invitationToken))}` : "/mot-de-passe-oublie";
   if (state.status === "success") {
     return <div className="rounded-xl bg-green-50 px-4 py-4 text-green-900" role="status" aria-live="polite">
       <h2 className="font-bold">Vérifiez votre adresse e-mail</h2>
       <p className="mt-2 text-sm leading-6">Si l’adresse <strong className="break-all font-semibold">{state.email}</strong> peut être inscrite, un e-mail de confirmation lui a été envoyé.</p>
-      <p className="mt-2 text-sm leading-6">Si vous disposez déjà d’un compte PatriGest, <Link className="auth-link" href="/connexion">connectez-vous</Link> ou utilisez la <Link className="auth-link" href="/mot-de-passe-oublie">procédure de mot de passe oublié</Link>.</p>
+      <p className="mt-2 text-sm leading-6">Si vous disposez déjà d’un compte PatriGest, <Link className="auth-link" href={loginHref}>connectez-vous</Link> ou utilisez la <Link className="auth-link" href={recoveryHref}>procédure de mot de passe oublié</Link>.</p>
     </div>;
   }
   return (
@@ -77,25 +81,26 @@ export function SignupForm({ invitationToken, email, firstName, lastName }: { in
       <p className="text-xs leading-5 text-[#64748B]">Utilisez au moins 8 caractères. Un mot de passe long et unique protège mieux vos données.</p>
       <FormMessage state={state} />
       <SubmitButton pendingLabel="Création…">Créer mon compte</SubmitButton>
-      <p className="text-center text-sm text-[#64748B]">Déjà inscrit ? <Link className="auth-link" href="/connexion">Se connecter</Link></p>
+      <p className="text-center text-sm text-[#64748B]">Déjà inscrit ? <Link className="auth-link" href={loginHref}>Se connecter</Link></p>
       <Link className="auth-back-link" href="/">Retour à l’accueil</Link>
     </form>
   );
 }
 
-export function ForgotPasswordForm() {
+export function ForgotPasswordForm({ nextPath }: { nextPath?: string }) {
   const [state, action] = useActionState(forgotPasswordAction, initialAuthState);
   return (
     <form action={action} className="space-y-4">
+      {nextPath && <input type="hidden" name="next" value={nextPath} />}
       <Field id="email" label="Adresse email" type="email" autoComplete="email" errors={state.fieldErrors?.email} />
       <FormMessage state={state} />
       <SubmitButton pendingLabel="Envoi…">Envoyer le lien</SubmitButton>
-      <Link className="auth-back-link" href="/connexion">Retour à la connexion</Link>
+      <Link className="auth-back-link" href={nextPath ? `/connexion?next=${encodeURIComponent(nextPath)}` : "/connexion"}>Retour à la connexion</Link>
     </form>
   );
 }
 
-export function UpdatePasswordForm() {
+export function UpdatePasswordForm({ nextPath }: { nextPath?: string }) {
   const [state, action] = useActionState(updatePasswordAction, initialAuthState);
   const router = useRouter();
 
@@ -107,6 +112,7 @@ export function UpdatePasswordForm() {
 
   return (
     <form action={action} className="space-y-4">
+      {nextPath && <input type="hidden" name="next" value={nextPath} />}
       <Field id="password" label="Nouveau mot de passe" type="password" autoComplete="new-password" errors={state.fieldErrors?.password} />
       <Field id="passwordConfirmation" label="Confirmation du mot de passe" type="password" autoComplete="new-password" errors={state.fieldErrors?.passwordConfirmation} />
       <FormMessage state={state} />

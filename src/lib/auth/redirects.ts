@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { getSafeInternalPath } from "./callback-destination";
 
 const allowedApplicationOrigins = new Set([
   "https://patrigest.fr",
@@ -21,11 +22,7 @@ function getAllowedApplicationOrigin(value: string | null | undefined) {
 }
 
 export function getSafeNextPath(value: string | null, fallback: string) {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) {
-    return fallback;
-  }
-
-  return value;
+  return getSafeInternalPath(value) ?? fallback;
 }
 
 export async function getApplicationOrigin() {
@@ -43,8 +40,9 @@ export async function getAuthCallbackOrigin() {
   return getApplicationOrigin();
 }
 
-export async function getPasswordRecoveryRedirectUrl() {
+export async function getPasswordRecoveryRedirectUrl(nextPath = "/tableau-de-bord") {
   const origin = await getAuthCallbackOrigin();
+  const safeNextPath = getSafeNextPath(nextPath, "/tableau-de-bord");
 
-  return `${origin}/auth/callback?next=/nouveau-mot-de-passe`;
+  return `${origin}/auth/callback?next=${encodeURIComponent(`/nouveau-mot-de-passe?next=${encodeURIComponent(safeNextPath)}`)}`;
 }

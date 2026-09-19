@@ -8,6 +8,7 @@ import {
   getPasswordRecoveryRedirectUrl,
   getSafeNextPath,
 } from "@/lib/auth/redirects";
+import { getDossierInvitationPath } from "@/lib/auth/invitation-destination";
 import type { AuthActionState } from "@/lib/auth/state";
 import { createClient } from "@/lib/supabase/server";
 import { markSignupInvitationUsed, validateSignupInvitation } from "@/domains/access/actions";
@@ -74,7 +75,7 @@ export async function signupAction(_state: AuthActionState, formData: FormData):
     email: parsed.data.email,
     password: parsed.data.password,
     options: {
-      emailRedirectTo: `${origin}/auth/callback${invitation?.kind === "dossier" && invitationToken?.success ? `?next=${encodeURIComponent(`/invitation/${invitationToken.data}`)}` : ""}`,
+      emailRedirectTo: `${origin}/auth/callback${invitation?.kind === "dossier" && invitationToken?.success ? `?next=${encodeURIComponent(getDossierInvitationPath(invitationToken.data))}` : ""}`,
       data: { first_name: parsed.data.firstName, last_name: parsed.data.lastName },
     },
   });
@@ -93,7 +94,8 @@ export async function forgotPasswordAction(_state: AuthActionState, formData: Fo
   const parsed = resetPasswordSchema.safeParse({ email: formData.get("email") });
   if (!parsed.success) return validationError(parsed.error);
 
-  const redirectTo = await getPasswordRecoveryRedirectUrl();
+  const nextPath = getSafeNextPath(typeof formData.get("next") === "string" ? String(formData.get("next")) : null, "/tableau-de-bord");
+  const redirectTo = await getPasswordRecoveryRedirectUrl(nextPath);
   const supabase = await createClient();
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
     redirectTo,
@@ -117,7 +119,7 @@ export async function updatePasswordAction(_state: AuthActionState, formData: Fo
   if (error) {
     return { status: "error", message: getAuthErrorMessage(error, "Impossible de modifier le mot de passe. Demandez un nouveau lien.") };
   }
-  return { status: "success", message: "Votre mot de passe a bien été modifié. Redirection en cours…", redirectTo: "/tableau-de-bord" };
+  return { status: "success", message: "Votre mot de passe a bien été modifié. Redirection en cours…", redirectTo: getSafeNextPath(typeof formData.get("next") === "string" ? String(formData.get("next")) : null, "/tableau-de-bord") };
 }
 
 export async function logoutAction() {

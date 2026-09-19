@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
         supabase.from("platform_administrators").select("user_id").eq("user_id", userId).maybeSingle(),
       ]);
       const hasApplicationAccess = Boolean(administrator || authorization?.status === "active");
-      const authFlowPath = nextPath?.startsWith("/invitation/") || nextPath === "/nouveau-mot-de-passe" ? nextPath : null;
+      const authFlowPath = nextPath?.startsWith("/invitation/") || nextPath?.startsWith("/nouveau-mot-de-passe") ? nextPath : null;
       const accountPath = nextPath === "/parametres/compte" && hasApplicationAccess ? nextPath : null;
       const destination = authFlowPath ?? accountPath ?? (hasApplicationAccess ? "/tableau-de-bord" : "/acces-en-attente");
       const response = NextResponse.redirect(new URL(destination, request.url));
