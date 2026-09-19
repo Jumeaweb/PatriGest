@@ -1,11 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { hasRecoverableDossierInvitations } from "@/domains/access/services";
+import { getRecoverableDossierInvitations } from "@/domains/access/services";
 import { getSafeAuthCallbackNextPath } from "@/lib/auth/callback-destination";
+import {
+  getInvitationRecoveryDestination,
+  INVITATION_RECOVERY_COOKIE,
+  INVITATION_RECOVERY_COOKIE_PATH,
+} from "@/lib/auth/invitation-recovery";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const nextPath = getSafeAuthCallbackNextPath(request.nextUrl.searchParams.get("next"));
+  const preferredInvitationId = request.cookies.get(INVITATION_RECOVERY_COOKIE)?.value ?? null;
 
   if (code) {
     const supabase = await createClient();
@@ -29,13 +35,23 @@ export async function GET(request: NextRequest) {
       let invitationRecoveryPath: string | null = null;
       if (!authFlowPath && !accountPath) {
         try {
-          invitationRecoveryPath = await hasRecoverableDossierInvitations(userId) ? "/invitations" : null;
+          invitationRecoveryPath = getInvitationRecoveryDestination(
+            await getRecoverableDossierInvitations(userId),
+            preferredInvitationId,
+          );
         } catch {
           invitationRecoveryPath = null;
         }
       }
       const destination = authFlowPath ?? accountPath ?? invitationRecoveryPath ?? (hasApplicationAccess ? "/tableau-de-bord" : "/acces-en-attente");
       const response = NextResponse.redirect(new URL(destination, request.url));
+      response.cookies.set(INVITATION_RECOVERY_COOKIE, "", {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: request.nextUrl.protocol === "https:",
+        path: INVITATION_RECOVERY_COOKIE_PATH,
+        maxAge: 0,
+      });
       response.headers.set("Cache-Control", "private, no-store");
       return response;
     }

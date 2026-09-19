@@ -46,7 +46,8 @@ test("l'acceptation retrouvée exige que l'id appartienne aux invitations de l'i
 });
 
 test("plusieurs invitations sont toutes présentées sans sélection arbitraire", () => {
-  assert.match(recoveryPage, /invitations\.map\(\(invitation\)/);
+  assert.match(recoveryPage, /displayedInvitations\.map\(\(invitation\)/);
+  assert.match(recoveryPage, /selectRecoverableInvitations\(invitations, preferredInvitationId\)/);
   assert.match(recoveryPage, /Choisissez explicitement l’invitation à accepter/);
   assert.doesNotMatch(recoveryPage, /invitations\[0\]/);
 });
@@ -65,10 +66,20 @@ test("la page publique n'énumère plus l'existence d'un compte Auth", () => {
 });
 
 test("callback, login ultérieur et écran d'attente reprennent l'invitation", () => {
-  assert.match(callback, /hasRecoverableDossierInvitations\(userId\)/);
+  assert.match(callback, /getRecoverableDossierInvitations\(userId\)/);
+  assert.match(callback, /getInvitationRecoveryDestination/);
   assert.match(authActions, /hasRecoverableDossierInvitations\(data\.user\.id\)/);
   assert.match(waitingPage, /authorization\?\.status === "pending"/);
   assert.match(waitingPage, /hasRecoverableDossierInvitations\(userId\)/);
+});
+
+test("la reprise Auth conserve seulement l'identifiant non secret de l'invitation d'origine", () => {
+  assert.match(authActions, /rememberInvitationRecovery\(invitation\.id\)/);
+  assert.match(authActions, /httpOnly: true/);
+  assert.match(authActions, /path: INVITATION_RECOVERY_COOKIE_PATH/);
+  assert.match(callback, /request\.cookies\.get\(INVITATION_RECOVERY_COOKIE\)/);
+  assert.match(callback, /maxAge: 0/);
+  assert.doesNotMatch(authActions, /cookieStore\.set\([^\n]*token_hash/);
 });
 
 test("l'inscription ordinaire conserve l'écran d'approbation", () => {

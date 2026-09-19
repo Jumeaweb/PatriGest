@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { z } from "zod";
 import { getAuthErrorMessage } from "@/lib/auth/errors";
 import {
@@ -8,12 +9,17 @@ import {
   getPasswordRecoveryRedirectUrl,
   getSafeNextPath,
 } from "@/lib/auth/redirects";
-import { getDossierInvitationPath } from "@/lib/auth/invitation-destination";
+import { getDossierInvitationPath, getDossierInvitationTokenFromPath } from "@/lib/auth/invitation-destination";
+import {
+  INVITATION_RECOVERY_COOKIE,
+  INVITATION_RECOVERY_COOKIE_MAX_AGE,
+  INVITATION_RECOVERY_COOKIE_PATH,
+} from "@/lib/auth/invitation-recovery";
 import { shouldRecoverInvitedAuthAccount } from "@/lib/auth/invited-signup-recovery";
 import type { AuthActionState } from "@/lib/auth/state";
 import { createClient } from "@/lib/supabase/server";
 import { markSignupInvitationUsed, validateSignupInvitation } from "@/domains/access/actions";
-import { hasRecoverableDossierInvitations } from "@/domains/access/services";
+import { getInvitationPreview, hasRecoverableDossierInvitations } from "@/domains/access/services";
 
 const emailSchema = z.email("Saisissez une adresse email valide.").trim();
 const passwordSchema = z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères.").max(72, "Le mot de passe ne peut pas dépasser 72 caractères.");
@@ -39,6 +45,17 @@ const updatePasswordSchema = z.object({
 
 function validationError(error: z.ZodError): AuthActionState {
   return { status: "error", message: "Vérifiez les informations saisies.", fieldErrors: error.flatten().fieldErrors };
+}
+
+async function rememberInvitationRecovery(invitationId: string) {
+  const cookieStore = await cookies();
+  cookieStore.set(INVITATION_RECOVERY_COOKIE, invitationId, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: INVITATION_RECOVERY_COOKIE_PATH,
+    maxAge: INVITATION_RECOVERY_COOKIE_MAX_AGE,
+  });
 }
 
 export async function loginAction(_state: AuthActionState, formData: FormData): Promise<AuthActionState> {
@@ -99,6 +116,9 @@ export async function signupAction(_state: AuthActionState, formData: FormData):
     signUpErrorCode: error?.code,
     identityCount: signupData.user?.identities?.length ?? null,
   });
+  if (invitation?.kind === "dossier" && (!error || shouldRecoverInvitedAccount)) {
+    await rememberInvitationRecovery(invitation.id);
+  }
   if (shouldRecoverInvitedAccount && invitationToken?.success) {
     const redirectTo = await getPasswordRecoveryRedirectUrl(getDossierInvitationPath(invitationToken.data));
     const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, { redirectTo });
@@ -123,6 +143,13 @@ export async function forgotPasswordAction(_state: AuthActionState, formData: Fo
   if (!parsed.success) return validationError(parsed.error);
 
   const nextPath = getSafeNextPath(typeof formData.get("next") === "string" ? String(formData.get("next")) : null, "/tableau-de-bord");
+  const invitationToken = getDossierInvitationTokenFromPath(nextPath);
+  if (invitationToken) {
+    const invitation = await getInvitationPreview(invitationToken);
+    if (invitation.status === "pending" && invitation.invitation.email.toLowerCase() === parsed.data.email.toLowerCase()) {
+      await rememberInvitationRecovery(invitation.invitation.id);
+    }
+  }
   const redirectTo = await getPasswordRecoveryRedirectUrl(nextPath);
   const supabase = await createClient();
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
