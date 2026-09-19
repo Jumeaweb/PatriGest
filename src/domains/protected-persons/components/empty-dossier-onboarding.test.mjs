@@ -46,8 +46,8 @@ test("les deux pages de liste réutilisent le contexte d'autorisation existant",
   assert.match(service, /if \(administrator\) throw new Error\("Un administrateur de plateforme ne peut pas créer de dossier\."\)/);
 });
 
-test("les dossiers existants restent accessibles avec leurs liens inchangés", () => {
-  assert.match(list, /persons\.map\(\(person\) => <Link key=\{person\.id\} href=\{`\/dossiers\/\$\{person\.id\}\/comptes`\}/);
+test("les dossiers existants s'ouvrent sur leur tableau de bord", () => {
+  assert.match(list, /persons\.map\(\(person\) => <Link key=\{person\.id\} href=\{`\/dossiers\/\$\{person\.id\}\/tableau-de-bord`\}/);
   assert.match(dashboard, /dossiers\.map\(\(dossier\) => <DossierCard key=\{dossier\.id\} dossier=\{dossier\} \/>/);
 });
 

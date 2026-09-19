@@ -101,7 +101,8 @@ test("les deux dashboards consomment le moteur partagé et ses compteurs", () =>
   assert.match(dossierService, /getDashboardActionCounts\(tasks\)/);
   assert.match(globalService, /period_start,period_end,status/);
   assert.match(globalPage, /Comptes de gestion à traiter/);
-  assert.match(globalPage, /dossier\.nextAction\?\.href/);
+  assert.match(globalPage, /href=\{`\/dossiers\/\$\{dossier\.id\}\/tableau-de-bord`\}>Ouvrir le dossier/);
+  assert.doesNotMatch(globalPage, /dossier\.nextAction\?\.href/);
   assert.match(dossierPage, /actionCount=\{data\.actionCounts\.actionCount\}/);
   assert.match(globalPage, /tasks\.filter\(\(task\) => !task\.actionable\)/);
   assert.match(dossierPage, /tasks\.filter\(\(task\) => !task\.actionable\)/);
