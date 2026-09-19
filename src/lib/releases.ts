@@ -10,6 +10,20 @@ export type AppRelease = {
 
 export const APP_RELEASES: readonly AppRelease[] = [
   {
+    version: "0.6.0",
+    date: "2026-09-19",
+    title: "Classification stable et parcours de gestion renforcés",
+    summary: `${APP_NAME} fiabilise la classification des opérations et les comptes de gestion, renforce la sécurité du compte utilisateur et simplifie les principaux parcours de saisie et de navigation.`,
+    changes: [
+      "Classification stable des opérations et reprise contrôlée de l’historique",
+      "Comptes de gestion alimentés par la classification stable avec parcours de correction guidé",
+      "Suppression sécurisée du compte utilisateur et gestion contrôlée des valorisations",
+      "Prise en charge des comptes-titres à valorisation globale",
+      "Saisie successive des opérations et ajout immédiat d’un justificatif aux dépenses",
+      "Navigation, états d’accompagnement et affichage mobile améliorés",
+    ],
+  },
+  {
     version: "0.5.0",
     date: "2026-09-02",
     title: "Accès, compte utilisateur et nouvel accueil",
