@@ -11,9 +11,11 @@ import { DossierNavigation } from "@/domains/protected-persons/components/dossie
 import { getProtectedPerson } from "@/domains/protected-persons/services/protected-person-service";
 import { TransactionFilters } from "@/domains/transactions/components/transaction-filters";
 import { TransactionJournal } from "@/domains/transactions/components/transaction-journal";
+import { TransactionPagination } from "@/domains/transactions/components/transaction-pagination";
 import { TransactionQuickActions } from "@/domains/transactions/components/transaction-quick-actions";
-import { getTransactions } from "@/domains/transactions/services/transaction-service";
+import { getTransactionJournalPage } from "@/domains/transactions/services/transaction-service";
 import { getSafeTransactionReturnTo } from "@/domains/transactions/return-to";
+import { getTransactionJournalPageHref, parseTransactionPage } from "@/domains/transactions/transaction-pagination";
 import type { TransactionFilters as TransactionFilterValues } from "@/domains/transactions/schemas/transaction-schema";
 import { getReportClassificationIssueJournal } from "@/domains/management-reports/classification-issue-service";
 import Link from "next/link";
@@ -42,16 +44,19 @@ export default async function OperationsPage({ params, searchParams }: { params:
   const currentPatrimony = getCurrentPatrimonyValue(accounts);
   const startDate = one(search.start);
   const endDate = one(search.end);
+  const requestedPage = parseTransactionPage(one(search.page));
   const canAddOperation = person.accessRole !== "read_only";
   const filterValues: { start?: string; end?: string; account?: string; type?: TransactionFilterValues["type"]; category?: string; q?: string } = { start: startDate, end: endDate, account: one(search.account), type: filterType(one(search.type)), category: one(search.category), q: one(search.q) };
   const corrective = correctiveRequested
     ? await getReportClassificationIssueJournal(protectedPersonId, requestedReportId!, requestedIssue as "unclassified" | "needs_precision")
     : null;
   if (correctiveRequested && !corrective) notFound();
-  const items = corrective ? corrective.items : await getTransactions(protectedPersonId, { startDate, endDate, accountId: filterValues.account, type: filterValues.type, categoryId: filterValues.category, query: filterValues.q });
-  const query = new URLSearchParams(Object.entries(filterValues).filter((entry): entry is [string, string] => Boolean(entry[1]))).toString();
+  const journalPage = corrective ? null : await getTransactionJournalPage(protectedPersonId, { startDate, endDate, accountId: filterValues.account, type: filterValues.type, categoryId: filterValues.category, query: filterValues.q }, requestedPage);
+  const items = corrective ? corrective.items : journalPage!.items;
   const correctiveQuery = corrective ? `reportId=${corrective.report.id}&classificationIssue=${requestedIssue}` : null;
-  const returnTo = getSafeTransactionReturnTo(protectedPersonId, `/dossiers/${protectedPersonId}/operations${correctiveQuery ? `?${correctiveQuery}` : query ? `?${query}` : ""}`);
+  const pathname = `/dossiers/${protectedPersonId}/operations`;
+  const journalHref = journalPage ? getTransactionJournalPageHref(pathname, filterValues, journalPage.page) : pathname;
+  const returnTo = getSafeTransactionReturnTo(protectedPersonId, correctiveQuery ? `${pathname}?${correctiveQuery}` : journalHref);
   return <PrivateShell current="dossiers" dossier={{ id: protectedPersonId, name: `${person.first_name} ${person.last_name}`, current: "operations" }}>
     <AppBreadcrumb items={[{ label: "Dossiers", href: "/dossiers" }, { label: `${person.first_name} ${person.last_name}`, href: `/dossiers/${protectedPersonId}/comptes` }, { label: "Opérations" }]} />
     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.12em] text-[#2563EB]">{person.first_name} {person.last_name}</p><div className="mt-1 flex flex-wrap items-end gap-x-4 gap-y-1"><h1 className="text-2xl font-bold sm:text-[28px] sm:leading-8">Opérations</h1><div className="border-l border-blue-100 pl-3"><p className="text-[10px] font-semibold leading-4 text-[#64748B]">Patrimoine actuel</p><p className="text-base font-bold leading-5">{formatCurrency(currentPatrimony)}</p></div></div></div>{!corrective && items.length > 0 && <TransactionQuickActions personId={protectedPersonId} accessRole={person.accessRole} ordinaryAllowed={canAddOperation} transferAllowed={canAddOperation} returnTo={returnTo} />}</div>
@@ -59,5 +64,6 @@ export default async function OperationsPage({ params, searchParams }: { params:
     <FinancialNavigation protectedPersonId={protectedPersonId} current="operations" />
     {corrective ? <section className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm"><strong>{requestedIssue === "unclassified" ? "Opérations à classer" : "Opérations à préciser"}</strong><p className="mt-1 text-xs">Compte de gestion {corrective.report.report_year} · du {corrective.report.period_start} au {corrective.report.period_end} · {items.length} opération(s)</p><p className="mt-1 text-xs text-[#475569]">Ce filtre suit le classement stable du compte de gestion ; une ancienne catégorie affichée dans le journal peut différer.</p><Link className="button button-secondary mt-3 text-xs" href={`/dossiers/${protectedPersonId}/comptes-de-gestion/${corrective.report.id}`}>Revenir au compte de gestion</Link></section> : <TransactionFilters personId={protectedPersonId} accounts={accounts} categories={categories} values={filterValues} />}
     <TransactionJournal personId={protectedPersonId} items={items} periods={person.managementPeriods} accessRole={person.accessRole} ordinaryAllowed={canAddOperation} transferAllowed={canAddOperation} returnTo={returnTo} correctiveMode={Boolean(corrective)} />
+    {journalPage && <TransactionPagination pathname={pathname} values={filterValues} page={journalPage.page} totalPages={journalPage.totalPages} />}
   </PrivateShell>;
 }

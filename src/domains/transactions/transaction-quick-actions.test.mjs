@@ -59,7 +59,7 @@ test("les comptes valorisés n'ouvrent pas de recette ou dépense ordinaire", ()
 test("le retour du journal de compte et NAV-03 restent contextualisés", () => {
   const accountJournal = `/dossiers/${personId}/comptes/${accountId}/operations`;
   assert.equal(getSafeTransactionReturnTo(personId, accountJournal, accountId), accountJournal);
-  assert.match(accountPage, /getSafeTransactionReturnTo\(protectedPersonId, `\/dossiers\/\$\{protectedPersonId\}\/comptes\/\$\{accountId\}\/operations/);
+  assert.match(accountPage, /getSafeTransactionReturnTo\(protectedPersonId, getTransactionJournalPageHref\(pathname, filterValues, journalPage\.page\), accountId\)/);
   assert.match(newPage, /defaultAccountId=\{requestedAccountId\}/);
   assert.match(form, /createTransferAction\.bind\(null, personId, returnHref\)/);
 });

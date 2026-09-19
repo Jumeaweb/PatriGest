@@ -33,7 +33,8 @@ test("un returnHref externe ou invalide retombe sur la destination interne sûre
 });
 
 test("un retour contextualisé garde ses filtres autorisés, sans admettre une destination extérieure", () => {
-  assert.equal(getSafeTransactionReturnTo(personId, `${accountJournal}?start=2026-01-01&q=test`), `${accountJournal}?start=2026-01-01&q=test`);
+  assert.equal(getSafeTransactionReturnTo(personId, `${accountJournal}?start=2026-01-01&q=test&page=3`), `${accountJournal}?start=2026-01-01&q=test&page=3`);
+  assert.equal(getSafeTransactionReturnTo(personId, `${accountJournal}?page=0`, accountId), accountJournal);
   assert.equal(getSafeTransactionReturnTo(personId, "https://example.com/evil", accountId), accountJournal);
 });
 

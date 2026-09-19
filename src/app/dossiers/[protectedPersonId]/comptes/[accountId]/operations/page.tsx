@@ -16,11 +16,13 @@ import {
 import { DossierNavigation } from "@/domains/protected-persons/components/dossier-navigation";
 import { getProtectedPerson } from "@/domains/protected-persons/services/protected-person-service";
 import { TransactionJournal } from "@/domains/transactions/components/transaction-journal";
+import { TransactionPagination } from "@/domains/transactions/components/transaction-pagination";
 import { TransactionQuickActions } from "@/domains/transactions/components/transaction-quick-actions";
 import type { TransactionFilters as TransactionFilterValues } from "@/domains/transactions/schemas/transaction-schema";
-import { getTransactions } from "@/domains/transactions/services/transaction-service";
+import { getTransactionJournalPage } from "@/domains/transactions/services/transaction-service";
 import { calculateRunningBalances } from "@/domains/transactions/utils/transaction-utils";
 import { getSafeTransactionReturnTo } from "@/domains/transactions/return-to";
+import { getTransactionJournalPageHref, parseTransactionPage } from "@/domains/transactions/transaction-pagination";
 
 export const metadata: Metadata = { title: "Journal du compte" };
 export const dynamic = "force-dynamic";
@@ -59,6 +61,7 @@ export default async function AccountOperationsPage({
     notFound();
   const valuationAccount = isValuationAccount(account.account_type);
   const search = await searchParams;
+  const requestedPage = parseTransactionPage(one(search.page));
   const filters: TransactionFilterValues = {
     startDate: one(search.start),
     endDate: one(search.end),
@@ -68,13 +71,11 @@ export default async function AccountOperationsPage({
     query: one(search.q),
   };
   const filterValues = { start: filters.startDate, end: filters.endDate, type: filters.type, category: filters.categoryId, q: filters.query };
-  const query = new URLSearchParams(Object.entries(filterValues).filter((entry): entry is [string, string] => Boolean(entry[1]))).toString();
-  const returnTo = getSafeTransactionReturnTo(protectedPersonId, `/dossiers/${protectedPersonId}/comptes/${accountId}/operations${query ? `?${query}` : ""}`, accountId);
-  const [items, allItems] = await Promise.all([
-    getTransactions(protectedPersonId, filters),
-    getTransactions(protectedPersonId, { accountId }),
-  ]);
-  const balances = valuationAccount ? undefined : calculateRunningBalances(account.initial_balance, allItems);
+  const journalPage = await getTransactionJournalPage(protectedPersonId, filters, requestedPage);
+  const items = journalPage.items;
+  const pathname = `/dossiers/${protectedPersonId}/comptes/${accountId}/operations`;
+  const returnTo = getSafeTransactionReturnTo(protectedPersonId, getTransactionJournalPageHref(pathname, filterValues, journalPage.page), accountId);
+  const balances = valuationAccount ? undefined : calculateRunningBalances(account.initial_balance, account.transactions);
   const current = getCurrentAccountValue(
     account,
     account.valuations,
@@ -157,6 +158,7 @@ export default async function AccountOperationsPage({
         balances={balances}
         returnTo={returnTo}
       />
+      <TransactionPagination pathname={pathname} values={filterValues} page={journalPage.page} totalPages={journalPage.totalPages} />
     </PrivateShell>
   );
 }
