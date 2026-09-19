@@ -5,6 +5,12 @@ import type { AccountValuationInput } from "../schemas/account-valuation-schema"
 import { isValuationAccount } from "../utils/financial-account-utils";
 import { deleteAccountValuationRow } from "./account-valuation-delete";
 import { loadCompleteTransactionHistory } from "@/domains/transactions/services/transaction-history";
+import {
+  calculateAccountBalanceAtDate,
+  validateAccountBalanceDate,
+  validateAccountBalanceContext,
+  type AccountBalanceAtDateResult,
+} from "./account-balance-at-date";
 
 export type FinancialAccountWithValuations = FinancialAccount & { valuations: AccountValuation[]; transactions: Transaction[] };
 
@@ -153,6 +159,33 @@ export async function updateAccountValuation(accountId: string, valuationId: str
   if (error?.code === "23505") throw new Error("Une valorisation existe déjà à cette date.");
   if (error) throw new Error("Impossible de modifier la valorisation.");
   return data;
+}
+
+export async function getAccountBalanceAtDate(
+  protectedPersonId: string,
+  financialAccountId: string,
+  date: string,
+): Promise<AccountBalanceAtDateResult> {
+  const { supabase, account } = await requireOwnedAccount(financialAccountId);
+  validateAccountBalanceContext(account, protectedPersonId);
+  validateAccountBalanceDate(account, date);
+
+  let transactions: Pick<Transaction, "amount" | "transaction_date" | "transaction_type">[];
+  try {
+    transactions = await loadCompleteTransactionHistory((from, to) => supabase
+      .from("transactions")
+      .select("amount, transaction_date, transaction_type")
+      .eq("financial_account_id", financialAccountId)
+      .lte("transaction_date", date)
+      .order("transaction_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to));
+  } catch {
+    throw new Error("Impossible de calculer le solde du compte.");
+  }
+
+  return calculateAccountBalanceAtDate(account.initial_balance, transactions, date);
 }
 
 export async function deleteAccountValuation(
