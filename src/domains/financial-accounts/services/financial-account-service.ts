@@ -4,6 +4,7 @@ import type { FinancialAccountInput } from "../schemas/financial-account-schema"
 import type { AccountValuationInput } from "../schemas/account-valuation-schema";
 import { isValuationAccount } from "../utils/financial-account-utils";
 import { deleteAccountValuationRow } from "./account-valuation-delete";
+import { loadCompleteTransactionHistory } from "@/domains/transactions/services/transaction-history";
 
 export type FinancialAccountWithValuations = FinancialAccount & { valuations: AccountValuation[]; transactions: Transaction[] };
 
@@ -43,17 +44,32 @@ export async function getFinancialAccounts(protectedPersonId: string): Promise<F
   if (error) throw new Error("Impossible de charger les comptes.");
   if (accounts.length === 0) return [];
   const accountIds = accounts.map((account) => account.id);
-  const [{ data: valuations, error: valuationsError }, { data: transactions, error: transactionsError }] = await Promise.all([supabase.from("account_valuations").select("*").in("financial_account_id", accountIds).order("valuation_date", { ascending: false }), supabase.from("transactions").select("*").in("financial_account_id", accountIds).order("transaction_date", { ascending: false })]);
+  const [{ data: valuations, error: valuationsError }, transactionsResult] = await Promise.all([
+    supabase.from("account_valuations").select("*").in("financial_account_id", accountIds).order("valuation_date", { ascending: false }),
+    loadCompleteTransactionHistory((from, to) => supabase.from("transactions").select("*")
+      .in("financial_account_id", accountIds)
+      .order("transaction_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to)).catch(() => { throw new Error("Impossible de charger les opérations."); }),
+  ]);
   if (valuationsError) throw new Error("Impossible de charger les valorisations.");
-  if (transactionsError) throw new Error("Impossible de charger les opérations.");
-  return accounts.map((account) => ({ ...account, valuations: valuations.filter((valuation) => valuation.financial_account_id === account.id), transactions: transactions.filter((transaction) => transaction.financial_account_id === account.id) }));
+  return accounts.map((account) => ({ ...account, valuations: valuations.filter((valuation) => valuation.financial_account_id === account.id), transactions: transactionsResult.filter((transaction) => transaction.financial_account_id === account.id) }));
 }
 
 export async function getFinancialAccount(accountId: string): Promise<FinancialAccountWithValuations | null> {
   try {
     const { supabase, account } = await requireOwnedAccount(accountId);
-    const [{ data: valuations, error }, { data: transactions, error: transactionsError }] = await Promise.all([supabase.from("account_valuations").select("*").eq("financial_account_id", accountId).order("valuation_date", { ascending: false }), supabase.from("transactions").select("*").eq("financial_account_id", accountId).order("transaction_date", { ascending: false }).order("created_at", { ascending: false })]);
-    if (error || transactionsError) throw new Error("Impossible de charger les données du compte.");
+    const [{ data: valuations, error }, transactions] = await Promise.all([
+      supabase.from("account_valuations").select("*").eq("financial_account_id", accountId).order("valuation_date", { ascending: false }),
+      loadCompleteTransactionHistory((from, to) => supabase.from("transactions").select("*")
+        .eq("financial_account_id", accountId)
+        .order("transaction_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to)).catch(() => { throw new Error("Impossible de charger les données du compte."); }),
+    ]);
+    if (error) throw new Error("Impossible de charger les données du compte.");
     return { ...account, valuations, transactions };
   } catch (error) {
     if (error instanceof Error && error.message === "Compte introuvable.") return null;

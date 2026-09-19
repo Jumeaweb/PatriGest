@@ -6,6 +6,7 @@ import { CLOSED_PERIOD_ERROR } from "../errors";
 import { resolveTransactionClassification, resolveTransactionClassificationForUpdate } from "./transaction-classification";
 import { loadTransactionDocumentsInBatches } from "./transaction-document-batches";
 import { getTransactionPageMetadata, TRANSACTION_JOURNAL_PAGE_SIZE } from "../transaction-pagination";
+import { loadCompleteTransactionHistory, loadTransactionRelationsInBatches } from "./transaction-history";
 
 import { resolveEffectiveTransactionClassification, type EffectiveTransactionClassification } from "./transaction-classification-read";
 
@@ -28,7 +29,10 @@ async function enrichTransactions(
   const transactionIds = data.map((transaction) => transaction.id);
   const [initialCategories, transfers, documents] = await Promise.all([
     initialCategoryIds.length ? supabase.from("categories").select("*").in("id", initialCategoryIds).then(({ data: rows }) => rows ?? []) : [],
-    transferIds.length ? supabase.from("transfers").select("*").in("id", transferIds).then(({ data: rows }) => rows ?? []) : [],
+    transferIds.length ? loadTransactionRelationsInBatches(transferIds, async (ids) => {
+      const { data: rows } = await supabase.from("transfers").select("*").in("id", [...ids]);
+      return { data: rows ?? [], error: null };
+    }) : [],
     transactionIds.length ? loadTransactionDocumentsInBatches(transactionIds, async (batchTransactionIds) => {
       const { data: rows, error: documentError } = await supabase
         .from("transaction_documents")
@@ -78,17 +82,31 @@ export async function getTransactions(personId: string, filters: TransactionFilt
   const accessibleAccountIds = accounts.map((a) => a.id);
   const accountIds = filters.reportAccountIds ? accessibleAccountIds.filter((id) => filters.reportAccountIds!.includes(id)) : accessibleAccountIds;
   if (!accountIds.length) return [];
-  let query = supabase.from("transactions").select("*").in("financial_account_id", accountIds);
-  if (!filters.reportAccountIds) query = query.order("transaction_date", { ascending: false }).order("created_at", { ascending: false }).order("id", { ascending: false });
-  if (filters.startDate) query = query.gte("transaction_date", filters.startDate);
-  if (filters.endDate) query = query.lte("transaction_date", filters.endDate);
-  if (filters.accountId) query = query.eq("financial_account_id", filters.accountId);
-  if (filters.type) query = filters.type === "transfer" ? query.in("transaction_type", ["transfer_in", "transfer_out"]) : query.eq("transaction_type", filters.type);
-  if (filters.categoryId) query = query.eq("category_id", filters.categoryId);
-  if (filters.query) query = query.ilike("label", `%${filters.query.replace(/[%_]/g, "")}%`);
-  if (filters.limit && filters.limit > 0) query = query.limit(filters.limit);
-  const { data, error } = await query;
-  if (error) throw new Error("Impossible de charger les opérations.");
+  const buildQuery = () => {
+    let query = supabase.from("transactions").select("*").in("financial_account_id", accountIds)
+      .order("transaction_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
+    if (filters.startDate) query = query.gte("transaction_date", filters.startDate);
+    if (filters.endDate) query = query.lte("transaction_date", filters.endDate);
+    if (filters.accountId) query = query.eq("financial_account_id", filters.accountId);
+    if (filters.type) query = filters.type === "transfer" ? query.in("transaction_type", ["transfer_in", "transfer_out"]) : query.eq("transaction_type", filters.type);
+    if (filters.categoryId) query = query.eq("category_id", filters.categoryId);
+    if (filters.query) query = query.ilike("label", `%${filters.query.replace(/[%_]/g, "")}%`);
+    return query;
+  };
+  let data: Transaction[];
+  try {
+    if (filters.limit && filters.limit > 0) {
+      const result = await buildQuery().limit(filters.limit);
+      if (result.error) throw result.error;
+      data = result.data ?? [];
+    } else {
+      data = await loadCompleteTransactionHistory((from, to) => buildQuery().range(from, to));
+    }
+  } catch {
+    throw new Error("Impossible de charger les opérations.");
+  }
   return enrichTransactions(supabase, accounts, data);
 }
 

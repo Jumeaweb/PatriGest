@@ -21,6 +21,7 @@ import type { ManagementReportDocumentType } from "@/types/database";
 import { buildManagementReportPreview } from "./preview-model";
 import { MANAGEMENT_REPORT_SNAPSHOT_SCHEMA_VERSION, parseManagementReportSnapshot } from "./snapshot";
 import { getManagementReportAccountSelection } from "./account-selection";
+import { loadCompleteTransactionHistory } from "@/domains/transactions/services/transaction-history";
 export async function getManagementReports(personId: string) {
   const { supabase } = await getAuthenticatedUser();
   const { data, error } = await supabase
@@ -254,27 +255,30 @@ export async function getManagementReportSnapshot(
     .filter((selection) => selection.included)
     .map((selection) => selection.account);
   const accountIds = includedAccounts.map((account) => account.id);
-  const empty = { data: [], error: null };
-  const [categoryResult, transactionResult, latestStatements] =
+  const [categoryResult, transactions, latestStatements] =
     await Promise.all([
       supabase.from("categories").select("*"),
       accountIds.length
-        ? supabase
-            .from("transactions")
-            .select("*")
-            .in("financial_account_id", accountIds)
-            .gte("transaction_date", report.period_start)
-            .lte("transaction_date", report.period_end)
-        : Promise.resolve(empty),
+        ? loadCompleteTransactionHistory((from, to) => supabase
+          .from("transactions")
+          .select("*")
+          .in("financial_account_id", accountIds)
+          .gte("transaction_date", report.period_start)
+          .lte("transaction_date", report.period_end)
+          .order("transaction_date", { ascending: false })
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(from, to)).catch(() => { throw new Error("Impossible de calculer le compte de gestion."); })
+        : Promise.resolve([]),
       Promise.all(includedAccounts.map(async (account) => ({
         account,
         statement: await getLatestBankStatementAtOrBefore(account.id, report.period_end),
       }))),
     ]);
-  if (categoryResult.error || transactionResult.error)
+  if (categoryResult.error)
     throw new Error("Impossible de calculer le compte de gestion.");
   const stableAggregation = aggregateStableReportOperations(
-    transactionResult.data,
+    transactions,
     categoryResult.data,
     includedAccounts,
   );

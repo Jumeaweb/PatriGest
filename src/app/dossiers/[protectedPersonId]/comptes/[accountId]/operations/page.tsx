@@ -146,6 +146,7 @@ export default async function AccountOperationsPage({
       />
       <FinancialNavigation protectedPersonId={protectedPersonId} accountId={accountId} current="operations" />
       <AccountFilters categories={categories} values={filterValues} />
+      <TransactionPagination pathname={pathname} values={filterValues} page={journalPage.page} totalPages={journalPage.totalPages} />
       <TransactionJournal
         personId={protectedPersonId}
         items={items}

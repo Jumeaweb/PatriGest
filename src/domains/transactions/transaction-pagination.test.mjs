@@ -70,9 +70,16 @@ test("les journaux global et compte utilisent le service paginé partagé", () =
   assert.match(accountPage, /getTransactionJournalPage\(protectedPersonId/);
   assert.match(globalPage, /<TransactionPagination/);
   assert.match(accountPage, /<TransactionPagination/);
-  assert.match(pagination, /Précédent/);
+  assert.equal((globalPage.match(/<TransactionPagination/g) ?? []).length, 2);
+  assert.equal((accountPage.match(/<TransactionPagination/g) ?? []).length, 2);
+  assert.match(pagination, /Première page/);
+  assert.match(pagination, /Page précédente/);
   assert.match(pagination, /Page \{page\} sur \{totalPages\}/);
-  assert.match(pagination, /Suivant/);
+  assert.match(pagination, /Page suivante/);
+  assert.match(pagination, /Dernière page/);
+  assert.match(pagination, /page > 1[\s\S]*page - 1/);
+  assert.match(pagination, /page < totalPages[\s\S]*page \+ 1/);
+  assert.match(pagination, /page < totalPages[\s\S]*totalPages/);
 });
 
 test("desktop et mobile reçoivent exactement les mêmes items paginés", () => {
