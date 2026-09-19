@@ -4,6 +4,7 @@ import { getAuthenticatedUser } from "@/domains/protected-persons/services/authe
 import type { TransactionFilters, TransactionInput } from "../schemas/transaction-schema";
 import { CLOSED_PERIOD_ERROR } from "../errors";
 import { resolveTransactionClassification, resolveTransactionClassificationForUpdate } from "./transaction-classification";
+import { loadTransactionDocumentsInBatches } from "./transaction-document-batches";
 
 import { resolveEffectiveTransactionClassification, type EffectiveTransactionClassification } from "./transaction-classification-read";
 
@@ -41,7 +42,14 @@ export async function getTransactions(personId: string, filters: TransactionFilt
   const [initialCategories, transfers, documents] = await Promise.all([
     initialCategoryIds.length ? supabase.from("categories").select("*").in("id", initialCategoryIds).then(({ data: rows }) => rows ?? []) : [],
     transferIds.length ? supabase.from("transfers").select("*").in("id", transferIds).then(({ data: rows }) => rows ?? []) : [],
-    transactionIds.length ? supabase.from("transaction_documents").select("transaction_id").in("transaction_id", transactionIds).then(({ data: rows, error: documentError }) => { if (documentError) throw new Error("Impossible de charger les justificatifs."); return rows ?? []; }) : [],
+    transactionIds.length ? loadTransactionDocumentsInBatches(transactionIds, async (batchTransactionIds) => {
+      const { data: rows, error: documentError } = await supabase
+        .from("transaction_documents")
+        .select("transaction_id")
+        .in("transaction_id", batchTransactionIds);
+      if (documentError) throw new Error("Impossible de charger les justificatifs.");
+      return rows ?? [];
+    }) : [],
   ]);
   const categoryById = new Map(initialCategories.map((category) => [category.id, category]));
   const missingPresetTargetIds = [...new Set(categoryIds.flatMap((categoryId) => {
