@@ -10,6 +10,20 @@ export type AppRelease = {
 
 export const APP_RELEASES: readonly AppRelease[] = [
   {
+    version: "0.7.0",
+    date: "2026-09-19",
+    title: "Invitations fiabilisées et journaux adaptés aux grands historiques",
+    summary: `${APP_NAME} sécurise le parcours complet des collaborateurs invités et rend les journaux financiers fiables et confortables à consulter même avec plusieurs milliers d’opérations.`,
+    changes: [
+      "Parcours d’invitation préservé jusqu’au bon dossier malgré une déconnexion, une confirmation d’adresse ou une récupération de compte",
+      "Finalisation guidée des comptes invités incomplets avec définition sécurisée du mot de passe",
+      "Contexte de l’invitation explicite avant acceptation, avec dossier, rôle et identité de l’invitant",
+      "Pagination serveur des journaux globaux et des journaux de compte, avec filtres et retours contextuels conservés",
+      "Chargement fiable des justificatifs et des historiques financiers volumineux au-delà de 1 000 opérations",
+      "Soldes, patrimoine, classifications et comptes de gestion calculés sur l’historique complet",
+    ],
+  },
+  {
     version: "0.6.0",
     date: "2026-09-19",
     title: "Classification stable et parcours de gestion renforcés",
