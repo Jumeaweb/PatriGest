@@ -63,8 +63,8 @@ export function SignupForm({ invitationToken, email, firstName, lastName }: { in
   const recoveryHref = invitationToken ? `/mot-de-passe-oublie?next=${encodeURIComponent(getDossierInvitationPath(invitationToken))}` : "/mot-de-passe-oublie";
   if (state.status === "success") {
     return <div className="rounded-xl bg-green-50 px-4 py-4 text-green-900" role="status" aria-live="polite">
-      <h2 className="font-bold">Vérifiez votre adresse e-mail</h2>
-      <p className="mt-2 text-sm leading-6">Si l’adresse <strong className="break-all font-semibold">{state.email}</strong> peut être inscrite, un e-mail de confirmation lui a été envoyé.</p>
+      <h2 className="font-bold">Consultez votre messagerie</h2>
+      <p className="mt-2 text-sm leading-6">Si l’adresse <strong className="break-all font-semibold">{state.email}</strong> peut être créée ou récupérée, un e-mail lui a été envoyé pour poursuivre.</p>
       <p className="mt-2 text-sm leading-6">Si vous disposez déjà d’un compte PatriGest, <Link className="auth-link" href={loginHref}>connectez-vous</Link> ou utilisez la <Link className="auth-link" href={recoveryHref}>procédure de mot de passe oublié</Link>.</p>
     </div>;
   }
@@ -80,7 +80,7 @@ export function SignupForm({ invitationToken, email, firstName, lastName }: { in
       <Field id="passwordConfirmation" label="Confirmation du mot de passe" type="password" autoComplete="new-password" errors={state.fieldErrors?.passwordConfirmation} />
       <p className="text-xs leading-5 text-[#64748B]">Utilisez au moins 8 caractères. Un mot de passe long et unique protège mieux vos données.</p>
       <FormMessage state={state} />
-      <SubmitButton pendingLabel="Création…">Créer mon compte</SubmitButton>
+      <SubmitButton pendingLabel="Création…">{invitationToken ? "Créer ou finaliser mon compte" : "Créer mon compte"}</SubmitButton>
       <p className="text-center text-sm text-[#64748B]">Déjà inscrit ? <Link className="auth-link" href={loginHref}>Se connecter</Link></p>
       <Link className="auth-back-link" href="/">Retour à l’accueil</Link>
     </form>

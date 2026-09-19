@@ -9,6 +9,7 @@ import {
   getSafeNextPath,
 } from "@/lib/auth/redirects";
 import { getDossierInvitationPath } from "@/lib/auth/invitation-destination";
+import { shouldRecoverInvitedAuthAccount } from "@/lib/auth/invited-signup-recovery";
 import type { AuthActionState } from "@/lib/auth/state";
 import { createClient } from "@/lib/supabase/server";
 import { markSignupInvitationUsed, validateSignupInvitation } from "@/domains/access/actions";
@@ -92,6 +93,20 @@ export async function signupAction(_state: AuthActionState, formData: FormData):
       data: { first_name: parsed.data.firstName, last_name: parsed.data.lastName },
     },
   });
+
+  const shouldRecoverInvitedAccount = shouldRecoverInvitedAuthAccount({
+    isDossierInvitation: invitation?.kind === "dossier" && Boolean(invitationToken?.success),
+    signUpErrorCode: error?.code,
+    identityCount: signupData.user?.identities?.length ?? null,
+  });
+  if (shouldRecoverInvitedAccount && invitationToken?.success) {
+    const redirectTo = await getPasswordRecoveryRedirectUrl(getDossierInvitationPath(invitationToken.data));
+    const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, { redirectTo });
+    if (recoveryError && recoveryError.code !== "over_email_send_rate_limit") {
+      console.error("[PatriGest] Échec de récupération d’un compte invité existant", { code: recoveryError.code });
+    }
+    return { status: "success", message: "Vérifiez votre messagerie pour poursuivre votre inscription.", email: normalizedEmail };
+  }
   if (error?.code === "user_already_exists") {
     return { status: "success", message: "Vérifiez votre messagerie pour poursuivre votre inscription.", email: normalizedEmail };
   }

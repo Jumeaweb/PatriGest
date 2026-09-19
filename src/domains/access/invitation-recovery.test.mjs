@@ -60,8 +60,8 @@ test("la session d'une autre identité propose une déconnexion avec reprise", (
 
 test("la page publique n'énumère plus l'existence d'un compte Auth", () => {
   assert.doesNotMatch(invitationPage, /accountExists/);
-  assert.match(invitationPage, /Se connecter pour accepter/);
-  assert.match(invitationPage, /Créer mon compte/);
+  assert.match(invitationPage, /J’ai déjà un compte/);
+  assert.match(invitationPage, /Créer ou finaliser mon compte/);
 });
 
 test("callback, login ultérieur et écran d'attente reprennent l'invitation", () => {

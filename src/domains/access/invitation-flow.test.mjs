@@ -21,6 +21,21 @@ test("les parcours de connexion secondaires conservent l'invitation", () => {
   assert.match(authForms, /mot-de-passe-oublie\?next=/);
 });
 
+test("un compte Auth invité incomplet reçoit un parcours de récupération sécurisé", () => {
+  assert.match(authActions, /shouldRecoverInvitedAuthAccount/);
+  assert.match(authActions, /identityCount: signupData\.user\?\.identities\?\.length \?\? null/);
+  assert.match(authActions, /getPasswordRecoveryRedirectUrl\(getDossierInvitationPath\(invitationToken\.data\)\)/);
+  assert.match(authActions, /resetPasswordForEmail\(normalizedEmail, \{ redirectTo \}\)/);
+  assert.match(authForms, /Créer ou finaliser mon compte/);
+  assert.match(invitationPage, /Créer ou finaliser mon compte/);
+});
+
+test("la récupération d'un compte invité reste neutre sur son existence", () => {
+  assert.match(authForms, /Si l’adresse[\s\S]*peut être créée ou récupérée/);
+  assert.doesNotMatch(authForms, /Ce compte existe/);
+  assert.doesNotMatch(invitationPage, /accountExists|auth\.users|identities/);
+});
+
 test("l'acceptation ouvre le tableau de bord du dossier partagé", () => {
   assert.match(actions, /redirect\(`\/dossiers\/\$\{data\}\/tableau-de-bord`\)/);
   assert.doesNotMatch(actions, /redirect\(`\/dossiers\/\$\{data\}\/comptes`\)/);
