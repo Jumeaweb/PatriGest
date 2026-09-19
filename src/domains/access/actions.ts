@@ -8,7 +8,7 @@ import { getDossierInvitationPath } from "@/lib/auth/invitation-destination";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { sendDossierInvitationEmail } from "./invitation-email";
-import { getInvitationPreview, getRecoverableDossierInvitations } from "./services";
+import { getDossierInvitationDisplayContext, getInvitationPreview, getRecoverableDossierInvitations } from "./services";
 import type { AccessActionState } from "./state";
 
 const requestSchema = z.object({ firstName: z.string().trim().min(1).max(80), lastName: z.string().trim().min(1).max(80), email: z.email().trim().toLowerCase(), message: z.string().trim().max(1000).optional() });
@@ -74,10 +74,13 @@ export async function validateSignupInvitation(token: string) {
   const now = new Date().toISOString();
   const [requestResult, dossierResult] = await Promise.all([
     admin.from("account_requests").select("id,email,first_name,last_name").eq("invitation_token_hash", tokenHash).eq("status", "approved").is("invitation_used_at", null).gt("invitation_expires_at", now).maybeSingle(),
-    admin.from("protected_person_invitations").select("id,email").eq("token_hash", tokenHash).is("accepted_at", null).is("revoked_at", null).gt("expires_at", now).maybeSingle(),
+    admin.from("protected_person_invitations").select("id,email,role,protected_person_id,invited_by").eq("token_hash", tokenHash).is("accepted_at", null).is("revoked_at", null).gt("expires_at", now).maybeSingle(),
   ]);
   if (requestResult.data) return { kind: "account" as const, ...requestResult.data };
-  if (dossierResult.data) return { kind: "dossier" as const, ...dossierResult.data, first_name: "", last_name: "" };
+  if (dossierResult.data) {
+    const displayContext = await getDossierInvitationDisplayContext(dossierResult.data.protected_person_id, dossierResult.data.invited_by);
+    return { kind: "dossier" as const, ...dossierResult.data, ...displayContext, first_name: "", last_name: "" };
+  }
   return null;
 }
 
@@ -110,6 +113,7 @@ export async function inviteCollaboratorAction(protectedPersonId: string, _state
     if (actor.role !== "owner" && actor.role !== "manager") return { status: "error", message: "Vous ne pouvez pas inviter de collaborateur." };
     if (actor.role === "manager" && input.role !== "read_only") return { status: "error", message: "Un gestionnaire ne peut inviter qu’en lecture seule." };
     const invitation = createDossierInvitationSecret();
+    const displayContext = await getDossierInvitationDisplayContext(actor.protectedPersonId, actor.userId);
     const { error } = await actor.supabase.rpc("issue_protected_person_invitation", {
       p_protected_person_id: actor.protectedPersonId,
       p_email: input.email,
@@ -121,7 +125,7 @@ export async function inviteCollaboratorAction(protectedPersonId: string, _state
     const invitationUrl = `${await getApplicationOrigin()}${getDossierInvitationPath(invitation.token)}`;
     revalidatePath(`/dossiers/${actor.protectedPersonId}/acces`);
     try {
-      await sendDossierInvitationEmail({ email: input.email, role: input.role, invitationUrl, expiresAt: invitation.expiresAt });
+      await sendDossierInvitationEmail({ email: input.email, role: input.role, ...displayContext, invitationUrl, expiresAt: invitation.expiresAt });
       return { status: "success", message: "Invitation envoyée." };
     } catch {
       return { status: "warning", message: "Invitation créée, mais l’e-mail n’a pas pu être envoyé.", invitationUrl, invitationExpiresAt: invitation.expiresAt };
@@ -150,6 +154,7 @@ export async function reissueDossierInvitationAction(protectedPersonId: string, 
     }
 
     const invitation = createDossierInvitationSecret();
+    const displayContext = await getDossierInvitationDisplayContext(actor.protectedPersonId, source.invited_by);
     const { error } = await actor.supabase.rpc("reissue_protected_person_invitation", {
       p_invitation_id: parsedInvitationId,
       p_token_hash: invitation.tokenHash,
@@ -160,7 +165,7 @@ export async function reissueDossierInvitationAction(protectedPersonId: string, 
     const invitationUrl = `${await getApplicationOrigin()}${getDossierInvitationPath(invitation.token)}`;
     revalidatePath(`/dossiers/${actor.protectedPersonId}/acces`);
     try {
-      await sendDossierInvitationEmail({ email: source.email, role: source.role, invitationUrl, expiresAt: invitation.expiresAt });
+      await sendDossierInvitationEmail({ email: source.email, role: source.role, ...displayContext, invitationUrl, expiresAt: invitation.expiresAt });
       return { status: "success", message: "Nouvelle invitation envoyée." };
     } catch {
       return { status: "warning", message: "Nouvelle invitation créée, mais l’e-mail n’a pas pu être envoyé.", invitationUrl, invitationExpiresAt: invitation.expiresAt };

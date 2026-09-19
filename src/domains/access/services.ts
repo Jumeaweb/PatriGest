@@ -16,6 +16,25 @@ export type RecoverableDossierInvitation = {
   expiresAt: string;
 };
 
+export async function getDossierInvitationDisplayContext(protectedPersonId: string, invitedBy: string | null) {
+  const admin = createAdminClient();
+  const [personResult, inviterResult] = await Promise.all([
+    admin.from("protected_persons").select("first_name,last_name").eq("id", protectedPersonId).maybeSingle(),
+    invitedBy
+      ? admin.from("profiles").select("first_name,last_name").eq("id", invitedBy).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+  ]);
+  if (personResult.error || inviterResult.error || !personResult.data) {
+    throw new Error("Impossible de charger le contexte de l’invitation.");
+  }
+  return {
+    dossierName: `${personResult.data.first_name} ${personResult.data.last_name}`.trim(),
+    inviterName: invitedBy
+      ? [inviterResult.data?.first_name, inviterResult.data?.last_name].filter(Boolean).join(" ") || "Un utilisateur PatriGest"
+      : "Utilisateur supprimé",
+  };
+}
+
 async function getVerifiedInvitationIdentity(userId: string) {
   const admin = createAdminClient();
   const [{ data: userData, error: userError }, { data: authorization, error: authorizationError }, { data: administrator, error: administratorError }] = await Promise.all([
@@ -95,22 +114,18 @@ export async function getInvitationPreview(token: string) {
   const status = getDossierInvitationStatus(data);
   if (status !== "pending") return { status };
 
-  const inviterResult = data.invited_by
-    ? await admin.from("profiles").select("first_name,last_name").eq("id", data.invited_by).maybeSingle()
-    : { data: null, error: null };
-  if (inviterResult.error) {
-    console.error("[PatriGest] Échec du chargement d’une invitation valide", {
-      ownerCode: inviterResult.error.code,
-    });
+  let displayContext;
+  try {
+    displayContext = await getDossierInvitationDisplayContext(data.protected_person_id, data.invited_by);
+  } catch {
+    console.error("[PatriGest] Échec du chargement du contexte d’une invitation valide");
     return { status: "error" as const };
   }
   return {
     status: "pending" as const,
     invitation: {
       ...data,
-      ownerName: data.invited_by
-        ? [inviterResult.data?.first_name, inviterResult.data?.last_name].filter(Boolean).join(" ") || "Un utilisateur PatriGest"
-        : "Utilisateur supprimé",
+      ...displayContext,
     },
   };
 }

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { acceptRecoveredDossierInvitationAction } from "@/domains/access/actions";
 import { getRecoverableDossierInvitations } from "@/domains/access/services";
+import { getInvitationRoleLabel } from "@/domains/access/invitation-presentation";
 import { selectRecoverableInvitations } from "@/lib/auth/invitation-recovery";
 import { createClient } from "@/lib/supabase/server";
 
@@ -31,9 +32,9 @@ export default async function PendingInvitationsPage({ searchParams }: { searchP
   >
     <div className="space-y-3">
       {displayedInvitations.map((invitation) => <article className="rounded-xl border border-[#E2E8F0] p-4" key={invitation.id}>
-        <h2 className="font-bold text-[#0F172A]">{invitation.dossierName}</h2>
-        <p className="mt-1 text-sm text-[#64748B]">Rôle proposé : {invitation.role === "manager" ? "Gestionnaire" : "Lecture seule"}</p>
-        {invitation.inviterName && <p className="mt-1 text-sm text-[#64748B]">Invitation envoyée par {invitation.inviterName}</p>}
+        <h2 className="font-bold text-[#0F172A]">{invitation.inviterName || "Un utilisateur PatriGest"}</h2>
+        <p className="mt-1 text-sm text-[#64748B]">vous invite au dossier de <strong className="text-[#334155]">{invitation.dossierName}</strong></p>
+        <p className="mt-1 text-sm text-[#64748B]">Rôle proposé : {getInvitationRoleLabel(invitation.role)}</p>
         <form action={acceptRecoveredDossierInvitationAction.bind(null, invitation.id)}>
           <button className="button button-primary mt-3 w-full" type="submit">Accepter cette invitation</button>
         </form>
