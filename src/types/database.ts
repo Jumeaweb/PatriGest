@@ -26,6 +26,7 @@ export type PropertyStatus = "active" | "disposed";
 export type PropertyEventType = "acquisition" | "sale" | "inheritance" | "donation" | "significant_change";
 export type DebtType = "bank_loan" | "tax_debt" | "institution_debt" | "personal_debt" | "other";
 export type DebtStatus = "active" | "settled";
+export type BankReconciliationStatus = "draft" | "validated";
 export type ManagementReportStatus = "draft" | "ready" | "generated" | "finalized" | "transmitted" | "approved" | "difficulty";
 export type ManagementReportDocumentType = "management_report_draft" | "management_report" | "approval_certificate" | "difficulty_report";
 export type ManagementReportTransmissionMethod = "postal_mail" | "hand_delivery" | "email" | "external_platform" | "other";
@@ -223,9 +224,15 @@ export type Database = {
         Relationships: [];
       };
       bank_statements: {
-        Row: { id: string; financial_account_id: string; statement_start_date: string | null; statement_end_date: string; statement_balance: number | null; storage_path: string; original_file_name: string; mime_type: string; file_size: number; note: string | null; created_by: string; created_at: string; updated_at: string };
-        Insert: { id?: string; financial_account_id: string; statement_start_date?: string | null; statement_end_date: string; statement_balance?: number | null; storage_path: string; original_file_name: string; mime_type: string; file_size: number; note?: string | null; created_by: string; created_at?: string; updated_at?: string };
-        Update: { statement_start_date?: string | null; statement_end_date?: string; statement_balance?: number | null; original_file_name?: string; mime_type?: string; file_size?: number; note?: string | null; updated_at?: string };
+        Row: { id: string; financial_account_id: string; statement_start_date: string | null; statement_end_date: string; statement_balance: number | null; storage_path: string; original_file_name: string | null; mime_type: string | null; file_size: number | null; note: string | null; created_by: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; financial_account_id: string; statement_start_date?: string | null; statement_end_date: string; statement_balance?: number | null; storage_path: string; original_file_name?: string | null; mime_type?: string | null; file_size?: number | null; note?: string | null; created_by: string; created_at?: string; updated_at?: string };
+        Update: { statement_start_date?: string | null; statement_end_date?: string; statement_balance?: number | null; original_file_name?: string | null; mime_type?: string | null; file_size?: number | null; note?: string | null; updated_at?: string };
+        Relationships: [];
+      };
+      bank_reconciliations: {
+        Row: { id: string; bank_statement_id: string; status: BankReconciliationStatus; calculated_balance: number | null; difference: number | null; created_by: string | null; created_at: string; updated_at: string; validated_at: string | null; validated_by: string | null };
+        Insert: { id?: string; bank_statement_id: string; status?: BankReconciliationStatus; calculated_balance?: number | null; difference?: number | null; created_by: string; created_at?: string; updated_at?: string; validated_at?: string | null; validated_by?: string | null };
+        Update: { status?: BankReconciliationStatus; calculated_balance?: number | null; difference?: number | null; updated_at?: string; validated_at?: string | null; validated_by?: string | null };
         Relationships: [];
       };
       management_reports: {
@@ -313,6 +320,7 @@ export type PropertyEvent = Database["public"]["Tables"]["property_events"]["Row
 export type Debt = Database["public"]["Tables"]["debts"]["Row"];
 export type DebtBalance = Database["public"]["Tables"]["debt_balances"]["Row"];
 export type BankStatement = Database["public"]["Tables"]["bank_statements"]["Row"];
+export type BankReconciliation = Database["public"]["Tables"]["bank_reconciliations"]["Row"];
 export type ManagementReport = Database["public"]["Tables"]["management_reports"]["Row"];
 export type ManagementReportDocument = Database["public"]["Tables"]["management_report_documents"]["Row"];
 export type ManagementReportAccountSelection = Database["public"]["Tables"]["management_report_account_selections"]["Row"];
