@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { deletePlatformUser, resendApplicationActivationEmail, reviewApplicationRegistration } from "./services/administration-service";
-import type { DeleteUserState, RegistrationReviewState } from "./state";
+import { sendGlobalReleaseNotifications, sendTestReleaseNotification } from "./services/release-notification-service";
+import type { DeleteUserState, RegistrationReviewState, ReleaseNotificationActionState } from "./state";
 
 export async function deletePlatformUserAction(userId: string, _state: DeleteUserState, _formData: FormData): Promise<DeleteUserState> {
   void _state;
@@ -45,5 +46,38 @@ export async function resendApplicationActivationEmailAction(_state: Registratio
     return { status: "success", message: "E-mail d’activation renvoyé." };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Impossible de renvoyer l’e-mail d’activation." };
+  }
+}
+
+const releaseTestSchema = z.object({ version: z.string().regex(/^\d+\.\d+\.\d+$/), userId: z.uuid() });
+const releaseGlobalSchema = z.object({ version: z.string().regex(/^\d+\.\d+\.\d+$/) });
+
+export async function sendTestReleaseNotificationAction(_state: ReleaseNotificationActionState, formData: FormData): Promise<ReleaseNotificationActionState> {
+  void _state;
+  const parsed = releaseTestSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { status: "error", message: "Version ou destinataire de test invalide." };
+  try {
+    const result = await sendTestReleaseNotification(parsed.data.version, parsed.data.userId);
+    revalidatePath("/administration");
+    return { status: "success", message: `E-mail de test envoyé à ${result.email}.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Impossible d’envoyer l’e-mail de test." };
+  }
+}
+
+export async function sendGlobalReleaseNotificationsAction(_state: ReleaseNotificationActionState, formData: FormData): Promise<ReleaseNotificationActionState> {
+  void _state;
+  const parsed = releaseGlobalSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { status: "error", message: "Version PatriGest invalide." };
+  try {
+    const summary = await sendGlobalReleaseNotifications(parsed.data.version);
+    revalidatePath("/administration");
+    return {
+      status: "success",
+      message: `${summary.sent} e-mail(s) envoyé(s), ${summary.alreadySent} déjà traité(s), ${summary.failed} échec(s).`,
+      summary,
+    };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Impossible d’informer les utilisateurs." };
   }
 }

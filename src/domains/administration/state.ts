@@ -8,3 +8,11 @@ export type RegistrationReviewState = {
 };
 
 export const initialRegistrationReviewState: RegistrationReviewState = { status: "idle", message: "" };
+
+export type ReleaseNotificationActionState = {
+  status: "idle" | "error" | "success";
+  message: string;
+  summary?: { recipients: number; alreadySent: number; sent: number; failed: number };
+};
+
+export const initialReleaseNotificationActionState: ReleaseNotificationActionState = { status: "idle", message: "" };

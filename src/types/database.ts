@@ -20,6 +20,8 @@ export type DossierAccessRole = "owner" | "manager" | "read_only";
 export type SharedAccessRole = Exclude<DossierAccessRole, "owner">;
 type AccountRequestStatus = "pending" | "approved" | "rejected";
 export type ApplicationUserAuthorizationStatus = "pending" | "active" | "rejected";
+export type ReleaseNotificationDeliveryKind = "test" | "global";
+export type ReleaseNotificationStatus = "pending" | "sending" | "sent" | "failed";
 export type PropertyType = "house" | "apartment" | "land" | "commercial" | "other";
 export type PropertyEntryMode = "acquisition" | "inheritance" | "donation" | "other";
 export type PropertyStatus = "active" | "disposed";
@@ -227,6 +229,12 @@ export type Database = {
         Row: { id: string; financial_account_id: string; statement_start_date: string | null; statement_end_date: string; statement_balance: number | null; storage_path: string; original_file_name: string | null; mime_type: string | null; file_size: number | null; note: string | null; created_by: string | null; created_at: string; updated_at: string };
         Insert: { id?: string; financial_account_id: string; statement_start_date?: string | null; statement_end_date: string; statement_balance?: number | null; storage_path: string; original_file_name?: string | null; mime_type?: string | null; file_size?: number | null; note?: string | null; created_by: string; created_at?: string; updated_at?: string };
         Update: { statement_start_date?: string | null; statement_end_date?: string; statement_balance?: number | null; original_file_name?: string | null; mime_type?: string | null; file_size?: number | null; note?: string | null; updated_at?: string };
+        Relationships: [];
+      };
+      release_notifications: {
+        Row: { id: string; version: string; user_id: string; email_snapshot: string; delivery_kind: ReleaseNotificationDeliveryKind; status: ReleaseNotificationStatus; provider_message_id: string | null; attempt_count: number; last_error_safe: string | null; requested_by: string | null; created_at: string; sent_at: string | null; updated_at: string };
+        Insert: { id?: string; version: string; user_id: string; email_snapshot: string; delivery_kind: ReleaseNotificationDeliveryKind; status?: ReleaseNotificationStatus; provider_message_id?: string | null; attempt_count?: number; last_error_safe?: string | null; requested_by?: string | null; created_at?: string; sent_at?: string | null; updated_at?: string };
+        Update: { email_snapshot?: string; status?: ReleaseNotificationStatus; provider_message_id?: string | null; attempt_count?: number; last_error_safe?: string | null; requested_by?: string | null; sent_at?: string | null; updated_at?: string };
         Relationships: [];
       };
       bank_reconciliations: {

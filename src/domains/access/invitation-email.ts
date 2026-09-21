@@ -1,7 +1,7 @@
 import "server-only";
 
-import { Resend } from "resend";
 import { APP_NAME } from "@/lib/app";
+import { sendEmailWithResend } from "@/lib/email/resend-transport";
 import type { SharedAccessRole } from "@/types/database";
 import { buildDossierInvitationEmail } from "./invitation-presentation";
 
@@ -20,9 +20,6 @@ export async function sendDossierInvitationEmail({
   invitationUrl: string;
   expiresAt: string;
 }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new Error("RESEND_API_KEY absente.");
-
   const expirationLabel = new Intl.DateTimeFormat("fr-FR", {
     dateStyle: "long",
     timeStyle: "short",
@@ -36,14 +33,10 @@ export async function sendDossierInvitationEmail({
     invitationUrl,
     expirationLabel,
   });
-  const resend = new Resend(apiKey);
-  const { error } = await resend.emails.send({
-    from: `${APP_NAME} <noreply@patrigest.fr>`,
+  await sendEmailWithResend({
     to: email,
     subject: content.subject,
     text: content.text,
     html: content.html,
   });
-
-  if (error) throw new Error("Échec de l’envoi Resend.");
 }
