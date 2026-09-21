@@ -14,7 +14,7 @@ test("la création d'un relevé accepte l'absence de PDF sans appeler Storage", 
 test("un relevé sans PDF n'expose pas d'action document ni d'appel Storage", () => {
   const component = source("./components/bank-statement-manager.tsx");
   const route = source("../../app/api/dossiers/[protectedPersonId]/comptes/[accountId]/releves/[statementId]/route.ts");
-  assert.match(component, /hasDocument=.*original_file_name!==null/);
+  assert.match(component, /hasDocument\s*=\s*item\.original_file_name\s*!==\s*null/);
   assert.match(component, /Aucun PDF/);
   assert.match(route, /Aucun PDF n’est associé à ce relevé/);
   assert.match(route, /if\(value\.statement\.original_file_name\)\{const downloaded=/);

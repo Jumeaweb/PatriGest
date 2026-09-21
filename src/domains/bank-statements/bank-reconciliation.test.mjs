@@ -56,7 +56,7 @@ test("la création explicite du draft est idempotente", () => {
 test("la liste charge seulement les états par lots sans calcul de solde", () => {
   const service = source("./reconciliation-service.ts");
   assert.match(service, /RECONCILIATION_QUERY_BATCH_SIZE = 100/);
-  assert.match(service, /select\("id, bank_statement_id, status, calculated_balance, difference, validated_at"\)/);
+  assert.match(service, /select\("id, bank_statement_id, status, reconciliation_mode, calculated_balance, difference, outstanding_debits, outstanding_credits, explained_bank_balance, residual_difference, validated_at"\)/);
   const listFunction = service.slice(service.indexOf("export async function getBankReconciliationListStates"), service.indexOf("export async function getBankReconciliation("));
   assert.doesNotMatch(listFunction, /getAccountBalanceAtDate/);
 });

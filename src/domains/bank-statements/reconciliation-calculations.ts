@@ -36,3 +36,26 @@ export function calculateReconciliationDifference(statementBalance: number, calc
     differenceInCents,
   };
 }
+
+export function calculateDetailedReconciliation(
+  statementBalance: number,
+  calculatedBalanceInCents: number,
+  outstandingDebitsInCents: number,
+  outstandingCreditsInCents: number,
+) {
+  const statementBalanceInCents = toMoneyCents(statementBalance);
+  const explainedBalanceInCents = calculatedBalanceInCents
+    + outstandingDebitsInCents
+    - outstandingCreditsInCents;
+  const residualDifferenceInCents = statementBalanceInCents - explainedBalanceInCents;
+  if (![calculatedBalanceInCents, outstandingDebitsInCents, outstandingCreditsInCents, explainedBalanceInCents, residualDifferenceInCents].every(Number.isSafeInteger)) {
+    throw new Error("Montant hors limites pour le rapprochement détaillé.");
+  }
+  return {
+    calculatedBalance: calculatedBalanceInCents / 100,
+    outstandingDebits: outstandingDebitsInCents / 100,
+    outstandingCredits: outstandingCreditsInCents / 100,
+    explainedBankBalance: explainedBalanceInCents / 100,
+    residualDifference: residualDifferenceInCents / 100,
+  };
+}

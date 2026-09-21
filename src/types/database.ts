@@ -230,9 +230,15 @@ export type Database = {
         Relationships: [];
       };
       bank_reconciliations: {
-        Row: { id: string; bank_statement_id: string; status: BankReconciliationStatus; calculated_balance: number | null; difference: number | null; created_by: string | null; created_at: string; updated_at: string; validated_at: string | null; validated_by: string | null };
-        Insert: { id?: string; bank_statement_id: string; status?: BankReconciliationStatus; calculated_balance?: number | null; difference?: number | null; created_by: string; created_at?: string; updated_at?: string; validated_at?: string | null; validated_by?: string | null };
-        Update: { status?: BankReconciliationStatus; calculated_balance?: number | null; difference?: number | null; updated_at?: string; validated_at?: string | null; validated_by?: string | null };
+        Row: { id: string; bank_statement_id: string; status: BankReconciliationStatus; reconciliation_mode: "simple" | "complete"; calculated_balance: number | null; difference: number | null; outstanding_debits: number | null; outstanding_credits: number | null; explained_bank_balance: number | null; residual_difference: number | null; created_by: string | null; created_at: string; updated_at: string; validated_at: string | null; validated_by: string | null };
+        Insert: { id?: string; bank_statement_id: string; status?: BankReconciliationStatus; reconciliation_mode?: "simple" | "complete"; calculated_balance?: number | null; difference?: number | null; outstanding_debits?: number | null; outstanding_credits?: number | null; explained_bank_balance?: number | null; residual_difference?: number | null; created_by: string; created_at?: string; updated_at?: string; validated_at?: string | null; validated_by?: string | null };
+        Update: { status?: BankReconciliationStatus; reconciliation_mode?: "simple" | "complete"; calculated_balance?: number | null; difference?: number | null; outstanding_debits?: number | null; outstanding_credits?: number | null; explained_bank_balance?: number | null; residual_difference?: number | null; updated_at?: string; validated_at?: string | null; validated_by?: string | null };
+        Relationships: [];
+      };
+      bank_reconciliation_outstanding_transactions: {
+        Row: { id: string; bank_reconciliation_id: string; transaction_id: string | null; transaction_id_snapshot: string; transaction_date_snapshot: string | null; transaction_type_snapshot: TransactionType | null; amount_snapshot: number | null; label_snapshot: string | null; created_by: string | null; created_at: string };
+        Insert: { id?: string; bank_reconciliation_id: string; transaction_id: string; transaction_id_snapshot: string; transaction_date_snapshot?: string | null; transaction_type_snapshot?: TransactionType | null; amount_snapshot?: number | null; label_snapshot?: string | null; created_by: string; created_at?: string };
+        Update: { transaction_id?: string | null; transaction_date_snapshot?: string | null; transaction_type_snapshot?: TransactionType | null; amount_snapshot?: number | null; label_snapshot?: string | null; created_by?: string | null };
         Relationships: [];
       };
       management_reports: {
@@ -276,6 +282,11 @@ export type Database = {
     Functions: {
       is_platform_admin: { Args: Record<string, never>; Returns: boolean };
       is_application_user_active: { Args: Record<string, never>; Returns: boolean };
+      activate_complete_bank_reconciliation: { Args: { p_reconciliation_id: string }; Returns: Database["public"]["Tables"]["bank_reconciliations"]["Row"] };
+      add_bank_reconciliation_outstanding_transaction: { Args: { p_reconciliation_id: string; p_transaction_id: string }; Returns: Database["public"]["Tables"]["bank_reconciliation_outstanding_transactions"]["Row"] };
+      remove_bank_reconciliation_outstanding_transaction: { Args: { p_reconciliation_id: string; p_transaction_id: string }; Returns: undefined };
+      list_bank_reconciliation_candidate_transactions: { Args: { p_reconciliation_id: string; p_after_date?: string | null; p_after_created_at?: string | null; p_after_id?: string | null; p_limit?: number }; Returns: Array<{ transaction_id: string; transaction_date: string; transaction_created_at: string; transaction_type: TransactionType; label: string; amount: number; is_outstanding: boolean; carried_from_previous: boolean }> };
+      get_bank_reconciliation_detailed_summary: { Args: { p_reconciliation_id: string }; Returns: Array<{ calculated_balance: number; outstanding_debits: number; outstanding_credits: number; explained_bank_balance: number; residual_difference: number; outstanding_count: number }> };
       review_application_user_registration: { Args: { p_user_id: string; p_decision: "active" | "rejected" }; Returns: "active" | "rejected" };
       is_protected_person_owner: { Args: { person_id: string }; Returns: boolean };
       can_read_protected_person: { Args: { person_id: string }; Returns: boolean };
@@ -322,6 +333,7 @@ export type Debt = Database["public"]["Tables"]["debts"]["Row"];
 export type DebtBalance = Database["public"]["Tables"]["debt_balances"]["Row"];
 export type BankStatement = Database["public"]["Tables"]["bank_statements"]["Row"];
 export type BankReconciliation = Database["public"]["Tables"]["bank_reconciliations"]["Row"];
+export type BankReconciliationOutstandingTransaction = Database["public"]["Tables"]["bank_reconciliation_outstanding_transactions"]["Row"];
 export type ManagementReport = Database["public"]["Tables"]["management_reports"]["Row"];
 export type ManagementReportDocument = Database["public"]["Tables"]["management_report_documents"]["Row"];
 export type ManagementReportAccountSelection = Database["public"]["Tables"]["management_report_account_selections"]["Row"];

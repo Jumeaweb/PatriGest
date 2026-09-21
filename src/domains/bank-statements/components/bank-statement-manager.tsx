@@ -5,8 +5,9 @@ import { Download, ExternalLink, FilePenLine, FilePlus2, RefreshCw, Scale, Trash
 import { useRouter } from "next/navigation";
 import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
 import type { BankStatement, FinancialAccount } from "@/types/database";
-import type { BankReconciliationControl, BankReconciliationListState } from "../reconciliation-service";
+import type { BankReconciliationControl, BankReconciliationListState, OutstandingTransactionPage } from "../reconciliation-service";
 import { getReconciliationUnavailableReason, type ReconciliationUnavailableReason } from "../reconciliation-calculations";
+import { OutstandingTransactionsDialog } from "./outstanding-transactions-dialog";
 
 const date = (value: string) => new Intl.DateTimeFormat("fr-FR").format(new Date(`${value}T00:00:00Z`));
 const dateTime = (value: string) => new Intl.DateTimeFormat("fr-FR").format(new Date(value));
@@ -55,7 +56,7 @@ function StatementCard(props: StatementProps) {
 
 function initialValidatedControl(item: BankStatement, reconciliation: BankReconciliationListState | null): BankReconciliationControl | null {
   if (!reconciliation || reconciliation.status !== "validated") return null;
-  return { reconciliationId: reconciliation.id, status: "validated", unavailableReason: null, statementEndDate: item.statement_end_date, statementBalance: item.statement_balance, calculatedBalance: reconciliation.calculated_balance, calculatedBalanceInCents: reconciliation.calculated_balance === null ? null : Math.round(reconciliation.calculated_balance * 100), difference: reconciliation.difference, differenceInCents: reconciliation.difference === null ? null : Math.round(reconciliation.difference * 100), validatedAt: reconciliation.validated_at };
+  return { reconciliationId: reconciliation.id, status: "validated", reconciliationMode: reconciliation.reconciliation_mode, unavailableReason: null, statementEndDate: item.statement_end_date, statementBalance: item.statement_balance, calculatedBalance: reconciliation.calculated_balance, calculatedBalanceInCents: reconciliation.calculated_balance === null ? null : Math.round(reconciliation.calculated_balance * 100), difference: reconciliation.difference, differenceInCents: reconciliation.difference === null ? null : Math.round(reconciliation.difference * 100), validatedAt: reconciliation.validated_at, outstandingDebits: reconciliation.outstanding_debits, outstandingCredits: reconciliation.outstanding_credits, explainedBankBalance: reconciliation.explained_bank_balance, residualDifference: reconciliation.residual_difference, outstandingCount: null };
 }
 
 function unavailableMessage(reason: ReconciliationUnavailableReason) {
@@ -69,7 +70,10 @@ function ReconciliationControl({ personId, accountId, item, reconciliation, acco
   const [control, setControl] = useState<BankReconciliationControl | null>(() => initialValidatedControl(item, reconciliation));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [pointingOpen, setPointingOpen] = useState(false);
+  const [pointingPage, setPointingPage] = useState<OutstandingTransactionPage | null>(null);
   const endpoint = `/api/dossiers/${personId}/comptes/${accountId}/releves/${item.id}/rapprochement`;
+  const pointingEndpoint = `${endpoint}/pointage`;
   const unavailableReason = getReconciliationUnavailableReason(item, accountDates);
   const status = control?.status ?? reconciliation?.status ?? "none";
 
@@ -85,14 +89,27 @@ function ReconciliationControl({ personId, accountId, item, reconciliation, acco
     finally { setBusy(false); }
   }
 
+  async function openPointing(activate: boolean) {
+    setBusy(true); setMessage("");
+    try {
+      const response = await fetch(pointingEndpoint, { method: activate ? "POST" : "GET" });
+      const result = await response.json() as OutstandingTransactionPage & { message?: string };
+      if (!response.ok) throw new Error(result.message || "Impossible de charger le rapprochement détaillé.");
+      setPointingPage(result);
+      if (control && activate) setControl({ ...control, reconciliationMode: "complete", ...result.summary });
+      setPointingOpen(true);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Impossible de charger le rapprochement détaillé."); }
+    finally { setBusy(false); }
+  }
+
   if (unavailableReason && status !== "validated") return <div><p className="text-xs font-semibold text-[#64748B]">Contrôle indisponible</p><p className="mt-0.5 text-xs text-[#64748B]">{unavailableMessage(unavailableReason)}</p></div>;
   if (status === "none") return <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-bold">Contrôle non commencé</p><p className="text-[11px] text-[#64748B]">Comparez le relevé au solde calculé par PatriGest.</p></div>{canManage && <button className="button button-secondary min-h-8 gap-1.5 px-2.5 text-xs" disabled={busy} onClick={() => request("POST")}><Scale size={13} />{busy ? "Calcul…" : "Contrôler le solde"}</button>}{message && <p role="alert" className="w-full text-xs text-red-700">{message}</p>}</div>;
   if (status === "draft" && !control) return <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold">Brouillon</p><button className="button button-secondary min-h-8 px-2.5 text-xs" disabled={busy} onClick={() => request("GET")}>{busy ? "Calcul…" : "Afficher le contrôle"}</button>{message && <p role="alert" className="w-full text-xs text-red-700">{message}</p>}</div>;
   if (!control || control.calculatedBalance === null || control.difference === null || control.statementBalance === null) return null;
-  return <div><div className="grid gap-2 sm:grid-cols-3"><Value label="Solde du relevé" value={control.statementBalance} /><Value label={`Solde PatriGest au ${date(control.statementEndDate)}`} value={control.calculatedBalance} /><Value label="Écart" value={control.difference} /></div><div className="mt-2 flex flex-wrap items-center justify-between gap-2"><p className="text-[11px] font-semibold text-[#64748B]">{control.status === "validated" && control.validatedAt ? `Validé le ${dateTime(control.validatedAt)} — montants figés` : "Brouillon — recalculé à l’affichage"}</p>{control.status === "draft" && canManage && <div className="flex flex-wrap gap-1.5"><button className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" disabled={busy} onClick={() => request("GET")}><RefreshCw size={13} />Recalculer</button><button className="button button-primary min-h-8 px-2.5 text-xs" disabled={busy} onClick={() => request("PATCH")}>Valider le contrôle</button></div>}{message && <p role="alert" className="w-full text-xs text-red-700">{message}</p>}</div></div>;
+  return <div><div className="grid gap-2 sm:grid-cols-3"><Value label="Solde du relevé" value={control.statementBalance} /><Value label={`Solde PatriGest au ${date(control.statementEndDate)}`} value={control.calculatedBalance} /><Value label={control.reconciliationMode === "complete" ? "Écart simple" : "Écart"} value={control.difference} /></div>{control.reconciliationMode === "complete" && <div className="mt-2 grid gap-2 rounded-lg bg-white p-2 sm:grid-cols-4"><Value label="+ Débits en circulation" value={control.outstandingDebits} /><Value label="− Crédits en circulation" value={control.outstandingCredits} /><Value label="Solde bancaire expliqué" value={control.explainedBankBalance} /><Value label="Écart résiduel" value={control.residualDifference} /></div>}<div className="mt-2 flex flex-wrap items-center justify-between gap-2"><p className="text-[11px] font-semibold text-[#64748B]">{control.status === "validated" && control.validatedAt ? `Validé le ${dateTime(control.validatedAt)} — montants figés` : control.reconciliationMode === "complete" ? "Brouillon détaillé — recalculé à l’affichage" : "Brouillon — recalculé à l’affichage"}</p><div className="flex flex-wrap gap-1.5">{control.reconciliationMode === "complete" && <button className="button button-secondary min-h-8 px-2.5 text-xs" disabled={busy} onClick={() => openPointing(false)}>Opérations en circulation</button>}{control.status === "draft" && canManage && <>{control.reconciliationMode === "simple" && <button className="button button-secondary min-h-8 px-2.5 text-xs" disabled={busy} onClick={() => openPointing(true)}>Rapprochement détaillé</button>}<button className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" disabled={busy} onClick={() => request("GET")}><RefreshCw size={13} />Recalculer</button><button className="button button-primary min-h-8 px-2.5 text-xs" disabled={busy} onClick={() => request("PATCH")}>Valider le contrôle</button></>}</div>{message && <p role="alert" className="w-full text-xs text-red-700">{message}</p>}</div>{pointingOpen && <OutstandingTransactionsDialog endpoint={pointingEndpoint} open canManage={canManage && control.status === "draft"} initialPage={pointingPage} onClose={() => setPointingOpen(false)} onChange={(page) => { setPointingPage(page); setControl((current) => current ? { ...current, ...page.summary } : current); }} />}</div>;
 }
 
-function Value({ label, value }: { label: string; value: number }) { return <div><p className="text-[10px] font-bold uppercase tracking-wide text-[#64748B]">{label}</p><p className="text-sm font-bold tabular-nums">{euro(value)}</p></div>; }
+function Value({ label, value }: { label: string; value: number | null }) { return <div><p className="text-[10px] font-bold uppercase tracking-wide text-[#64748B]">{label}</p><p className="text-sm font-bold tabular-nums">{value === null ? "—" : euro(value)}</p></div>; }
 
 function StatementActions({ personId, accountId, item, canManage, isValidated }: StatementProps & { isValidated: boolean }) {
   const [editing, setEditing] = useState(false), [deleting, setDeleting] = useState(false); const endpoint = `/api/dossiers/${personId}/comptes/${accountId}/releves/${item.id}`; const hasDocument = item.original_file_name !== null && item.mime_type !== null && item.file_size !== null;
