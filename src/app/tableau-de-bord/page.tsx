@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowRight, CalendarDays, ClipboardList, FolderOpen, ListTodo, UserRound } from "lucide-react";
 import { PrivateShell } from "@/components/layout/private-shell";
-import { AdministrationDashboard } from "@/domains/administration/components/administration-dashboard";
 import { getPrivateAccessContext } from "@/domains/administration/services/private-access-context";
 import { getDashboardData, type DashboardDossier, type DashboardReportSummary, type DashboardTask } from "@/domains/dashboard/services/dashboard-service";
 import { formatFinancialDate } from "@/domains/financial-accounts/utils/financial-account-utils";
@@ -15,7 +15,7 @@ const reportStatusLabels = { draft: "En préparation", ready: "Prêt", generated
 
 export default async function DashboardPage() {
   const { isPlatformAdmin } = await getPrivateAccessContext();
-  if (isPlatformAdmin) return <PrivateShell current="dashboard"><AdministrationDashboard /></PrivateShell>;
+  if (isPlatformAdmin) redirect("/administration");
   const data = await getDashboardData();
   return <PrivateShell current="dashboard">
     <header><p className="text-sm font-semibold text-[#64748B]">{data.firstName ? `Bonjour, ${data.firstName}` : "Bonjour"}</p><h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">Tableau de bord</h1><p className="mt-1 text-sm text-[#64748B]">Suivez vos dossiers et les prochaines actions à traiter.</p></header>

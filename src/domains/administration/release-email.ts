@@ -10,14 +10,21 @@ function escapeHtml(value: string) {
   })[character] ?? character);
 }
 
-export function buildReleaseEmail({ appName, release, changelogUrl }: {
+export function buildReleaseEmail({ appName, release, changelogUrl, recipient }: {
   appName: string;
   release: AppRelease;
   changelogUrl: string;
+  recipient: { firstName?: string | null; lastName?: string | null };
 }) {
+  const firstName = recipient.firstName?.trim() ?? "";
+  const lastName = recipient.lastName?.trim() ?? "";
+  const fullName = [firstName, lastName].filter(Boolean).join(" ");
+  const greeting = fullName ? `Bonjour ${fullName},` : "Bonjour,";
+  const introduction = `Voici les nouveautés de la version ${appName} v${release.version}.`;
   const subject = `${appName} v${release.version} — Découvrez les nouveautés`;
   const text = [
-    `${appName} v${release.version} est disponible.`,
+    greeting,
+    introduction,
     release.title,
     release.summary,
     ...release.changes.map((change) => `• ${change}`),
@@ -28,7 +35,8 @@ export function buildReleaseEmail({ appName, release, changelogUrl }: {
     .join("");
   const html = `
     <div style="font-family:Arial,sans-serif;color:#0f172a;line-height:1.6">
-      <p style="font-weight:700;color:#2563eb">${escapeHtml(appName)} v${escapeHtml(release.version)}</p>
+      <p>${escapeHtml(greeting)}</p>
+      <p style="font-weight:700;color:#2563eb">${escapeHtml(introduction)}</p>
       <h1 style="font-size:22px;line-height:1.3">${escapeHtml(release.title)}</h1>
       <p>${escapeHtml(release.summary)}</p>
       <ul style="padding-left:20px">${changes}</ul>

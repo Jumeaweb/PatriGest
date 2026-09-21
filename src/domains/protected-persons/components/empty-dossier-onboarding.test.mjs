@@ -23,7 +23,7 @@ test("le tableau de bord sans dossier explique l'absence d'accès et garde la li
 test("le CTA direct du tableau de bord crée le premier dossier uniquement si autorisé", () => {
   assert.match(dashboard, /\{canCreate && <Link className="button button-primary" href="\/dossiers\/nouveau">Créer mon premier dossier<\/Link>\}/);
   assert.match(dashboard, /<DossiersSection dossiers=\{data\.dossiers\} canCreate=\{!isPlatformAdmin\} \/>/);
-  assert.match(dashboard, /if \(isPlatformAdmin\) return <PrivateShell current="dashboard"><AdministrationDashboard \/>/);
+  assert.match(dashboard, /if \(isPlatformAdmin\) redirect\("\/administration"\)/);
 });
 
 test("la liste formule l'état vide en termes d'accès et non de création", () => {

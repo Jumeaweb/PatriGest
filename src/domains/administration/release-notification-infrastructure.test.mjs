@@ -33,6 +33,7 @@ test("le test n'accepte qu'un userId éligible et possède une idempotence disti
   assert.match(service, /recipients\.find\(\(candidate\) => candidate\.userId === targetUserId\)/);
   assert.match(service, /delivery_kind: "test"/);
   assert.match(service, /release-test:\$\{version\}:\$\{notification\.id\}/);
+  assert.match(service, /getReleaseMessage\(version, recipient\)/);
 });
 
 test("l'envoi global réserve en DB, relance seulement failed et utilise une clé stable", () => {
@@ -42,6 +43,12 @@ test("l'envoi global réserve en DB, relance seulement failed et utilise une cl�
   assert.match(service, /\.eq\("status", "failed"\)/);
   assert.match(service, /release:\$\{version\}:\$\{recipient\.userId\}/);
   assert.match(migration, /where delivery_kind = 'global'/);
+});
+
+test("le test et chaque envoi global utilisent le même générateur avec leur destinataire", () => {
+  assert.match(service, /buildReleaseEmail\(\{ appName: APP_NAME, release, changelogUrl, recipient \}\)/);
+  assert.match(service, /send: async \(recipient, idempotencyKey\) => \{[\s\S]*?getReleaseMessage\(version, recipient\)/);
+  assert.doesNotMatch(service, /const message = buildReleaseEmail[\s\S]*?return runReleaseNotificationBatch/);
 });
 
 test("l'interface n'envoie rien à l'affichage et exige deux confirmations", () => {

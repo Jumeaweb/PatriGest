@@ -17,7 +17,7 @@ export function PrivateNavigation({ current, dossier, isPlatformAdmin = false }:
   const drawerRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const principal: NavigationItem[] = isPlatformAdmin ? [
-    { label: "Tableau de bord", href: "/tableau-de-bord", icon: LayoutDashboard, active: current === "dashboard" || current === "administration" },
+    { label: "Administration", href: "/administration", icon: LayoutDashboard, active: current === "administration" },
     { label: "Inscriptions à valider", href: "/administration/demandes", icon: ShieldCheck, active: current === "administration-requests" },
     { label: "Comptes utilisateurs", href: "/administration/utilisateurs", icon: Users, active: current === "administration-users" },
   ] : [
@@ -32,6 +32,8 @@ export function PrivateNavigation({ current, dossier, isPlatformAdmin = false }:
     { label: "Informations du dossier", href: `/dossiers/${dossier.id}`, icon: LayoutGrid, active: dossier.current === "overview" },
     ...(dossier.accessRole === "owner" || dossier.accessRole === "manager" ? [{ label: "Partage du dossier", href: `/dossiers/${dossier.id}/acces`, icon: Users, active: dossier.current === "access" }] : []),
   ] : [];
+
+  const homeHref = isPlatformAdmin ? "/administration" : "/tableau-de-bord";
 
   useEffect(() => {
     if (!open) return;
@@ -52,12 +54,12 @@ export function PrivateNavigation({ current, dossier, isPlatformAdmin = false }:
     return () => { document.body.style.overflow = previousOverflow; document.removeEventListener("keydown", handleKeyDown); };
   }, [open]);
 
-  const navigation = <NavigationContent current={current} principal={principal} principalLabel={isPlatformAdmin ? "Administration" : "Principal"} dossier={isPlatformAdmin ? undefined : dossier} dossierItems={isPlatformAdmin ? [] : dossierItems} onNavigate={() => setOpen(false)} />;
+  const navigation = <NavigationContent current={current} principal={principal} principalLabel={isPlatformAdmin ? "Administration" : "Principal"} homeHref={homeHref} dossier={isPlatformAdmin ? undefined : dossier} dossierItems={isPlatformAdmin ? [] : dossierItems} onNavigate={() => setOpen(false)} />;
   return <>
     <aside className="sticky top-0 hidden h-screen w-[248px] shrink-0 flex-col overflow-y-auto border-r border-[#E2E8F0] bg-white lg:flex" aria-label="Navigation privée">{navigation}</aside>
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[#E2E8F0] bg-white px-5 lg:hidden">
       <button ref={triggerRef} type="button" className="focus-ring -ml-2 flex size-10 items-center justify-center rounded-xl text-[#334155] hover:bg-slate-100" aria-label="Ouvrir le menu" aria-expanded={open} aria-controls="mobile-private-navigation" onClick={() => setOpen(true)}><Menu aria-hidden="true" size={22} /></button>
-      <Link href="/tableau-de-bord" className="focus-ring flex items-center gap-2 rounded-lg font-bold"><ShieldCheck aria-hidden="true" className="text-[#2563EB]" size={21} />{APP_NAME}</Link>
+      <Link href={homeHref} className="focus-ring flex items-center gap-2 rounded-lg font-bold"><ShieldCheck aria-hidden="true" className="text-[#2563EB]" size={21} />{APP_NAME}</Link>
       <span className="size-10" aria-hidden="true" />
     </header>
     {open && <div className="fixed inset-0 z-50 lg:hidden">
@@ -70,9 +72,9 @@ export function PrivateNavigation({ current, dossier, isPlatformAdmin = false }:
   </>;
 }
 
-function NavigationContent({ current, principal, principalLabel, dossier, dossierItems, onNavigate }: { current: PrivateSection; principal: NavigationItem[]; principalLabel: string; dossier?: PrivateDossierContext; dossierItems: NavigationItem[]; onNavigate: () => void }) {
+function NavigationContent({ current, principal, principalLabel, homeHref, dossier, dossierItems, onNavigate }: { current: PrivateSection; principal: NavigationItem[]; principalLabel: string; homeHref: string; dossier?: PrivateDossierContext; dossierItems: NavigationItem[]; onNavigate: () => void }) {
   return <div className="flex min-h-full flex-1 flex-col px-4 py-5">
-    <Link href="/tableau-de-bord" onClick={onNavigate} className="focus-ring mb-7 flex items-center gap-3 rounded-xl px-2"><span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#2563EB] text-white"><ShieldCheck aria-hidden="true" size={20} /></span><span className="min-w-0"><span className="block font-bold leading-tight">{APP_NAME}</span><span className="block text-xs text-[#94A3B8]">v{APP_VERSION}</span></span></Link>
+    <Link href={homeHref} onClick={onNavigate} className="focus-ring mb-7 flex items-center gap-3 rounded-xl px-2"><span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#2563EB] text-white"><ShieldCheck aria-hidden="true" size={20} /></span><span className="min-w-0"><span className="block font-bold leading-tight">{APP_NAME}</span><span className="block text-xs text-[#94A3B8]">v{APP_VERSION}</span></span></Link>
     <NavigationGroup label={principalLabel} items={principal} onNavigate={onNavigate} />
     {dossier && <div className="mt-7 min-w-0"><p className="px-3 text-xs font-bold uppercase tracking-[0.12em] text-[#94A3B8]">Dossier en cours</p><p className="mt-2 truncate px-3 text-sm font-bold text-[#334155]" title={dossier.name}>{dossier.name}</p><div className="mt-2 space-y-1"><NavigationLinks items={dossierItems} onNavigate={onNavigate} /></div></div>}
     <div className="mt-auto space-y-1 border-t border-[#E2E8F0] pt-4"><NavigationLinks items={[{ label: "Mon compte", href: "/parametres/compte", icon: UserRound, active: current === "account" }, { label: "Historique des versions", href: "/historique-versions", icon: History, active: current === "history" }]} onNavigate={onNavigate} /><form action={logoutAction}><button type="submit" className="focus-ring flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-[#64748B] transition-colors hover:bg-slate-50 hover:text-[#0F172A]"><LogOut aria-hidden="true" size={18} />Déconnexion</button></form><Link href="/historique-versions" onClick={onNavigate} className="focus-ring ml-3 inline-block rounded text-xs text-[#94A3B8] hover:text-[#64748B]">{APP_NAME} v{APP_VERSION}</Link></div>

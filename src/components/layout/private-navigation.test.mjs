@@ -15,6 +15,9 @@ const dossierActions = source("../../domains/protected-persons/actions.ts");
 const categories = source("../../app/parametres/categories/page.tsx");
 const sharing = source("../../app/dossiers/[protectedPersonId]/acces/page.tsx");
 const sharingService = source("../../domains/access/services.ts");
+const administration = source("../../app/administration/page.tsx");
+const administrationRequests = source("../../app/administration/demandes/page.tsx");
+const administrationUsers = source("../../app/administration/utilisateurs/page.tsx");
 
 test("Dossiers est l'unique entrée du menu utilisateur", () => {
   assert.match(navigation, /label: "Dossiers", href: "\/dossiers"/);
@@ -62,4 +65,33 @@ test("owner et manager voient le partage, read_only est masqué et refusé", () 
   assert.match(navigation, /dossier\.accessRole === "owner" \|\| dossier\.accessRole === "manager"/);
   assert.match(dossierNavigation, /accessRole === "owner" \|\| accessRole === "manager"/);
   assert.match(sharingService, /person\.accessRole === "read_only"\) notFound\(\)/);
+});
+
+test("platform_admin dispose d'une entrée Administration partagée par les navigations desktop et mobile", () => {
+  assert.match(navigation, /isPlatformAdmin \? \[[\s\S]*?label: "Administration", href: "\/administration"/);
+  assert.match(navigation, /const navigation = <NavigationContent/);
+  assert.match(navigation, /aria-label="Navigation privée">\{navigation\}<\/aside>/);
+  assert.match(navigation, /id="mobile-private-navigation"[\s\S]*?\{navigation\}/);
+  assert.match(navigation, /const homeHref = isPlatformAdmin \? "\/administration" : "\/tableau-de-bord"/);
+});
+
+test("les utilisateurs ordinaires conservent leur navigation sans entrée Administration", () => {
+  const ordinaryStart = navigation.indexOf("] : [");
+  const ordinaryEnd = navigation.indexOf("\n  ];", ordinaryStart);
+  assert.notEqual(ordinaryStart, -1);
+  assert.notEqual(ordinaryEnd, -1);
+  const ordinaryItems = navigation.slice(ordinaryStart, ordinaryEnd);
+  assert.doesNotMatch(ordinaryItems, /label: "Administration"|href: "\/administration"/);
+});
+
+test("le tableau de bord platform_admin redirige vers la route canonique sans changer le rendu ordinaire", () => {
+  assert.match(dashboard, /if \(isPlatformAdmin\) redirect\("\/administration"\)/);
+  assert.match(dashboard, /const data = await getDashboardData\(\)/);
+  assert.match(dashboard, /return <PrivateShell current="dashboard">/);
+});
+
+test("les pages Administration réutilisent le fil d'Ariane existant", () => {
+  assert.match(administration, /AppBreadcrumb items=\{\[\{ label: "Administration" \}\]\}/);
+  assert.match(administrationRequests, /AppBreadcrumb items=\{\[\{ label: "Administration", href: "\/administration" \}, \{ label: "Inscriptions à valider" \}\]\}/);
+  assert.match(administrationUsers, /AppBreadcrumb items=\{\[\{ label: "Administration", href: "\/administration" \}, \{ label: "Comptes utilisateurs" \}\]\}/);
 });

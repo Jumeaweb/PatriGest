@@ -101,10 +101,10 @@ export async function getReleaseNotificationDashboard(version: string) {
   };
 }
 
-async function getReleaseMessage(version: string) {
+async function getReleaseMessage(version: string, recipient: ReleaseRecipient) {
   const release = getRelease(version);
   const changelogUrl = `${await getApplicationOrigin()}/historique-versions`;
-  return buildReleaseEmail({ appName: APP_NAME, release, changelogUrl });
+  return buildReleaseEmail({ appName: APP_NAME, release, changelogUrl, recipient });
 }
 
 export async function sendTestReleaseNotification(version: string, targetUserId: string) {
@@ -113,7 +113,7 @@ export async function sendTestReleaseNotification(version: string, targetUserId:
   const recipients = await loadEligibleRecipients(admin);
   const recipient = recipients.find((candidate) => candidate.userId === targetUserId);
   if (!recipient) throw new Error("Destinataire de test non autorisé.");
-  const message = await getReleaseMessage(version);
+  const message = await getReleaseMessage(version, recipient);
   const { data: notification, error: insertError } = await admin
     .from("release_notifications")
     .insert({
@@ -197,15 +197,15 @@ async function reserveGlobalNotification(admin: AdminClient, version: string, re
 export async function sendGlobalReleaseNotifications(version: string) {
   const { userId: requestedBy } = await requirePlatformAdministrator();
   const admin = createAdminClient();
-  const release = getRelease(version);
   const recipients = await loadEligibleRecipients(admin);
-  const changelogUrl = `${await getApplicationOrigin()}/historique-versions`;
-  const message = buildReleaseEmail({ appName: APP_NAME, release, changelogUrl });
 
   return runReleaseNotificationBatch({
     recipients,
     reserve: (recipient) => reserveGlobalNotification(admin, version, recipient, requestedBy),
-    send: (recipient, idempotencyKey) => sendEmailWithResend({ to: recipient.email, ...message, idempotencyKey }),
+    send: async (recipient, idempotencyKey) => {
+      const message = await getReleaseMessage(version, recipient);
+      return sendEmailWithResend({ to: recipient.email, ...message, idempotencyKey });
+    },
     markSent: async (notificationId, providerMessageId) => {
       const { error } = await admin.from("release_notifications").update({
         status: "sent",
