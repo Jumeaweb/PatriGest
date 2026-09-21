@@ -362,10 +362,7 @@ select extensions.throws_ok(
 );
 
 select extensions.lives_ok(
-  $$ update public.bank_reconciliations
-     set status = 'validated', calculated_balance = 108, difference = 2,
-         validated_at = now(), validated_by = '30000000-0000-4000-8000-000000000001'
-     where id = '30000000-0000-4000-8000-000000000601' $$,
+  $$ select public.validate_bank_reconciliation('30000000-0000-4000-8000-000000000601') $$,
   'owner validates a draft reconciliation'
 );
 
@@ -374,7 +371,7 @@ select extensions.results_eq(
             validated_at is not null, validated_by
      from public.bank_reconciliations
      where id = '30000000-0000-4000-8000-000000000601' $$,
-  $$ values ('validated'::text, 108.00::numeric, 2.00::numeric, true, '30000000-0000-4000-8000-000000000001'::uuid) $$,
+  $$ values ('validated'::text, 100.00::numeric, 10.00::numeric, true, '30000000-0000-4000-8000-000000000001'::uuid) $$,
   'validated reconciliation stores both snapshots and audit metadata'
 );
 
@@ -383,14 +380,14 @@ select extensions.throws_ok(
      set status = 'draft', calculated_balance = null, difference = null,
          validated_at = null, validated_by = null
      where id = '30000000-0000-4000-8000-000000000601' $$,
-  'P0001', 'Un rapprochement validé est définitivement figé.',
+  '42501', null,
   'validated reconciliation cannot return to draft'
 );
 
 select extensions.throws_ok(
   $$ update public.bank_reconciliations set difference = 3
      where id = '30000000-0000-4000-8000-000000000601' $$,
-  'P0001', 'Un rapprochement validé est définitivement figé.',
+  '42501', null,
   'validated reconciliation snapshots cannot change'
 );
 
@@ -438,10 +435,7 @@ select extensions.lives_ok(
 );
 
 select extensions.lives_ok(
-  $$ update public.bank_reconciliations
-     set status = 'validated', calculated_balance = 125, difference = 5,
-         validated_at = now(), validated_by = '30000000-0000-4000-8000-000000000002'
-     where id = '30000000-0000-4000-8000-000000000603' $$,
+  $$ select public.validate_bank_reconciliation('30000000-0000-4000-8000-000000000603') $$,
   'manager validates a draft reconciliation'
 );
 
@@ -462,13 +456,10 @@ select extensions.is(
   'read_only reads accessible reconciliations'
 );
 
-select extensions.results_eq(
-  $$ with changed as (
-       update public.bank_reconciliations set updated_at = now()
-       where id = '30000000-0000-4000-8000-000000000601'
-       returning 1
-     ) select count(*)::bigint from changed $$,
-  $$ values (0::bigint) $$,
+select extensions.throws_ok(
+  $$ update public.bank_reconciliations set updated_at = now()
+     where id = '30000000-0000-4000-8000-000000000601' $$,
+  '42501', null,
   'read_only cannot update a reconciliation'
 );
 
@@ -580,10 +571,7 @@ select extensions.lives_ok(
        '30000000-0000-4000-8000-000000000509',
        '30000000-0000-4000-8000-000000000001'
      );
-     update public.bank_reconciliations
-     set status = 'validated', calculated_balance = 168, difference = 2,
-         validated_at = now(), validated_by = '30000000-0000-4000-8000-000000000001'
-     where id = '30000000-0000-4000-8000-000000000609' $$,
+     select public.validate_bank_reconciliation('30000000-0000-4000-8000-000000000609') $$,
   'owner adds a PDF and validates its reconciliation'
 );
 
