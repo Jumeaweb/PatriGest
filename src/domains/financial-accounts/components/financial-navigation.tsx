@@ -22,7 +22,7 @@ export function FinancialNavigation({
             key={item.href}
             href={item.href}
             aria-current={item.active ? "page" : undefined}
-            className={`focus-ring rounded-t-lg border-b-2 px-3 py-2.5 text-sm font-semibold transition-colors ${item.active ? "border-[#2563EB] bg-blue-50 text-[#2563EB]" : "border-transparent text-[#64748B] hover:bg-slate-50 hover:text-[#0F172A]"}`}
+            className={`focus-ring rounded-t-lg border-b-2 px-3 py-2.5 text-sm font-semibold transition-colors ${item.active ? "border-brand-accent bg-brand-navigation text-brand-foreground" : "border-transparent bg-transparent text-brand-foreground/75 hover:bg-brand-navigation/25 hover:text-brand-foreground"}`}
           >
             {item.label}
           </Link>

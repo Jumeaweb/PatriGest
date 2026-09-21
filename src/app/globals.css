@@ -1,13 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --brand-background: #f8f6e9;
+  --brand-foreground: #214660;
+  --brand-navigation: #86b5af;
+  --brand-accent: #377e84;
+  --brand-gold: #bc9955;
+  --background: var(--brand-background);
+  --foreground: var(--brand-foreground);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-brand-background: var(--brand-background);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-navigation: var(--brand-navigation);
+  --color-brand-accent: var(--brand-accent);
+  --color-brand-gold: var(--brand-gold);
   --font-sans: var(--font-geist-sans);
 }
 
@@ -36,14 +46,14 @@ a {
 .auth-submit:focus-visible,
 .auth-back-link:focus-visible,
 .auth-link:focus-visible {
-  outline: 3px solid rgba(37, 99, 235, 0.35);
+  outline: 3px solid rgba(55, 126, 132, 0.38);
   outline-offset: 3px;
 }
 
 .auth-label {
   display: block;
   margin-bottom: 6px;
-  color: #334155;
+  color: var(--brand-foreground);
   font-size: 14px;
   font-weight: 650;
 }
@@ -55,7 +65,7 @@ a {
   border-radius: 12px;
   background: #fff;
   padding: 0 12px;
-  color: #0f172a;
+  color: var(--brand-foreground);
   font: inherit;
   font-size: 14px;
 }
@@ -76,7 +86,7 @@ a {
   justify-content: center;
   border: 0;
   border-radius: 12px;
-  background: #2563eb;
+  background: var(--brand-accent);
   color: #fff;
   font: inherit;
   font-size: 14px;
@@ -86,7 +96,7 @@ a {
 }
 
 .auth-submit:hover:not(:disabled) {
-  background: #1d4ed8;
+  background: var(--brand-foreground);
 }
 
 .auth-submit:disabled {
@@ -95,12 +105,12 @@ a {
 }
 
 .auth-link {
-  color: #2563eb;
+  color: var(--brand-accent);
   font-weight: 650;
 }
 
 .auth-link:hover {
-  color: #1d4ed8;
+  color: var(--brand-foreground);
   text-decoration: underline;
 }
 
@@ -109,13 +119,13 @@ a {
   width: fit-content;
   margin: 0 auto;
   border-radius: 6px;
-  color: #64748b;
+  color: var(--brand-accent);
   font-size: 13px;
   font-weight: 600;
 }
 
 .auth-back-link:hover {
-  color: #0f172a;
+  color: var(--brand-foreground);
 }
 
 .auth-message {
@@ -172,13 +182,13 @@ a {
 .button-secondary {
   border: 1px solid #cbd5e1;
   background: #fff;
-  color: #0f172a;
+  color: var(--brand-foreground);
 }
 
 .button-secondary:hover {
-  border-color: #93c5fd;
-  background: #eff6ff;
-  color: #1d4ed8;
+  border-color: var(--brand-navigation);
+  background: #f3f8f6;
+  color: var(--brand-accent);
 }
 
 .private-content .auth-label {

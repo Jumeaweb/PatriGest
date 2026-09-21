@@ -34,7 +34,7 @@ const steps = [
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A]">
+    <div className="min-h-screen bg-brand-background text-brand-foreground">
       <PublicHeader />
       <main>
         <section className="relative overflow-hidden bg-white" aria-labelledby="hero-title">
@@ -42,7 +42,7 @@ export default function Home() {
           <div className="decorative-blob right-[-5rem] top-10 h-48 w-48 bg-emerald-100" />
           <div className="mx-auto grid max-w-7xl items-center gap-14 px-5 py-14 sm:px-8 sm:py-20 lg:grid-cols-[0.95fr_1.05fr] lg:px-10 lg:py-24">
             <div className="relative z-10 max-w-2xl">
-              <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-[#2563EB]">
+              <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-brand-navigation/40 bg-brand-background px-3 py-1.5 text-sm font-semibold text-brand-accent">
                 <ShieldCheck aria-hidden="true" size={16} />Pour les particuliers exerçant une mesure de protection
               </p>
               <h1 id="hero-title" className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl lg:leading-[1.08]">Gérez chaque dossier de personne protégée plus simplement</h1>
@@ -124,7 +124,7 @@ export default function Home() {
 }
 
 function SectionHeading({ eyebrow, title, id }: { eyebrow: string; title: string; id: string }) {
-  return <div className="mx-auto max-w-3xl text-center"><p className="text-sm font-bold uppercase tracking-[0.16em] text-[#2563EB]">{eyebrow}</p><h2 id={id} className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">{title}</h2></div>;
+  return <div className="mx-auto max-w-3xl text-center"><p className="text-sm font-bold uppercase tracking-[0.16em] text-brand-accent">{eyebrow}</p><h2 id={id} className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">{title}</h2></div>;
 }
 
 function Role({ icon: Icon, title, description }: { icon: typeof UserRound; title: string; description: string }) {

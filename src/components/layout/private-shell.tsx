@@ -20,7 +20,7 @@ export async function PrivateShell({ children, current, dossier }: { children: R
     navigationDossier = { ...dossier, accessRole: person?.owner_id === userId ? "owner" : access?.role ?? "read_only" };
   }
 
-  return <div className="min-h-screen bg-[#F8FAFC] lg:flex">
+  return <div className="min-h-screen bg-brand-background lg:flex">
     <PrivateNavigation current={current} dossier={navigationDossier} isPlatformAdmin={accessContext.isPlatformAdmin} />
     <div className="min-w-0 flex-1">
       {showReleaseNotice && <ReleaseNotice release={LATEST_RELEASE} />}

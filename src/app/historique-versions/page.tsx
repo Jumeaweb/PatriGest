@@ -23,7 +23,7 @@ export default async function ReleaseHistoryPage() {
     return <PrivateShell current="history"><div className="mx-auto max-w-4xl"><AppBreadcrumb items={[{ label: "Tableau de bord", href: "/tableau-de-bord" }, { label: "Historique des versions" }]} /><ReleaseHistoryContent returnHref="/tableau-de-bord" returnLabel="Retour au tableau de bord" /></div></PrivateShell>;
   }
 
-  return <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A]"><PublicHeader /><main className="mx-auto max-w-4xl px-5 py-8 sm:px-8 sm:py-10"><ReleaseHistoryContent returnHref="/" returnLabel="Retour à l’accueil" /></main><PublicFooter /></div>;
+  return <div className="min-h-screen bg-brand-background text-brand-foreground"><PublicHeader /><main className="mx-auto max-w-4xl px-5 py-8 sm:px-8 sm:py-10"><ReleaseHistoryContent returnHref="/" returnLabel="Retour à l’accueil" /></main><PublicFooter /></div>;
 }
 
 function ReleaseHistoryContent({ returnHref, returnLabel }: { returnHref: string; returnLabel: string }) {

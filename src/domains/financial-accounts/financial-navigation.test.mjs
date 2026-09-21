@@ -58,6 +58,9 @@ test("la navigation réutilisable marque le lien actif de façon accessible", ()
   const component = source("./components/financial-navigation.tsx");
   assert.match(component, /getFinancialNavigationItems\(protectedPersonId, current, accountId\)/);
   assert.match(component, /aria-current=\{item\.active \? "page" : undefined\}/);
+  assert.match(component, /border-brand-accent bg-brand-navigation text-brand-foreground/);
+  assert.match(component, /bg-transparent text-brand-foreground\/75 hover:bg-brand-navigation\/25/);
+  assert.doesNotMatch(component, /border-\[#2563EB\] bg-blue-50 text-\[#2563EB\]/);
 });
 
 test("les menus dossier affichent Gestion financière sur la route Comptes", () => {
@@ -65,6 +68,7 @@ test("les menus dossier affichent Gestion financière sur la route Comptes", () 
   const mobile = source("../protected-persons/components/dossier-navigation.tsx");
   assert.match(desktop, /label: "Gestion financière", href: `\/dossiers\/\$\{dossier\.id\}\/comptes`/);
   assert.match(mobile, /label: "Gestion financière", href: `\/dossiers\/\$\{protectedPersonId\}\/comptes`/);
+  assert.match(mobile, /bg-brand-navigation text-brand-foreground ring-1 ring-brand-accent\/40/);
   assert.doesNotMatch(desktop, /label: "Comptes et patrimoine"|label: "Opérations", href: `\/dossiers/);
   assert.doesNotMatch(mobile, /label: "Comptes et patrimoine"|label: "Opérations", href: `\/dossiers/);
   assert.doesNotMatch(desktop, /label: "Exercices de gestion"/);
