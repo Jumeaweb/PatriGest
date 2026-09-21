@@ -10,6 +10,20 @@ export type AppRelease = {
 
 export const APP_RELEASES: readonly AppRelease[] = [
   {
+    version: "0.8.0",
+    date: "2026-09-21",
+    title: "Contrôle et rapprochement bancaires",
+    summary: `${APP_NAME} facilite le contrôle des relevés bancaires, explique les écarts de solde et permet de conserver l’historique des rapprochements validés.`,
+    changes: [
+      "Enregistrement d’un relevé bancaire possible même sans document PDF",
+      "Comparaison du solde indiqué sur le relevé avec le solde calculé par PatriGest à la même date",
+      "Validation d’un contrôle bancaire pour en conserver durablement le résultat et les informations",
+      "Rapprochement détaillé facultatif avec indication des opérations encore en circulation",
+      "Prise en compte distincte des débits et crédits en circulation dans le calcul du solde bancaire",
+      "Explication du calcul et de l’écart résiduel pour faciliter la vérification",
+    ],
+  },
+  {
     version: "0.7.0",
     date: "2026-09-19",
     title: "Invitations fiabilisées et journaux adaptés aux grands historiques",
