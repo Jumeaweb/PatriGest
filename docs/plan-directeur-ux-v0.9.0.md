@@ -334,10 +334,31 @@ Avant ou pendant les lots concernés, prévoir notamment :
 
 **Priorité : très haute**
 
+Le LOT 1 est traité comme un **fil rouge transversal** pendant l’implémentation des lots fonctionnels. Ses règles doivent être appliquées aux écrans touchés par chaque lot, sans déclencher à chaque étape un audit global ni une refonte générale de l’application.
+
+Il n’est considéré comme totalement clôturé qu’après le **LOT 1F — Clôture des fondations UX transversales**, réalisé avant la validation finale de la v0.9.0.
+
+Exigences à préserver tout au long des lots :
+
 - Harmoniser navigation, onglets, fils d'Ariane et suppression des navigations redondantes.
 - Harmoniser pictogrammes : taille, conteneur, alignement, espacement, titres et couleurs fonctionnelles.
 - Harmoniser les dialogues : après réussite, masquer formulaire/actions et ne conserver que **Fermer** ; en cas d'échec, conserver les possibilités de correction.
 - Déconnexion utilisateur et administrateur : confirmation avant fermeture de session.
+
+## LOT 1F — Clôture des fondations UX transversales
+
+**Priorité : bloquante avant validation finale v0.9.0**
+
+Après réalisation des lots fonctionnels, effectuer une revue ciblée des exigences du LOT 1 sur l’application devenue quasi finale.
+
+Cette clôture ne doit pas réimplémenter ce qui est déjà conforme. Elle doit uniquement identifier et corriger les écarts résiduels concernant :
+
+- navigation, onglets, fils d'Ariane et navigations redondantes ;
+- cohérence des pictogrammes sur les écrans concernés par la v0.9.0 ;
+- comportement des dialogues après réussite et après échec ;
+- confirmation de déconnexion utilisateur et administrateur.
+
+Le LOT 1F doit rester ciblé : pas d’audit métier général, pas de refonte fonctionnelle et pas de modification hors des exigences transversales ci-dessus.
 
 # LOT 2 — Navigation principale et tableau de bord
 
@@ -515,7 +536,7 @@ Ces sujets doivent conserver leurs décisions métier et recevoir un chantier di
 # 12. Ordre recommandé
 
 1. LOT 0 — audits bloquants métier/sécurité
-2. LOT 1 — fondations UX transversales
+2. LOT 1 — fondations UX transversales, appliquées en fil rouge
 3. LOT 2 — navigation principale/tableau de bord
 4. LOT 3 — Informations du dossier
 5. LOT 4 — Comptes de gestion / Exercices
@@ -525,8 +546,10 @@ Ces sujets doivent conserver leurs décisions métier et recevoir un chantier di
 9. LOT 8 — Mon compte
 10. LOT 9 — Administration
 11. LOT 10 — Historique si nécessaire
+12. LOT 1F — clôture des fondations UX transversales
+13. validation globale v0.9.0
 
-Le LOT 11 est une réserve de chantiers métier à planifier selon ce qui est déjà implémenté.
+Le LOT 11 est une réserve de chantiers métier à planifier selon ce qui est déjà implémenté. Le LOT 1 reste actif comme fil rouge pendant les lots fonctionnels et n’est déclaré clôturé qu’après le LOT 1F.
 
 # 13. Utilisation de Codex
 
