@@ -37,6 +37,7 @@ test("le mécanisme ne met aucune donnée personnelle dans le retour", () => {
 test("confirmation préalable, permission owner et service de suppression sont préservés", () => {
   assert.match(dialog, /<AppConfirmDialog open=\{open\} title="Supprimer ce dossier \?"/);
   assert.match(dialog, /<FormMessage state=\{state\}/);
-  assert.match(dossier, /person\.accessRole === "owner" && <section/);
+  assert.match(dossier, /const canDelete = person\.accessRole === "owner"/);
+  assert.match(dossier, /currentView === "deletion" && canDelete && <section/);
   assert.match(source("../services/protected-person-service.ts"), /supabase\.rpc\("delete_empty_protected_person"/);
 });

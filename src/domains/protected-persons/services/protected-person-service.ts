@@ -1,4 +1,4 @@
-import type { DossierAccessRole, ManagementPeriod, ProtectedPerson, ProtectionMeasure } from "@/types/database";
+import type { DossierAccessRole, ManagementPeriod, ManagementReport, ProtectedPerson, ProtectionMeasure } from "@/types/database";
 import type { ProtectedPersonInput } from "../schemas/protected-person-schema";
 import type { ManagementPeriodInput } from "../schemas/management-period-schema";
 import type { ProtectionMeasureInput } from "../schemas/protection-measure-schema";
@@ -8,6 +8,7 @@ import { getAuthenticatedUser } from "./authenticated-user";
 export type ProtectedPersonDetail = ProtectedPerson & {
   protectionMeasures: ProtectionMeasure[];
   managementPeriods: ManagementPeriod[];
+  managementReports: ManagementReport[];
   accessRole: DossierAccessRole;
 };
 export type ProtectedPersonListItem = ProtectedPerson & { accessRole: DossierAccessRole };
@@ -39,15 +40,16 @@ export async function getProtectedPerson(id: string): Promise<ProtectedPersonDet
   if (error) throw new Error("Impossible de charger le dossier.");
   if (!person) return null;
 
-  const [measuresResult, periodsResult] = await Promise.all([
+  const [measuresResult, periodsResult, reportsResult] = await Promise.all([
     supabase.from("protection_measures").select("*").eq("protected_person_id", id).order("created_at", { ascending: false }),
     supabase.from("management_periods").select("*").eq("protected_person_id", id).order("start_date", { ascending: false }),
+    supabase.from("management_reports").select("*").eq("protected_person_id", id).order("updated_at", { ascending: false }),
   ]);
 
-  if (measuresResult.error || periodsResult.error) throw new Error("Impossible de charger les informations du dossier.");
+  if (measuresResult.error || periodsResult.error || reportsResult.error) throw new Error("Impossible de charger les informations du dossier.");
 
   const { data: access } = person.owner_id === userId ? { data: null } : await supabase.from("protected_person_access").select("role").eq("protected_person_id", id).eq("user_id", userId).maybeSingle();
-  return { ...person, protectionMeasures: measuresResult.data, managementPeriods: periodsResult.data, accessRole: person.owner_id === userId ? "owner" : access?.role ?? "read_only" };
+  return { ...person, protectionMeasures: measuresResult.data, managementPeriods: periodsResult.data, managementReports: reportsResult.data, accessRole: person.owner_id === userId ? "owner" : access?.role ?? "read_only" };
 }
 
 export async function createProtectedPerson(input: ProtectedPersonInput) {
