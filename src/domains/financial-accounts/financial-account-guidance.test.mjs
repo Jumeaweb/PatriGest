@@ -53,20 +53,19 @@ test("l'édition conserve la date enregistrée et les calculs de solde restent i
   assert.match(accountUtils, /getCurrentValuationValue\(account\.initial_balance, valuations\)/);
 });
 
-test("la création conserve la redirection vers la fiche du nouveau compte", () => {
-  assert.match(actions, /redirect\(`\/dossiers\/\$\{protectedPersonId\}\/comptes\/\$\{account\.id\}`\)/);
+test("la création rejoint l'entrée adaptée au modèle du nouveau compte", () => {
+  assert.match(actions, /redirect\(getFinancialAccountEntryHref\(protectedPersonId, account\.id, isValuationAccount\(account\.account_type\)\)\)/);
 });
 
-test("owner et manager voient Ajouter un autre compte vers le même dossier", () => {
-  assert.match(detail, /person\.accessRole !== "read_only" && <>/);
-  assert.match(detail, /href=\{`\/dossiers\/\$\{protectedPersonId\}\/comptes\/nouveau`\}[^\n]+Ajouter un autre compte/);
+test("owner et manager conservent Modifier sans bouton Ajouter un autre compte", () => {
+  assert.match(detail, /person\.accessRole !== "read_only" && <Link[^\n]+>Modifier<\/Link>/);
+  assert.doesNotMatch(detail, /Ajouter un autre compte/);
   assert.match(newPage, /person\.accessRole === "read_only"\) notFound\(\)/);
 });
 
-test("le bouton Ajouter un autre compte est absent du bloc read_only", () => {
-  const gatedActions = detail.match(/person\.accessRole !== "read_only" && <>(.*?)<\/>{1}/);
-  assert.ok(gatedActions);
-  assert.match(gatedActions[1], /Ajouter un autre compte/);
+test("read_only ne reçoit toujours pas l'action Modifier", () => {
+  assert.match(detail, /person\.accessRole !== "read_only" && <Link/);
+  assert.doesNotMatch(detail, /person\.accessRole === "read_only"[^\n]+Modifier/);
 });
 
 test("la première valorisation décrit la valeur globale datée sans modèle de titres", () => {

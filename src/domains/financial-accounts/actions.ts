@@ -7,6 +7,8 @@ import { accountValuationSchema } from "./schemas/account-valuation-schema";
 import { closeFinancialAccountSchema, financialAccountSchema } from "./schemas/financial-account-schema";
 import { closeFinancialAccount, createAccountValuation, createFinancialAccount, deleteAccountValuation, deleteFinancialAccount, getFinancialAccount, reopenFinancialAccount, updateAccountValuation, updateFinancialAccount } from "./services/financial-account-service";
 import type { FinancialAccountActionState } from "./state";
+import { getFinancialAccountEntryHref } from "./financial-account-entry";
+import { isValuationAccount } from "./utils/financial-account-utils";
 
 function invalid(error: z.ZodError): FinancialAccountActionState { return { status: "error", message: "Vérifiez les informations saisies.", fieldErrors: error.flatten().fieldErrors }; }
 function accountValues(formData: FormData) { return { accountType: formData.get("accountType"), accountName: formData.get("accountName"), institutionName: formData.get("institutionName"), accountReference: formData.get("accountReference"), initialBalance: formData.get("initialBalance"), initialBalanceDate: formData.get("initialBalanceDate"), openingDate: formData.get("openingDate"), notes: formData.get("notes") }; }
@@ -19,7 +21,7 @@ export async function createFinancialAccountAction(protectedPersonId: string, _s
   let account;
   try { account = await createFinancialAccount(protectedPersonId, parsed.data); } catch { return { status: "error", message: "Impossible de créer le compte. Veuillez réessayer." }; }
   revalidatePath(`/dossiers/${protectedPersonId}`);
-  redirect(`/dossiers/${protectedPersonId}/comptes/${account.id}`);
+  redirect(getFinancialAccountEntryHref(protectedPersonId, account.id, isValuationAccount(account.account_type)));
 }
 
 export async function updateFinancialAccountAction(protectedPersonId: string, accountId: string, _state: FinancialAccountActionState, formData: FormData): Promise<FinancialAccountActionState> {

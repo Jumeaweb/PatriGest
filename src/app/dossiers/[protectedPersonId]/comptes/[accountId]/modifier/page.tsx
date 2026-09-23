@@ -5,7 +5,9 @@ import { PrivateShell } from "@/components/layout/private-shell";
 import { AppBreadcrumb } from "@/components/ui/app-breadcrumb";
 import { FinancialNavigation } from "@/domains/financial-accounts/components/financial-navigation";
 import { FinancialAccountForm } from "@/domains/financial-accounts/components/financial-account-form";
+import { getFinancialAccountEntryHref } from "@/domains/financial-accounts/financial-account-entry";
 import { getFinancialAccount } from "@/domains/financial-accounts/services/financial-account-service";
+import { isValuationAccount } from "@/domains/financial-accounts/utils/financial-account-utils";
 import { DossierNavigation } from "@/domains/protected-persons/components/dossier-navigation";
 import { getProtectedPerson } from "@/domains/protected-persons/services/protected-person-service";
 
@@ -17,8 +19,9 @@ export default async function EditFinancialAccountPage({ params }: { params: Pro
   if (![protectedPersonId, accountId].every((id) => z.uuid().safeParse(id).success)) notFound();
   const [person, account] = await Promise.all([getProtectedPerson(protectedPersonId), getFinancialAccount(accountId)]);
   if (!person || person.accessRole === "read_only" || !account || account.protected_person_id !== protectedPersonId) notFound();
-  return <PrivateShell current="dossiers" dossier={{ id: protectedPersonId, name: `${person.first_name} ${person.last_name}`, current: "accounts" }}>
-    <AppBreadcrumb items={[{ label: "Dossiers", href: "/dossiers" }, { label: `${person.first_name} ${person.last_name}`, href: `/dossiers/${protectedPersonId}/comptes` }, { label: "Comptes et patrimoine", href: `/dossiers/${protectedPersonId}/comptes` }, { label: account.account_name, href: `/dossiers/${protectedPersonId}/comptes/${accountId}` }, { label: "Modifier" }]} />
+  const accountHref = getFinancialAccountEntryHref(protectedPersonId, accountId, isValuationAccount(account.account_type));
+  return <PrivateShell current="dossiers" dossier={{ id: protectedPersonId, name: `${person.first_name} ${person.last_name}`, current: "accounts", accessRole: person.accessRole }}>
+    <AppBreadcrumb items={[{ label: "Dossiers", href: "/dossiers" }, { label: `${person.first_name} ${person.last_name}`, href: `/dossiers/${protectedPersonId}/comptes` }, { label: "Comptes et patrimoine", href: `/dossiers/${protectedPersonId}/comptes` }, { label: account.account_name, href: accountHref }, { label: "Modifier" }]} />
     <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#2563EB]">{person.first_name} {person.last_name}</p>
     <h1 className="mt-1 text-2xl font-bold sm:text-[28px]">Modifier le compte</h1>
     <DossierNavigation protectedPersonId={protectedPersonId} current="accounts" />

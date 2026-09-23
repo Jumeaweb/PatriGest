@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export type FinancialNavigationCurrent = "accounts" | "details" | "operations" | "statements";
+export type FinancialNavigationCurrent = "accounts" | "details" | "operations" | "statements" | "reconciliations";
 
 export type FinancialNavigationItem = {
   label: string;
@@ -19,7 +19,7 @@ export function getFinancialNavigationItems(
 
   const base = `/dossiers/${protectedPersonId}`;
   if (!accountId) {
-    if (current === "details" || current === "statements") {
+    if (current === "details" || current === "statements" || current === "reconciliations") {
       throw new Error("Une navigation de compte exige un compte.");
     }
     return [
@@ -37,8 +37,9 @@ export function getFinancialNavigationItems(
 
   const accountBase = `${base}/comptes/${accountId}`;
   return [
-    { label: "Informations du compte", href: accountBase, active: current === "details" },
     { label: "Opérations du compte", href: `${accountBase}/operations`, active: current === "operations" },
     { label: "Relevés", href: `${accountBase}/releves`, active: current === "statements" },
+    { label: "Rapprochements", href: `${accountBase}/rapprochements`, active: current === "reconciliations" },
+    { label: "Informations du compte", href: accountBase, active: current === "details" },
   ];
 }

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { Category } from "@/types/database";
 import type { FinancialAccountWithValuations } from "@/domains/financial-accounts/services/financial-account-service";
-import { formatCurrency, getCurrentAccountValue } from "@/domains/financial-accounts/utils/financial-account-utils";
+import { getFinancialAccountEntryHref } from "@/domains/financial-accounts/financial-account-entry";
+import { formatCurrency, getCurrentAccountValue, isValuationAccount } from "@/domains/financial-accounts/utils/financial-account-utils";
 
 type FilterValues = { start?: string; end?: string; account?: string; type?: string; category?: string; q?: string };
 
@@ -15,7 +16,7 @@ export function TransactionFilters({ personId, accounts, categories, values }: {
         <div className="flex min-w-max divide-x divide-[#E2E8F0]">
           {activeAccounts.map((account) => {
             const current = getCurrentAccountValue(account, account.valuations, account.transactions);
-            return <Link key={account.id} href={`/dossiers/${personId}/comptes/${account.id}`} className="focus-ring block w-44 shrink-0 px-3 py-2 transition hover:bg-blue-50/50 sm:w-52 sm:px-4">
+            return <Link key={account.id} href={getFinancialAccountEntryHref(personId, account.id, isValuationAccount(account.account_type))} className="focus-ring block w-44 shrink-0 px-3 py-2 transition hover:bg-blue-50/50 sm:w-52 sm:px-4">
               <p className="truncate text-[11px] font-semibold leading-4 text-[#64748B]" title={account.account_name}>{account.account_name}</p>
               <p className="whitespace-nowrap text-base font-bold leading-6 tracking-tight text-[#0F172A] sm:text-lg">{formatCurrency(current.value)}</p>
             </Link>;

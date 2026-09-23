@@ -6,6 +6,7 @@ import { Landmark, Plus, WalletCards } from "lucide-react";
 import { PrivateShell } from "@/components/layout/private-shell";
 import { AppBreadcrumb } from "@/components/ui/app-breadcrumb";
 import { FinancialNavigation } from "@/domains/financial-accounts/components/financial-navigation";
+import { getFinancialAccountEntryHref } from "@/domains/financial-accounts/financial-account-entry";
 import { DossierNavigation } from "@/domains/protected-persons/components/dossier-navigation";
 import { getProtectedPerson } from "@/domains/protected-persons/services/protected-person-service";
 import { getFinancialAccounts, type FinancialAccountWithValuations } from "@/domains/financial-accounts/services/financial-account-service";
@@ -34,7 +35,7 @@ function AccountSection({ title, accounts, protectedPersonId, muted = false }: {
   if (!accounts.length) return null;
   return <section className="mt-6"><h2 className="text-lg font-bold">{title}</h2><div className="mt-3 grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-3">{accounts.map((account) => {
     const current = getCurrentAccountValue(account, account.valuations);
-    const href = isValuationAccount(account.account_type) ? `/dossiers/${protectedPersonId}/comptes/${account.id}` : `/dossiers/${protectedPersonId}/comptes/${account.id}/operations`;
+    const href = getFinancialAccountEntryHref(protectedPersonId, account.id, isValuationAccount(account.account_type));
     return <Link key={account.id} href={href} className={`focus-ring self-start rounded-xl border border-[#E2E8F0] bg-white px-3.5 py-3 shadow-[0_6px_18px_rgba(15,23,42,0.035)] transition hover:border-blue-200 ${muted ? "opacity-70" : ""}`}><div className="flex items-start justify-between gap-2"><div className="min-w-0"><h3 className="truncate text-sm font-bold leading-5">{account.account_name}</h3><p className="truncate text-[11px] leading-4 text-[#64748B]">{account.institution_name}</p></div><span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold leading-4 ${account.status === "active" ? "bg-green-50 text-[#15803D]" : "bg-slate-100 text-[#64748B]"}`}>{account.status === "active" ? "Actif" : "Clôturé"}</span></div><p className="mt-1.5 truncate text-[11px] font-semibold leading-4 text-[#2563EB]">{financialAccountLabels[account.account_type]}</p><p className="text-xl font-bold leading-7">{formatCurrency(current.value)}</p>{current.valuation && <p className="text-[10px] leading-4 text-[#94A3B8]">Valorisation au {formatFinancialDate(current.valuation.valuation_date)}</p>}</Link>;
   })}</div></section>;
 }

@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { FileText, Info } from "lucide-react";
 import { z } from "zod";
 import { PrivateShell } from "@/components/layout/private-shell";
 import { AppBreadcrumb } from "@/components/ui/app-breadcrumb";
@@ -91,6 +89,7 @@ export default async function AccountOperationsPage({
         id: protectedPersonId,
         name: `${person.first_name} ${person.last_name}`,
         current: "accounts",
+        accessRole: person.accessRole,
       }}
     >
       <AppBreadcrumb
@@ -122,23 +121,7 @@ export default async function AccountOperationsPage({
             {formatCurrency(current.value)}
           </p>
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          {items.length > 0 && <TransactionQuickActions personId={protectedPersonId} accountId={accountId} accessRole={person.accessRole} ordinaryAllowed={canManage} transferAllowed={canTransfer} returnTo={returnTo} />}
-          <Link
-            href={`/dossiers/${protectedPersonId}/comptes/${accountId}/releves`}
-            className="button button-secondary min-h-8 gap-1.5 px-2.5 text-xs"
-          >
-            <FileText size={14} />
-            Relevés
-          </Link>
-          <Link
-            href={`/dossiers/${protectedPersonId}/comptes/${accountId}`}
-            className="button button-secondary min-h-8 gap-1.5 px-2.5 text-xs"
-          >
-            <Info size={14} />
-            Informations du compte
-          </Link>
-        </div>
+        {items.length > 0 && <TransactionQuickActions personId={protectedPersonId} accountId={accountId} accessRole={person.accessRole} ordinaryAllowed={canManage} transferAllowed={canTransfer} returnTo={returnTo} />}
       </div>
       <DossierNavigation
         protectedPersonId={protectedPersonId}

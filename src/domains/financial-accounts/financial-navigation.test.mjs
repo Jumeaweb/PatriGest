@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { getFinancialAccountEntryHref } from "./financial-account-entry.ts";
 import { getFinancialNavigationItems } from "./financial-navigation-links.ts";
 
 const personId = "11111111-1111-4111-8111-111111111111";
@@ -25,17 +26,20 @@ test("Relevés n'apparaît jamais sans compte", () => {
   }
 });
 
-test("les trois destinations contextualisées conservent le même compte", () => {
+test("les quatre destinations contextualisées suivent l'ordre UX prévu", () => {
   assert.deepEqual(getFinancialNavigationItems(personId, "details", accountId), [
-    { label: "Informations du compte", href: `/dossiers/${personId}/comptes/${accountId}`, active: true },
     { label: "Opérations du compte", href: `/dossiers/${personId}/comptes/${accountId}/operations`, active: false },
     { label: "Relevés", href: `/dossiers/${personId}/comptes/${accountId}/releves`, active: false },
+    { label: "Rapprochements", href: `/dossiers/${personId}/comptes/${accountId}/rapprochements`, active: false },
+    { label: "Informations du compte", href: `/dossiers/${personId}/comptes/${accountId}`, active: true },
   ]);
 });
 
-test("l'état actif suit le journal et les relevés du compte", () => {
-  assert.deepEqual(getFinancialNavigationItems(personId, "operations", accountId).map(({ active }) => active), [false, true, false]);
-  assert.deepEqual(getFinancialNavigationItems(personId, "statements", accountId).map(({ active }) => active), [false, false, true]);
+test("l'état actif suit chaque vue du compte", () => {
+  assert.deepEqual(getFinancialNavigationItems(personId, "operations", accountId).map(({ active }) => active), [true, false, false, false]);
+  assert.deepEqual(getFinancialNavigationItems(personId, "statements", accountId).map(({ active }) => active), [false, true, false, false]);
+  assert.deepEqual(getFinancialNavigationItems(personId, "reconciliations", accountId).map(({ active }) => active), [false, false, true, false]);
+  assert.deepEqual(getFinancialNavigationItems(personId, "details", accountId).map(({ active }) => active), [false, false, false, true]);
 });
 
 test("changer de compte modifie chaque lien contextualisé, sans retour implicite au global", () => {
@@ -48,10 +52,17 @@ test("changer de compte modifie chaque lien contextualisé, sans retour implicit
 
 test("les contextes incomplets ou UUID invalides échouent au lieu de basculer en vue globale", () => {
   assert.throws(() => getFinancialNavigationItems(personId, "statements"));
+  assert.throws(() => getFinancialNavigationItems(personId, "reconciliations"));
   assert.throws(() => getFinancialNavigationItems(personId, "details"));
   assert.throws(() => getFinancialNavigationItems(personId, "operations", "invalid"));
   assert.throws(() => getFinancialNavigationItems("invalid", "accounts"));
   assert.throws(() => getFinancialNavigationItems(personId, "accounts", accountId));
+});
+
+test("les comptes transactionnels ouvrent le journal et les comptes valorisés leur fiche", () => {
+  assert.equal(getFinancialAccountEntryHref(personId, accountId, false), `/dossiers/${personId}/comptes/${accountId}/operations`);
+  assert.equal(getFinancialAccountEntryHref(personId, accountId, true), `/dossiers/${personId}/comptes/${accountId}`);
+  assert.throws(() => getFinancialAccountEntryHref(personId, "invalid", false));
 });
 
 test("la navigation réutilisable marque le lien actif de façon accessible", () => {
@@ -81,9 +92,9 @@ test("les pages globales et de compte insèrent la navigation au bon contexte", 
     const page = source(base + path);
     assert.match(page, /<FinancialNavigation protectedPersonId=\{protectedPersonId\} current="(?:accounts|operations)" \/>/);
   }
-  for (const path of ["comptes/[accountId]/page.tsx", "comptes/[accountId]/modifier/page.tsx", "comptes/[accountId]/operations/page.tsx", "comptes/[accountId]/releves/page.tsx"]) {
+  for (const path of ["comptes/[accountId]/page.tsx", "comptes/[accountId]/modifier/page.tsx", "comptes/[accountId]/operations/page.tsx", "comptes/[accountId]/releves/page.tsx", "comptes/[accountId]/rapprochements/page.tsx"]) {
     const page = source(base + path);
-    assert.match(page, /<FinancialNavigation protectedPersonId=\{protectedPersonId\} accountId=\{accountId\} current="(?:details|operations|statements)"\s*\/>/);
+    assert.match(page, /<FinancialNavigation[\s\S]*?protectedPersonId=\{protectedPersonId\}[\s\S]*?accountId=\{accountId\}[\s\S]*?current="(?:details|operations|statements|reconciliations)"[\s\S]*?\/>/);
   }
   assert.match(source(base + "operations/nouvelle/page.tsx"), /accountId=\{requestedAccountId\} current="operations"/);
 });
