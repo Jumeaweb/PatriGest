@@ -7,6 +7,8 @@ import { DossierNavigation } from "@/domains/protected-persons/components/dossie
 import { getProtectedPerson } from "@/domains/protected-persons/services/protected-person-service";
 import { getManagementReports } from "@/domains/management-reports/services";
 import { ManagementReportCreateForm } from "@/domains/management-reports/management-report-create-form";
+import { ManagementReportNavigation } from "@/domains/management-reports/management-report-navigation";
+import { getManagementReportStatusPresentation } from "@/domains/management-reports/management-report-status";
 import { getReportPreparationGuidance } from "@/domains/management-reports/report-preparation-guidance";
 import { formatFinancialDate } from "@/domains/financial-accounts/utils/financial-account-utils";
 export const dynamic = "force-dynamic";
@@ -67,14 +69,18 @@ export default async function Page({
         protectedPersonId={protectedPersonId}
         current="reports"
       />
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E2E8F0] bg-white p-4">
+      <ManagementReportNavigation
+        protectedPersonId={protectedPersonId}
+        current="reports"
+      />
+      <div className="mt-4 rounded-xl border border-[#E2E8F0] bg-white p-4">
         <div className="text-sm text-[#475569]">
           {preparationState === "no_period" ? (
             <>
               <p className="font-semibold">Aucun exercice de gestion n&apos;est actuellement disponible.</p>
               <p className="mt-1">
                 {canManage
-                  ? "Vous pouvez créer un exercice pour définir la période du compte de gestion, ou continuer en renseignant les dates manuellement ci-dessous."
+                  ? "Vous pouvez utiliser l’onglet Exercices de gestion pour définir une période, ou continuer en renseignant les dates manuellement ci-dessous."
                   : "Les comptes de gestion déjà préparés restent consultables ci-dessous."}
               </p>
             </>
@@ -83,7 +89,7 @@ export default async function Page({
               <p className="font-semibold">Aucun exercice ne peut préremplir la période d&apos;un nouveau compte de gestion.</p>
               <p className="mt-1">
                 {canManage
-                  ? "Vous pouvez gérer les exercices ou renseigner les dates manuellement ci-dessous."
+                  ? "Vous pouvez consulter l’onglet Exercices de gestion ou renseigner les dates manuellement ci-dessous."
                   : "Les comptes de gestion déjà préparés restent consultables ci-dessous."}
               </p>
             </>
@@ -95,11 +101,6 @@ export default async function Page({
             </p>
           )}
         </div>
-        {canManage && (
-          <Link href={`/dossiers/${protectedPersonId}/exercices`} className="button button-secondary">
-            Gérer les exercices
-          </Link>
-        )}
       </div>
       {canManage && (
         <ManagementReportCreateForm
@@ -108,36 +109,29 @@ export default async function Page({
         />
       )}
       <div className="mt-4 space-y-2">
-        {reports.map((report) => (
-          <Link
-            key={report.id}
-            href={`/dossiers/${protectedPersonId}/comptes-de-gestion/${report.id}`}
-            className="focus-ring flex items-center justify-between rounded-xl border bg-white p-4"
-          >
-            <span>
-              <strong>{report.report_year}</strong>
-              <span className="ml-3 text-xs text-slate-500">
-                {formatFinancialDate(report.period_start)} →{" "}
-                {formatFinancialDate(report.period_end)}
+        {reports.map((report) => {
+          const status = getManagementReportStatusPresentation(report.status);
+          return (
+            <Link
+              key={report.id}
+              href={`/dossiers/${protectedPersonId}/comptes-de-gestion/${report.id}`}
+              className="focus-ring flex items-center justify-between gap-3 rounded-xl border bg-white p-4"
+            >
+              <span>
+                <strong>{report.report_year}</strong>
+                <span className="ml-3 text-xs text-slate-500">
+                  {formatFinancialDate(report.period_start)} →{" "}
+                  {formatFinancialDate(report.period_end)}
+                </span>
               </span>
-            </span>
-            <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold">
-              {report.status === "approved"
-                ? "Approuvé"
-                : report.status === "difficulty"
-                ? "Difficulté signalée"
-                : report.status === "transmitted"
-                ? "Transmis"
-                : report.status === "finalized"
-                ? "Finalisé"
-                : report.status === "generated"
-                  ? "Projet généré"
-                  : report.status === "ready"
-                    ? "Prêt"
-                    : "En préparation"}
-            </span>
-          </Link>
-        ))}
+              <span
+                className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${status.className}`}
+              >
+                {status.label}
+              </span>
+            </Link>
+          );
+        })}
         {!reports.length && (
           <p className="rounded-xl border border-dashed bg-white p-6 text-center text-sm text-slate-500">
             Aucun compte de gestion préparé.

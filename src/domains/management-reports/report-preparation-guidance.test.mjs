@@ -19,10 +19,11 @@ test("sans exercice, la guidance n'impose pas un exercice pour préparer manuell
   assert.match(service, /if \(input\.managementPeriodId\) \{/);
 });
 
-test("le lien correct est réservé aux rôles pouvant gérer les exercices", () => {
+test("l'onglet Exercices reste consultable et la préparation reste réservée aux rôles de gestion", () => {
   assert.match(page, /const canManage = person\.accessRole !== "read_only"/);
-  assert.match(page, /\{canManage && \(\s*<Link href=\{`\/dossiers\/\$\{protectedPersonId\}\/exercices`\}/);
-  assert.match(page, /Gérer les exercices/);
+  assert.match(page, /<ManagementReportNavigation[\s\S]*?current="reports"/);
+  assert.match(page, /\{canManage && \(\s*<ManagementReportCreateForm/);
+  assert.doesNotMatch(page, />\s*Gérer les exercices\s*<\/Link>/);
 });
 
 test("un exercice annuel disponible préserve le préremplissage existant", () => {
@@ -39,7 +40,7 @@ test("les périodes manuelles restent possibles sans préremplissage", () => {
 });
 
 test("les rapports existants restent visibles et aucun précontrôle approximatif n'est ajouté", () => {
-  assert.match(page, /\{reports\.map\(\(report\) => \(/);
+  assert.match(page, /\{reports\.map\(\(report\) => \{/);
   assert.match(page, /\{!reports\.length && \(/);
   assert.doesNotMatch(page, /getFinancialAccounts|getTransactions|aggregateStableReportOperations/);
   assert.doesNotMatch(page, /preparationState === "no_period" && <ManagementReportCreateForm/);

@@ -9,6 +9,7 @@ const actions = source("./actions.ts");
 const service = source("./services/protected-person-service.ts");
 const manager = source("./components/management-period-manager.tsx");
 const page = source("../../app/dossiers/[protectedPersonId]/exercices/page.tsx");
+const confirmDialog = source("../../components/ui/app-confirm-dialog.tsx");
 
 test("un exercice valide accepte une période d'un jour, sans changer l'ordre métier", () => {
   assert.equal(managementPeriodSchema.safeParse({ startDate: "2026-09-15", endDate: "2026-09-15" }).success, true);
@@ -77,16 +78,27 @@ test("dates contrôlées restent saisies après erreur et les boutons sont bloqu
   assert.match(manager, /<FormMessage state=\{state\}/);
 });
 
+test("un succès reste visible sans formulaire ni action d'édition jusqu'à Fermer", () => {
+  assert.match(manager, /const succeeded = state\.status === "success"/);
+  assert.match(manager, /cancelLabel=\{succeeded \? "Fermer" : "Annuler"\}/);
+  assert.match(manager, /actions=\{succeeded \? null : <button/);
+  assert.match(manager, /\{succeeded \? <FormMessage state=\{state\} \/> : <form/);
+  assert.doesNotMatch(manager, /state\.status === "success"[\s\S]{0,100}onClose\(\)/);
+  assert.match(confirmDialog, /cancelLabel = "Annuler"/);
+});
+
 test("l'état vide est explicite pour gestionnaire et lecture seule", () => {
   assert.match(manager, /Aucun exercice de gestion/);
   assert.match(page, /person\.accessRole === "read_only"/);
   assert.match(page, /Aucun exercice de gestion/);
+  assert.match(page, /Ouvert · exercice courant/);
+  assert.match(page, /Clôturé/);
   assert.match(manager, /Créer un exercice/);
   assert.doesNotMatch(page.split('person.accessRole === "read_only" ?')[1].split(': <ManagementPeriodManager')[0], /Créer un exercice/);
 });
 
 test("l'accès depuis Informations du dossier et NAV-04 restent inchangés", () => {
-  assert.match(source("../../app/dossiers/[protectedPersonId]/page.tsx"), /Gérer les exercices/);
+  assert.match(source("../../app/dossiers/[protectedPersonId]/page.tsx"), /Voir les exercices →/);
   const nav = source("./components/dossier-navigation.tsx");
   assert.doesNotMatch(nav, /label: "Exercices de gestion"/);
 });

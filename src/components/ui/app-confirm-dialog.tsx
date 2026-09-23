@@ -12,9 +12,10 @@ type AppConfirmDialogProps = {
   actions: React.ReactNode;
   onClose: () => void;
   size?: "default" | "wide";
+  cancelLabel?: string;
 };
 
-export function AppConfirmDialog({ open, title, description, subject, children, actions, onClose, size = "default" }: AppConfirmDialogProps) {
+export function AppConfirmDialog({ open, title, description, subject, children, actions, onClose, size = "default", cancelLabel = "Annuler" }: AppConfirmDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
@@ -49,7 +50,7 @@ export function AppConfirmDialog({ open, title, description, subject, children, 
         {subject && <p className="mt-3 rounded-lg bg-[#F8FAFC] px-3 py-2 text-sm font-bold text-[#334155]">{subject}</p>}
         {children && <div className="mt-3">{children}</div>}
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button ref={cancelButtonRef} type="button" className="button button-secondary" onClick={onClose}>Annuler</button>
+          <button ref={cancelButtonRef} type="button" className="button button-secondary" onClick={onClose}>{cancelLabel}</button>
           {actions}
         </div>
       </div>
