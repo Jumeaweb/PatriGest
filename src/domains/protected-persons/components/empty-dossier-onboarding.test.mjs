@@ -9,6 +9,7 @@ function source(relativePath) {
 const dashboard = source("../../../app/tableau-de-bord/page.tsx");
 const dossierPage = source("../../../app/dossiers/page.tsx");
 const compatibilityPage = source("../../../app/dossiers/gestion/page.tsx");
+const newDossierPage = source("../../../app/dossiers/nouveau/page.tsx");
 const list = source("./protected-person-list.tsx");
 const actions = source("../actions.ts");
 const service = source("../services/protected-person-service.ts");
@@ -22,7 +23,7 @@ test("le tableau de bord sans dossier explique l'absence d'accès et garde la li
 
 test("le CTA direct du tableau de bord crée le premier dossier uniquement si autorisé", () => {
   assert.match(dashboard, /\{canCreate && <Link className="button button-primary" href="\/dossiers\/nouveau">Créer mon premier dossier<\/Link>\}/);
-  assert.match(dashboard, /<DossiersSection dossiers=\{data\.dossiers\} canCreate=\{!isPlatformAdmin\} \/>/);
+  assert.match(dashboard, /<DossiersSection dossiers=\{data\.dossiers\} canCreate=\{canCreateDossier\} \/>/);
   assert.match(dashboard, /if \(isPlatformAdmin\) redirect\("\/administration"\)/);
 });
 
@@ -39,11 +40,25 @@ test("la liste cache ses deux CTA de création sans droit, mais les conserve ave
 
 test("les deux pages de liste réutilisent le contexte d'autorisation existant", () => {
   assert.match(context, /platform_administrators/);
+  assert.match(context, /application_user_authorizations/);
+  assert.match(context, /account_mode/);
+  assert.match(context, /canCreateDossier: !isPlatformAdmin && accountMode !== "collaborator"/);
   for (const page of [dossierPage, compatibilityPage]) {
     assert.match(page, /getPrivateAccessContext\(\)/);
-    assert.match(page, /<ProtectedPersonList persons=\{persons\} canCreate=\{!isPlatformAdmin\} \/>/);
+    assert.match(page, /<ProtectedPersonList persons=\{persons\} canCreate=\{canCreateDossier\} \/>/);
   }
   assert.match(service, /if \(administrator\) throw new Error\("Un administrateur de plateforme ne peut pas créer de dossier\."\)/);
+});
+
+test("un collaborateur ne peut pas ouvrir directement le formulaire de création", () => {
+  assert.match(newDossierPage, /getPrivateAccessContext\(\)/);
+  assert.match(newDossierPage, /if \(!canCreateDossier\) redirect\("\/dossiers"\)/);
+});
+
+test("un refus atomique du mode collaborateur produit un message applicatif sûr", () => {
+  assert.match(service, /AccountModeConflictError/);
+  assert.match(service, /Un compte collaborateur ne peut pas créer son propre dossier\./);
+  assert.match(actions, /error instanceof AccountModeConflictError/);
 });
 
 test("les dossiers existants s'ouvrent sur leur tableau de bord", () => {

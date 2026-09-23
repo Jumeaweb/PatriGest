@@ -11,6 +11,22 @@ import { sendDossierInvitationEmail } from "./invitation-email";
 import { getDossierInvitationDisplayContext, getInvitationPreview, getRecoverableDossierInvitations } from "./services";
 import type { AccessActionState } from "./state";
 
+function isAutonomousAccountInvitationError(error: { message?: string } | null) {
+  return error?.message?.includes("Un compte autonome ne peut pas être invité comme collaborateur.") ?? false;
+}
+
+function invitationCreationErrorMessage(error: { message?: string } | null) {
+  return isAutonomousAccountInvitationError(error)
+    ? "Cette adresse correspond à un compte autonome et ne peut pas recevoir d’accès collaborateur."
+    : "Impossible de créer cette invitation.";
+}
+
+function invitationAcceptanceErrorMessage(error: { message?: string } | null) {
+  return error?.message?.includes("Un compte autonome ne peut pas devenir collaborateur.")
+    ? "Ce compte autonome ne peut pas accepter une invitation collaborateur."
+    : "Invitation invalide ou expirée.";
+}
+
 const requestSchema = z.object({ firstName: z.string().trim().min(1).max(80), lastName: z.string().trim().min(1).max(80), email: z.email().trim().toLowerCase(), message: z.string().trim().max(1000).optional() });
 
 async function requirePlatformAdmin() {
@@ -121,7 +137,7 @@ export async function inviteCollaboratorAction(protectedPersonId: string, _state
       p_token_hash: invitation.tokenHash,
       p_expires_at: invitation.expiresAt,
     });
-    if (error) return { status: "error", message: "Impossible de créer cette invitation." };
+    if (error) return { status: "error", message: invitationCreationErrorMessage(error) };
     const invitationUrl = `${await getApplicationOrigin()}${getDossierInvitationPath(invitation.token)}`;
     revalidatePath(`/dossiers/${actor.protectedPersonId}/acces`);
     try {
@@ -160,7 +176,7 @@ export async function reissueDossierInvitationAction(protectedPersonId: string, 
       p_token_hash: invitation.tokenHash,
       p_expires_at: invitation.expiresAt,
     });
-    if (error) return { status: "error", message: "Impossible de renvoyer cette invitation." };
+    if (error) return { status: "error", message: isAutonomousAccountInvitationError(error) ? invitationCreationErrorMessage(error) : "Impossible de renvoyer cette invitation." };
 
     const invitationUrl = `${await getApplicationOrigin()}${getDossierInvitationPath(invitation.token)}`;
     revalidatePath(`/dossiers/${actor.protectedPersonId}/acces`);
@@ -218,7 +234,7 @@ export async function acceptDossierInvitationAction(token: string): Promise<void
   const { data: administrator } = await supabase.from("platform_administrators").select("user_id").eq("user_id", userId).maybeSingle();
   if (administrator) throw new Error("Un Administrateur PatriGest ne peut pas accepter une invitation métier.");
   const { data, error } = await supabase.rpc("accept_protected_person_invitation", { p_token_hash: createHash("sha256").update(token).digest("hex") });
-  if (error || !data) throw new Error("Invitation invalide ou expirée.");
+  if (error || !data) throw new Error(invitationAcceptanceErrorMessage(error));
   revalidatePath("/dossiers");
   const { redirect } = await import("next/navigation");
   redirect(`/dossiers/${data}/tableau-de-bord`);
@@ -248,7 +264,7 @@ export async function acceptRecoveredDossierInvitationAction(invitationId: strin
   if (invitationError || !invitation) throw new Error("Invitation invalide ou expirée.");
 
   const { data, error } = await supabase.rpc("accept_protected_person_invitation", { p_token_hash: invitation.token_hash });
-  if (error || !data) throw new Error("Invitation invalide ou expirée.");
+  if (error || !data) throw new Error(invitationAcceptanceErrorMessage(error));
   revalidatePath("/dossiers");
   const { redirect } = await import("next/navigation");
   redirect(`/dossiers/${data}/tableau-de-bord`);

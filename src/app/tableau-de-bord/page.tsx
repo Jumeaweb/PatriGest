@@ -14,7 +14,7 @@ const roleLabels = { owner: "Propriétaire", manager: "Gestionnaire", read_only:
 const reportStatusLabels = { draft: "En préparation", ready: "Prêt", generated: "Projet généré", finalized: "Finalisé", transmitted: "Transmis", approved: "Approuvé", difficulty: "Difficulté signalée" } as const;
 
 export default async function DashboardPage() {
-  const { isPlatformAdmin } = await getPrivateAccessContext();
+  const { isPlatformAdmin, canCreateDossier } = await getPrivateAccessContext();
   if (isPlatformAdmin) redirect("/administration");
   const data = await getDashboardData();
   return <PrivateShell current="dashboard">
@@ -25,7 +25,7 @@ export default async function DashboardPage() {
       <StatCard title="Actions à traiter" value={data.actionCount} icon={ListTodo} color="violet" />
     </section>
     <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(19rem,0.85fr)]">
-      <DossiersSection dossiers={data.dossiers} canCreate={!isPlatformAdmin} />
+      <DossiersSection dossiers={data.dossiers} canCreate={canCreateDossier} />
       <TasksSection tasks={data.tasks} />
     </div>
   </PrivateShell>;

@@ -12,6 +12,8 @@ export type ProtectedPersonDetail = ProtectedPerson & {
 };
 export type ProtectedPersonListItem = ProtectedPerson & { accessRole: DossierAccessRole };
 
+export class AccountModeConflictError extends Error {}
+
 export async function getProtectedPersons() {
   const { supabase, userId } = await getAuthenticatedUser();
   const { data, error } = await supabase
@@ -77,7 +79,12 @@ export async function createProtectedPerson(input: ProtectedPersonInput) {
     .select("*")
     .single();
 
-  if (error) throw new Error("Impossible de créer le dossier.");
+  if (error) {
+    if (error.message.includes("Un compte collaborateur ne peut pas créer ou posséder de dossier.")) {
+      throw new AccountModeConflictError("Un compte collaborateur ne peut pas créer son propre dossier.");
+    }
+    throw new Error("Impossible de créer le dossier.");
+  }
   return data;
 }
 

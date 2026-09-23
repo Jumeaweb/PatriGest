@@ -26,6 +26,13 @@ test("un compte non confirmé, rejeté ou administrateur ne contourne pas l'acti
   assert.equal(canRecoverDossierInvitations({ emailConfirmed: true, authorizationStatus: "pending", platformAdministrator: true }), false);
 });
 
+test("les conflits de mode utilisent l'autorité DB et un message applicatif sûr", () => {
+  assert.match(actions, /rpc\("issue_protected_person_invitation"/);
+  assert.match(actions, /isAutonomousAccountInvitationError/);
+  assert.match(actions, /Cette adresse correspond à un compte autonome et ne peut pas recevoir d’accès collaborateur\./);
+  assert.match(actions, /Ce compte autonome ne peut pas accepter une invitation collaborateur\./);
+});
+
 test("la reprise ne charge que les invitations exactes encore valides", () => {
   assert.match(services, /\.eq\("email", identity\.email\)/);
   assert.match(services, /\.is\("accepted_at", null\)/);

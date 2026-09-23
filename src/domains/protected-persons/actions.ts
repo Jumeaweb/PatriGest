@@ -8,6 +8,7 @@ import { ManagementPeriodWriteError, managementPeriodUserMessage } from "./servi
 import { protectedPersonSchema } from "./schemas/protected-person-schema";
 import { protectionMeasureSchema } from "./schemas/protection-measure-schema";
 import {
+  AccountModeConflictError,
   createManagementPeriod,
   getProtectedPerson,
   closeManagementPeriod,
@@ -58,7 +59,10 @@ export async function createProtectedPersonAction(
   let person;
   try {
     person = await createProtectedPerson(parsed.data);
-  } catch {
+  } catch (error) {
+    if (error instanceof AccountModeConflictError) {
+      return { status: "error", message: error.message };
+    }
     return { status: "error", message: "Impossible de créer le dossier. Veuillez réessayer." };
   }
 

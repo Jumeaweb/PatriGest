@@ -8,6 +8,6 @@ export const metadata: Metadata = { title: "Gérer les dossiers" };
 export const dynamic = "force-dynamic";
 
 export default async function ManageProtectedPersonsPage() {
-  const [persons, { isPlatformAdmin }] = await Promise.all([getProtectedPersons(), getPrivateAccessContext()]);
-  return <PrivateShell current="dossiers"><ProtectedPersonList persons={persons} canCreate={!isPlatformAdmin} /></PrivateShell>;
+  const [persons, { canCreateDossier }] = await Promise.all([getProtectedPersons(), getPrivateAccessContext()]);
+  return <PrivateShell current="dossiers"><ProtectedPersonList persons={persons} canCreate={canCreateDossier} /></PrivateShell>;
 }

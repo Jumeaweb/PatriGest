@@ -20,6 +20,7 @@ export type DossierAccessRole = "owner" | "manager" | "read_only";
 export type SharedAccessRole = Exclude<DossierAccessRole, "owner">;
 type AccountRequestStatus = "pending" | "approved" | "rejected";
 export type ApplicationUserAuthorizationStatus = "pending" | "active" | "rejected";
+export type AccountMode = "autonomous" | "collaborator";
 export type ReleaseNotificationDeliveryKind = "test" | "global";
 export type ReleaseNotificationStatus = "pending" | "sending" | "sent" | "failed";
 export type PropertyType = "house" | "apartment" | "land" | "commercial" | "other";
@@ -44,9 +45,9 @@ export type Database = {
         Relationships: [];
       };
       application_user_authorizations: {
-        Row: { user_id: string; status: ApplicationUserAuthorizationStatus; status_changed_at: string; status_changed_by: string | null; created_at: string; updated_at: string };
-        Insert: { user_id: string; status?: ApplicationUserAuthorizationStatus; status_changed_at?: string; status_changed_by?: string | null; created_at?: string; updated_at?: string };
-        Update: { status?: ApplicationUserAuthorizationStatus; status_changed_at?: string; status_changed_by?: string | null; updated_at?: string };
+        Row: { user_id: string; status: ApplicationUserAuthorizationStatus; account_mode: AccountMode | null; status_changed_at: string; status_changed_by: string | null; created_at: string; updated_at: string };
+        Insert: { user_id: string; status?: ApplicationUserAuthorizationStatus; account_mode?: AccountMode | null; status_changed_at?: string; status_changed_by?: string | null; created_at?: string; updated_at?: string };
+        Update: { status?: ApplicationUserAuthorizationStatus; account_mode?: AccountMode | null; status_changed_at?: string; status_changed_by?: string | null; updated_at?: string };
         Relationships: [];
       };
       protected_persons: {
