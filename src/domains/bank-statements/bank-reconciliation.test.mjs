@@ -71,27 +71,27 @@ test("l'API expose GET POST PATCH et réserve les écritures aux gestionnaires",
 });
 
 test("le client ne transmet aucune valeur métier à la validation", () => {
-  const component = source("./components/bank-statement-manager.tsx");
+  const component = source("./components/bank-reconciliation-manager.tsx");
   assert.match(component, /fetch\(endpoint, \{ method \}\)/);
   assert.doesNotMatch(component, /fetch\(endpoint, \{ method, body:/);
 });
 
 test("l'interface couvre desktop mobile brouillon validé et lecture seule", () => {
-  const component = source("./components/bank-statement-manager.tsx");
-  assert.match(component, /md:block/);
-  assert.match(component, /md:hidden/);
+  const component = source("./components/bank-reconciliation-manager.tsx");
+  assert.match(component, /flex flex-wrap items-start justify-between/);
+  assert.match(component, /grid gap-2 sm:grid-cols-3/);
   assert.match(component, /Contrôler le solde/);
-  assert.match(component, /Brouillon — recalculé à l’affichage/);
+  assert.match(component, /Brouillon simple — recalculé à l’affichage/);
   assert.match(component, /Valider le contrôle/);
   assert.match(component, /montants figés/);
   assert.match(component, /control\.status === "draft" && canManage/);
-  assert.match(component, /canManage && !isValidated/);
+  assert.match(source("./components/bank-statement-manager.tsx"), /canManage && !isValidated/);
 });
 
 test("les cas non rapprochables restent informatifs sans action", () => {
-  const component = source("./components/bank-statement-manager.tsx");
+  const component = source("./components/bank-reconciliation-manager.tsx");
   assert.match(component, /Solde du relevé non renseigné/);
   assert.match(component, /antérieur à la première date contrôlable/);
   assert.match(component, /postérieur à la clôture/);
-  assert.match(component, /if \(unavailableReason && status !== "validated"\) return/);
+  assert.match(component, /if \(unavailableReason && status !== "validated"\) \{/);
 });

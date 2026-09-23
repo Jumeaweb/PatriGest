@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CheckCircle2, CircleDashed, FileSearch } from "lucide-react";
 import { z } from "zod";
 import { PrivateShell } from "@/components/layout/private-shell";
 import { AppBreadcrumb } from "@/components/ui/app-breadcrumb";
+import { parseBankStatementPage, type BankStatementQuery } from "@/domains/bank-statements/bank-statement-pagination";
+import { BankReconciliationManager } from "@/domains/bank-statements/components/bank-reconciliation-manager";
+import { BankStatementPagination } from "@/domains/bank-statements/components/bank-statement-pagination";
 import { getBankReconciliationListStates } from "@/domains/bank-statements/reconciliation-service";
-import { getBankStatements } from "@/domains/bank-statements/services";
+import { getBankStatementPage } from "@/domains/bank-statements/services";
 import { FinancialNavigation } from "@/domains/financial-accounts/components/financial-navigation";
 import { getFinancialAccountEntryHref } from "@/domains/financial-accounts/financial-account-entry";
 import { getFinancialAccount } from "@/domains/financial-accounts/services/financial-account-service";
@@ -19,10 +20,12 @@ export const dynamic = "force-dynamic";
 
 export default async function AccountReconciliationsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ protectedPersonId: string; accountId: string }>;
+  searchParams: Promise<BankStatementQuery>;
 }) {
-  const { protectedPersonId, accountId } = await params;
+  const [{ protectedPersonId, accountId }, query] = await Promise.all([params, searchParams]);
   if (![protectedPersonId, accountId].every((id) => z.uuid().safeParse(id).success)) {
     notFound();
   }
@@ -35,19 +38,16 @@ export default async function AccountReconciliationsPage({
     notFound();
   }
 
-  const statements = await getBankStatements(accountId);
+  const statementPage = await getBankStatementPage(accountId, parseBankStatementPage(query.page));
   const reconciliations = await getBankReconciliationListStates(
-    statements.map((statement) => statement.id),
+    statementPage.items.map((statement) => statement.id),
   );
-  const validated = reconciliations.filter((item) => item.status === "validated").length;
-  const drafts = reconciliations.filter((item) => item.status === "draft").length;
-  const notStarted = Math.max(0, statements.length - validated - drafts);
-  const statementsHref = `/dossiers/${protectedPersonId}/comptes/${accountId}/releves`;
   const accountHref = getFinancialAccountEntryHref(
     protectedPersonId,
     accountId,
     isValuationAccount(account.account_type),
   );
+  const pathname = `/dossiers/${protectedPersonId}/comptes/${accountId}/rapprochements`;
 
   return (
     <PrivateShell
@@ -59,71 +59,48 @@ export default async function AccountReconciliationsPage({
         accessRole: person.accessRole,
       }}
     >
-      <AppBreadcrumb
-        items={[
-          { label: "Dossiers", href: "/dossiers" },
-          {
-            label: `${person.first_name} ${person.last_name}`,
-            href: `/dossiers/${protectedPersonId}/comptes`,
-          },
-          {
-            label: "Comptes et patrimoine",
-            href: `/dossiers/${protectedPersonId}/comptes`,
-          },
-          { label: account.account_name, href: accountHref },
-          { label: "Rapprochements" },
-        ]}
-      />
+      <AppBreadcrumb items={[
+        { label: "Dossiers", href: "/dossiers" },
+        { label: `${person.first_name} ${person.last_name}`, href: `/dossiers/${protectedPersonId}/comptes` },
+        { label: "Comptes et patrimoine", href: `/dossiers/${protectedPersonId}/comptes` },
+        { label: account.account_name, href: accountHref },
+        { label: "Rapprochements" },
+      ]} />
       <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#2563EB]">
         {person.first_name} {person.last_name}
       </p>
       <h1 className="mt-1 text-2xl font-bold">Rapprochements</h1>
       <p className="mt-1 text-sm font-semibold">{account.account_name}</p>
       <p className="text-xs text-[#64748B]">
-        {account.institution_name}
-        {account.account_reference ? ` · ${account.account_reference}` : ""}
+        {account.institution_name}{account.account_reference ? ` · ${account.account_reference}` : ""}
       </p>
       <DossierNavigation protectedPersonId={protectedPersonId} current="accounts" />
-      <FinancialNavigation
-        protectedPersonId={protectedPersonId}
-        accountId={accountId}
-        current="reconciliations"
+      <FinancialNavigation protectedPersonId={protectedPersonId} accountId={accountId} current="reconciliations" />
+      <BankStatementPagination
+        pathname={pathname}
+        values={query}
+        page={statementPage.page}
+        totalPages={statementPage.totalPages}
       />
-
-      <section className="mt-5 rounded-xl border border-[#E2E8F0] bg-white p-4">
-        <h2 className="text-base font-bold">Synthèse des contrôles bancaires</h2>
-        <p className="mt-1 text-sm text-[#64748B]">
-          Les contrôles restent réalisés depuis chaque relevé bancaire. Cette synthèse rend leur avancement accessible sans dupliquer la gestion des documents.
-        </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <Summary icon={CircleDashed} label="Non commencés" value={notStarted} />
-          <Summary icon={FileSearch} label="Brouillons" value={drafts} />
-          <Summary icon={CheckCircle2} label="Validés" value={validated} />
-        </div>
-        <Link className="button button-primary mt-4" href={statementsHref}>
-          Accéder aux contrôles dans Relevés
-        </Link>
-      </section>
+      <BankReconciliationManager
+        personId={protectedPersonId}
+        accountId={accountId}
+        items={statementPage.items}
+        totalCount={statementPage.totalCount}
+        reconciliations={reconciliations}
+        accountDates={{
+          initial_balance_date: account.initial_balance_date,
+          opening_date: account.opening_date,
+          closing_date: account.closing_date,
+        }}
+        canManage={person.accessRole !== "read_only"}
+      />
+      <BankStatementPagination
+        pathname={pathname}
+        values={query}
+        page={statementPage.page}
+        totalPages={statementPage.totalPages}
+      />
     </PrivateShell>
-  );
-}
-
-function Summary({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof CircleDashed;
-  label: string;
-  value: number;
-}) {
-  return (
-    <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3">
-      <div className="flex items-center gap-2 text-brand-foreground">
-        <Icon aria-hidden="true" size={16} />
-        <p className="text-xs font-semibold">{label}</p>
-      </div>
-      <p className="mt-1 text-xl font-bold">{value}</p>
-    </div>
   );
 }

@@ -39,14 +39,12 @@ test("la gestion courante et la suppression destructive restent distinctes selon
   assert.match(detail, /<DeleteAccountForm/);
 });
 
-test("Rapprochements est une destination réelle préparatoire sans fonctions documentaires dupliquées", () => {
+test("Rapprochements est devenu l'espace de contrôle sans fonctions documentaires dupliquées", () => {
   assert.match(reconciliation, /export default async function AccountReconciliationsPage/);
   assert.match(reconciliation, /current="reconciliations"/);
   assert.match(reconciliation, /getBankReconciliationListStates/);
-  assert.match(reconciliation, /Non commencés/);
-  assert.match(reconciliation, /Brouillons/);
-  assert.match(reconciliation, /Validés/);
-  assert.match(reconciliation, /Accéder aux contrôles dans Relevés/);
+  assert.match(reconciliation, /<BankReconciliationManager/);
+  assert.match(reconciliation, /<BankStatementPagination/);
   assert.doesNotMatch(reconciliation, /Ajouter un relevé|Voir le PDF|Télécharger|BankStatementManager/);
 });
 

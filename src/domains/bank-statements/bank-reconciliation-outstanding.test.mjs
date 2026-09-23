@@ -66,7 +66,7 @@ test("le client n'envoie aucun montant faisant autorité", () => {
 });
 
 test("le panneau est chargé uniquement à la demande", () => {
-  const manager = source("./components/bank-statement-manager.tsx");
+  const manager = source("./components/bank-reconciliation-manager.tsx");
   assert.match(manager, /onClick=\{\(\) => openPointing\(true\)\}>Rapprochement détaillé/);
   assert.match(manager, /onClick=\{\(\) => openPointing\(false\)\}>Opérations en circulation/);
   assert.doesNotMatch(source("../../app/dossiers/[protectedPersonId]/comptes/[accountId]/releves/page.tsx"), /getOutstandingTransactionPage/);
