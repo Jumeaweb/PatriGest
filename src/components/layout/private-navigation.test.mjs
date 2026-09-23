@@ -32,9 +32,17 @@ test("/dossiers affiche la liste même pour un seul dossier actif", () => {
 });
 
 test("le tableau de bord mène à /dossiers et non à la route de compatibilité", () => {
-  assert.match(dashboard, /<StatCard href="\/dossiers" title="Dossiers actifs"/);
   assert.match(dashboard, /href="\/dossiers">Voir tous les dossiers<\/Link>/);
   assert.doesNotMatch(dashboard, /\/dossiers\/gestion|>Gérer les dossiers<\/Link>/);
+});
+
+test("les pages racines ne dupliquent ni indicateurs ni fil d'Ariane", () => {
+  assert.doesNotMatch(dashboard, /<StatCard|Dossiers actifs|Comptes de gestion à traiter|Actions à traiter/);
+  assert.match(dashboard, /Dossiers suivis \(\{dossierCount\}\)/);
+  assert.match(dashboard, /dossierCount=\{data\.activeDossierCount\}/);
+  assert.doesNotMatch(dashboard, /AppBreadcrumb/);
+  assert.doesNotMatch(dossierList, /AppBreadcrumb/);
+  assert.doesNotMatch(categories, /AppBreadcrumb/);
 });
 
 test("la suppression d'un dossier revient à la liste unique", () => {
