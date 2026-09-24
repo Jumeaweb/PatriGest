@@ -3,7 +3,10 @@ import { notFound } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import type { AccountMode, ApplicationUserAuthorizationStatus, SharedAccessRole } from "@/types/database";
 import { sendApplicationActivationEmail } from "../registration-email";
+
+export const ADMIN_USERS_PAGE_SIZE = 25;
 
 export async function requirePlatformAdministrator() {
   const supabase = await createClient();
@@ -102,23 +105,127 @@ export async function resendApplicationActivationEmail(userId: string) {
   await sendApplicationActivationEmail({ email: targetResult.user.email, firstName: profile?.first_name ?? "" });
 }
 
-export async function getPlatformUsers() {
+export type PlatformUserSummary = {
+  id: string;
+  email: string;
+  createdAt: string;
+  firstName: string;
+  lastName: string;
+  emailConfirmed: boolean;
+  ownedDossiers: number;
+  authorizationStatus: ApplicationUserAuthorizationStatus | undefined;
+  accountMode: AccountMode | null;
+  sharedAccesses: Array<{ protectedPersonId: string; protectedPersonName: string; role: SharedAccessRole }>;
+  canResendActivationEmail: boolean;
+  canDelete: boolean;
+  deletionBlockReasons: string[];
+};
+
+export async function getPlatformUsers(requestedPage = 1) {
   const { userId: currentUserId } = await requirePlatformAdministrator();
   const admin = createAdminClient();
-  const users = await getAllAuthUsers(admin);
+  const firstResult = await admin.auth.admin.listUsers({ page: requestedPage, perPage: ADMIN_USERS_PAGE_SIZE });
+  if (firstResult.error) throw new Error("Impossible de charger les utilisateurs.");
+  const page = firstResult.data.lastPage > 0 && requestedPage > firstResult.data.lastPage ? firstResult.data.lastPage : requestedPage;
+  const pageResult = page === requestedPage
+    ? firstResult
+    : await admin.auth.admin.listUsers({ page, perPage: ADMIN_USERS_PAGE_SIZE });
+  if (pageResult.error) throw new Error("Impossible de charger les utilisateurs.");
+  const users = pageResult.data.users;
   const ids = users.map((user) => user.id);
-  const [{ data: profiles }, { data: owned }, { data: administrators }, { data: authorizations }] = await Promise.all([
+  const emails = users.flatMap((user) => user.email ? [user.email.trim().toLowerCase()] : []);
+  const now = new Date().toISOString();
+  const results = await Promise.all([
     ids.length ? admin.from("profiles").select("id,first_name,last_name").in("id", ids) : Promise.resolve({ data: [] }),
-    ids.length ? admin.from("protected_persons").select("owner_id").in("owner_id", ids) : Promise.resolve({ data: [] }),
-    ids.length ? admin.from("platform_administrators").select("user_id").in("user_id", ids) : Promise.resolve({ data: [] }),
-    ids.length ? admin.from("application_user_authorizations").select("user_id,status").in("user_id", ids) : Promise.resolve({ data: [] }),
+    ids.length ? admin.from("protected_persons").select("id,owner_id").in("owner_id", ids) : Promise.resolve({ data: [] }),
+    ids.length ? admin.from("platform_administrators").select("user_id,appointed_by").in("user_id", ids) : Promise.resolve({ data: [] }),
+    ids.length ? admin.from("platform_administrators").select("user_id,appointed_by").in("appointed_by", ids) : Promise.resolve({ data: [] }),
+    ids.length ? admin.from("application_user_authorizations").select("user_id,status,account_mode").in("user_id", ids) : Promise.resolve({ data: [] }),
+    ids.length ? admin.from("protected_person_access").select("user_id,protected_person_id,role").in("user_id", ids) : Promise.resolve({ data: [] }),
+    ids.length ? admin.from("protected_person_invitations").select("invited_by,email").in("invited_by", ids).is("accepted_at", null).is("revoked_at", null).gt("expires_at", now) : Promise.resolve({ data: [] }),
+    emails.length ? admin.from("protected_person_invitations").select("invited_by,email").in("email", emails).is("accepted_at", null).is("revoked_at", null).gt("expires_at", now) : Promise.resolve({ data: [] }),
+    ids.length ? admin.from("categories").select("owner_id").in("owner_id", ids) : Promise.resolve({ data: [] }),
+    ids.length ? admin.from("transaction_documents").select("created_by").in("created_by", ids) : Promise.resolve({ data: [] }),
+    ids.length ? admin.from("bank_statements").select("created_by").in("created_by", ids) : Promise.resolve({ data: [] }),
+    ids.length ? admin.from("management_reports").select("created_by").in("created_by", ids) : Promise.resolve({ data: [] }),
+    ids.length ? admin.from("management_report_documents").select("generated_by").in("generated_by", ids) : Promise.resolve({ data: [] }),
+    ids.length ? admin.from("management_report_transmissions").select("declared_by").in("declared_by", ids) : Promise.resolve({ data: [] }),
+    ids.length ? admin.from("management_report_approvals").select("declared_by").in("declared_by", ids) : Promise.resolve({ data: [] }),
+    ids.length ? admin.from("management_report_difficulties").select("declared_by").in("declared_by", ids) : Promise.resolve({ data: [] }),
+    ids.length ? admin.from("management_report_account_selections").select("created_by").in("created_by", ids) : Promise.resolve({ data: [] }),
   ]);
+  if (results.some((result) => "error" in result && result.error)) throw new Error("Impossible de charger les informations des utilisateurs.");
+  const [profilesResult, ownedResult, administratorsResult, appointedResult, authorizationsResult, accessesResult, invitationsByUserResult, invitationsByEmailResult, ...businessResults] = results;
+  const profiles = profilesResult.data ?? [];
+  const owned = ownedResult.data ?? [];
+  const administrators = administratorsResult.data ?? [];
+  const appointed = appointedResult.data ?? [];
+  const authorizations = authorizationsResult.data ?? [];
+  const accesses = accessesResult.data ?? [];
+  const protectedPersonIds = [...new Set(accesses.map((access) => access.protected_person_id))];
+  const personResult = protectedPersonIds.length
+    ? await admin.from("protected_persons").select("id,first_name,last_name").in("id", protectedPersonIds)
+    : { data: [], error: null };
+  if (personResult.error) throw new Error("Impossible de charger les accès partagés.");
+
   const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
   const counts = new Map<string, number>();
   for (const person of owned ?? []) counts.set(person.owner_id, (counts.get(person.owner_id) ?? 0) + 1);
   const administratorIds = new Set((administrators ?? []).map((administrator) => administrator.user_id));
-  const authorizationById = new Map((authorizations ?? []).map((authorization) => [authorization.user_id, authorization.status]));
-  return users.map((user) => ({ id: user.id, email: user.email ?? "", createdAt: user.created_at, firstName: profileById.get(user.id)?.first_name ?? "", lastName: profileById.get(user.id)?.last_name ?? "", ownedDossiers: counts.get(user.id) ?? 0, authorizationStatus: authorizationById.get(user.id), canResendActivationEmail: authorizationById.get(user.id) === "active" && !administratorIds.has(user.id), canDelete: user.id !== currentUserId && !administratorIds.has(user.id) }));
+  const appointedByIds = new Set((appointed ?? []).flatMap((administrator) => administrator.appointed_by ? [administrator.appointed_by] : []));
+  const authorizationById = new Map((authorizations ?? []).map((authorization) => [authorization.user_id, authorization]));
+  const personById = new Map((personResult.data ?? []).map((person) => [person.id, person]));
+  const activeInvitationUserIds = new Set((invitationsByUserResult.data ?? []).flatMap((invitation) => invitation.invited_by ? [invitation.invited_by] : []));
+  const activeInvitationEmails = new Set((invitationsByEmailResult.data ?? []).map((invitation) => invitation.email.trim().toLowerCase()));
+  const businessUserIds = new Set<string>();
+  for (const result of businessResults) {
+    for (const row of result.data ?? []) {
+      const value = "owner_id" in row ? row.owner_id : "created_by" in row ? row.created_by : "generated_by" in row ? row.generated_by : row.declared_by;
+      if (value) businessUserIds.add(value);
+    }
+  }
+
+  const summaries: PlatformUserSummary[] = users.map((user) => {
+    const authorization = authorizationById.get(user.id);
+    const sharedAccesses = accesses.filter((access) => access.user_id === user.id).map((access) => {
+      const person = personById.get(access.protected_person_id);
+      return {
+        protectedPersonId: access.protected_person_id,
+        protectedPersonName: person ? `${person.first_name} ${person.last_name}`.trim() : "Dossier accessible",
+        role: access.role,
+      };
+    });
+    const reasons = new Set<string>();
+    if (user.id === currentUserId) reasons.add("Compte administrateur actuellement connecté");
+    if (administratorIds.has(user.id)) reasons.add("Administrateur PatriGest");
+    if (appointedByIds.has(user.id)) reasons.add("Relation d’administration conservée");
+    if ((counts.get(user.id) ?? 0) > 0) reasons.add("Dossier possédé");
+    if (sharedAccesses.length > 0) reasons.add("Accès à un dossier partagé");
+    if (activeInvitationUserIds.has(user.id) || (user.email && activeInvitationEmails.has(user.email.trim().toLowerCase()))) reasons.add("Invitation de partage active");
+    if (businessUserIds.has(user.id)) reasons.add("Données métier associées");
+    return {
+      id: user.id,
+      email: user.email ?? "",
+      createdAt: user.created_at,
+      firstName: profileById.get(user.id)?.first_name ?? "",
+      lastName: profileById.get(user.id)?.last_name ?? "",
+      emailConfirmed: Boolean(user.email_confirmed_at),
+      ownedDossiers: counts.get(user.id) ?? 0,
+      authorizationStatus: authorization?.status,
+      accountMode: authorization?.account_mode ?? null,
+      sharedAccesses,
+      canResendActivationEmail: authorization?.status === "active" && !administratorIds.has(user.id),
+      canDelete: reasons.size === 0,
+      deletionBlockReasons: [...reasons],
+    };
+  });
+
+  return {
+    users: summaries,
+    page,
+    total: pageResult.data.total,
+    totalPages: Math.max(1, pageResult.data.lastPage || Math.ceil(pageResult.data.total / ADMIN_USERS_PAGE_SIZE)),
+  };
 }
 
 export async function deletePlatformUser(userId: string) {
@@ -166,19 +273,19 @@ export async function getAdministrationDashboardData(): Promise<AdministrationDa
   const { supabase } = await requirePlatformAdministrator();
   const admin = createAdminClient();
   const now = new Date().toISOString();
-  const [users, requestsResult, invitationsResult, pendingRegistrations] = await Promise.all([
-    getAllAuthUsers(admin),
+  const [usersResult, requestsResult, invitationsResult, pendingRegistrations] = await Promise.all([
+    admin.auth.admin.listUsers({ page: 1, perPage: 1 }),
     supabase.from("account_requests").select("*").eq("status", "pending").order("created_at", { ascending: false }),
     admin.from("protected_person_invitations").select("id", { count: "exact", head: true }).is("accepted_at", null).is("revoked_at", null).gt("expires_at", now),
     getPendingApplicationRegistrations(),
   ]);
 
-  if (requestsResult.error || invitationsResult.error) {
+  if (usersResult.error || requestsResult.error || invitationsResult.error) {
     throw new Error("Impossible de charger le tableau de bord d’administration.");
   }
 
   return {
-    usersCount: users.length,
+    usersCount: usersResult.data.total,
     pendingRequestsCount: pendingRegistrations.length,
     pendingInvitationsCount: invitationsResult.count ?? 0,
     pendingRequests: requestsResult.data.slice(0, 5),

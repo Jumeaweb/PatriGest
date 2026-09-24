@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { deletePlatformUser, resendApplicationActivationEmail, reviewApplicationRegistration } from "./services/administration-service";
 import { sendGlobalReleaseNotifications, sendTestReleaseNotification } from "./services/release-notification-service";
@@ -12,8 +11,6 @@ export async function deletePlatformUserAction(userId: string, _state: DeleteUse
   if (!z.uuid().safeParse(userId).success) return { status: "error", message: "Utilisateur invalide." };
   try { await deletePlatformUser(userId); }
   catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Impossible de supprimer cet utilisateur." }; }
-  revalidatePath("/administration");
-  revalidatePath("/administration/utilisateurs");
   return { status: "success", message: "L’utilisateur a été supprimé." };
 }
 
@@ -58,7 +55,6 @@ export async function sendTestReleaseNotificationAction(_state: ReleaseNotificat
   if (!parsed.success) return { status: "error", message: "Version ou destinataire de test invalide." };
   try {
     const result = await sendTestReleaseNotification(parsed.data.version, parsed.data.userId);
-    revalidatePath("/administration");
     return { status: "success", message: `E-mail de test envoyé à ${result.email}.` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Impossible d’envoyer l’e-mail de test." };
@@ -71,7 +67,6 @@ export async function sendGlobalReleaseNotificationsAction(_state: ReleaseNotifi
   if (!parsed.success) return { status: "error", message: "Version PatriGest invalide." };
   try {
     const summary = await sendGlobalReleaseNotifications(parsed.data.version);
-    revalidatePath("/administration");
     return {
       status: "success",
       message: `${summary.sent} e-mail(s) envoyé(s), ${summary.alreadySent} déjà traité(s), ${summary.failed} échec(s).`,

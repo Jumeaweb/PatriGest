@@ -54,7 +54,9 @@ test("le test et chaque envoi global utilisent le même générateur avec leur d
 test("l'interface n'envoie rien à l'affichage et exige deux confirmations", () => {
   assert.match(panel, /Envoyer un e-mail de test/);
   assert.match(panel, /Informer les utilisateurs/);
-  assert.match(panel, /AppConfirmDialog open=\{dialog === "test"\}/);
-  assert.match(panel, /AppConfirmDialog open=\{dialog === "global"\}/);
+  assert.match(panel, /dialog === "test" && <TestReleaseDialog/);
+  assert.match(panel, /dialog === "global" && <GlobalReleaseDialog/);
+  assert.match(panel, /cancelLabel=\{succeeded \? "Fermer" : "Annuler"\}/);
+  assert.match(panel, /actions=\{succeeded \? null : <SubmitButton/);
   assert.doesNotMatch(panel, /useEffect/);
 });

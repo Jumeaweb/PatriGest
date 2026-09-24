@@ -2,51 +2,58 @@
 
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { useRouter } from "next/navigation";
 import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
 import { resendApplicationActivationEmailAction, reviewApplicationRegistrationAction } from "../actions";
 import { initialRegistrationReviewState } from "../state";
 
 export function RegistrationReviewActions({ userId, email }: { userId: string; email: string }) {
+  const router = useRouter();
   const [decision, setDecision] = useState<"active" | "rejected" | null>(null);
   const [state, action] = useActionState(reviewApplicationRegistrationAction, initialRegistrationReviewState);
-
-  if (state.status === "success" || state.status === "warning") {
-    return <div className="max-w-sm text-left" aria-live="polite">
-      <p className={`text-xs font-semibold ${state.status === "warning" ? "text-amber-700" : "text-green-700"}`} role="status">{state.message}</p>
-      {state.decision === "active" && <ResendActivationEmailButton userId={userId} />}
-    </div>;
+  const completed = state.status === "success" || state.status === "warning";
+  function closeDialog() {
+    setDecision(null);
+    if (completed) router.refresh();
   }
 
   return <div>
     <span className="mb-2 inline-block rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">En attente</span>
-    <div className="flex flex-wrap gap-2">
+    {!completed && <div className="flex flex-wrap gap-2">
       <button className="button button-primary" type="button" onClick={() => setDecision("active")}>Autoriser l’accès</button>
       <button className="button button-secondary" type="button" onClick={() => setDecision("rejected")}>Refuser</button>
-    </div>
+    </div>}
     <form action={action}>
       <input type="hidden" name="userId" value={userId} />
       <input type="hidden" name="decision" value={decision ?? ""} />
       <AppConfirmDialog
         open={decision !== null}
         title={decision === "active" ? "Autoriser l’accès à PatriGest ?" : "Refuser cette inscription ?"}
-        description={decision === "active" ? "Le compte pourra accéder à PatriGest et un e-mail d’activation sera envoyé." : "Le compte sera conservé, mais ne pourra accéder à aucune donnée métier."}
+        description={completed ? "La décision a été enregistrée." : decision === "active" ? "Le compte pourra accéder à PatriGest et un e-mail d’activation sera envoyé." : "Le compte sera conservé, mais ne pourra accéder à aucune donnée métier."}
         subject={email}
-        onClose={() => setDecision(null)}
-        actions={<ReviewSubmit label={decision === "active" ? "Autoriser l’accès" : "Refuser"} />}
+        onClose={closeDialog}
+        cancelLabel={completed ? "Fermer" : "Annuler"}
+        actions={completed ? null : <ReviewSubmit label={decision === "active" ? "Autoriser l’accès" : "Refuser"} />}
       >
-        {state.status === "error" && <p className="text-sm font-semibold text-red-700" role="alert" aria-live="polite">{state.message}</p>}
+        {state.message && <p className={`text-sm font-semibold ${state.status === "error" ? "text-red-700" : state.status === "warning" ? "text-amber-700" : "text-green-700"}`} role={state.status === "error" ? "alert" : "status"} aria-live="polite">{state.message}</p>}
       </AppConfirmDialog>
     </form>
   </div>;
 }
 
-export function ResendActivationEmailButton({ userId }: { userId: string }) {
+export function ResendActivationEmailButton({ userId, email }: { userId: string; email: string }) {
+  const [open, setOpen] = useState(false);
   const [state, action] = useActionState(resendApplicationActivationEmailAction, initialRegistrationReviewState);
-  return <form action={action} className="mt-2">
-    <input type="hidden" name="userId" value={userId} />
-    <ResendSubmit />
-    {state.message && <p className={`mt-1 text-xs font-semibold ${state.status === "error" ? "text-red-700" : "text-green-700"}`} role={state.status === "error" ? "alert" : "status"} aria-live="polite">{state.message}</p>}
-  </form>;
+  const succeeded = state.status === "success";
+  return <>
+    <button type="button" className="button button-secondary" onClick={() => setOpen(true)}>Renvoyer l’e-mail d’activation</button>
+    <form action={action}>
+      <input type="hidden" name="userId" value={userId} />
+      <AppConfirmDialog open={open} onClose={() => setOpen(false)} title="Renvoyer l’e-mail d’activation ?" description={succeeded ? "L’e-mail d’activation a été renvoyé." : "Un nouvel e-mail d’activation va être envoyé à cette adresse."} subject={email} cancelLabel={succeeded ? "Fermer" : "Annuler"} actions={succeeded ? null : <ResendSubmit />}>
+        {state.message && <p className={`text-sm font-semibold ${state.status === "error" ? "text-red-700" : "text-green-700"}`} role={state.status === "error" ? "alert" : "status"} aria-live="polite">{state.message}</p>}
+      </AppConfirmDialog>
+    </form>
+  </>;
 }
 
 function ReviewSubmit({ label }: { label: string }) {
@@ -56,5 +63,5 @@ function ReviewSubmit({ label }: { label: string }) {
 
 function ResendSubmit() {
   const { pending } = useFormStatus();
-  return <button type="submit" className="text-xs font-semibold text-[#2563EB] hover:underline disabled:opacity-60" disabled={pending}>{pending ? "Envoi…" : "Renvoyer l’e-mail d’activation"}</button>;
+  return <button type="submit" className="button button-primary" disabled={pending}>{pending ? "Envoi…" : "Renvoyer l’e-mail"}</button>;
 }
