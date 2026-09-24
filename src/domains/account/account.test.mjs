@@ -364,10 +364,10 @@ test("retourne des messages distincts pour les états pending et immédiat sans 
   assert.doesNotMatch(source, /error\.message/);
 });
 
-test("construit le redirect Auth vers la route canonique sans domaine codé en dur", () => {
+test("construit le redirect Auth vers l’onglet e-mail canonique sans domaine codé en dur", () => {
   const source = readFileSync(new URL("./actions.ts", import.meta.url), "utf8");
   assert.match(source, /getAuthCallbackOrigin\(\)/);
-  assert.match(source, /\/auth\/callback\?next=\$\{encodeURIComponent\("\/parametres\/compte"\)\}/);
+  assert.match(source, /\/auth\/callback\?next=\$\{encodeURIComponent\("\/parametres\/compte\?vue=email"\)\}/);
   assert.doesNotMatch(source, /https:\/\/patrigest\.fr\/auth\/callback/);
 });
 

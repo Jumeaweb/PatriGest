@@ -58,7 +58,7 @@ export async function requestEmailChangeAction(_state: AccountActionState, formD
 
   try {
     const origin = await getAuthCallbackOrigin();
-    const emailRedirectTo = `${origin}/auth/callback?next=${encodeURIComponent("/parametres/compte")}`;
+    const emailRedirectTo = `${origin}/auth/callback?next=${encodeURIComponent("/parametres/compte?vue=email")}`;
     const result = await requestOwnEmailChange(parsed.data, emailRedirectTo);
     revalidatePath("/parametres/compte");
     if (result.status === "pending") {
