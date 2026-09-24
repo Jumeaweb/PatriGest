@@ -356,9 +356,11 @@ Cette clôture ne doit pas réimplémenter ce qui est déjà conforme. Elle doit
 - navigation, onglets, fils d'Ariane et navigations redondantes ;
 - cohérence des pictogrammes sur les écrans concernés par la v0.9.0 ;
 - comportement des dialogues après réussite et après échec ;
-- confirmation de déconnexion utilisateur et administrateur.
+- confirmation de déconnexion utilisateur et administrateur ;
+- **identité visuelle des e-mails PatriGest** : inventorier d’abord les e-mails réellement envoyés par l’application et ceux éventuellement générés par Supabase Auth, puis harmoniser les modèles que PatriGest contrôle avec la nouvelle identité graphique (logo, palette, hiérarchie, boutons, espacements, pied de page et rendu mobile), sans supposer que tous les e-mails utilisent le même moteur ;
+- **favicon et identité navigateur** : auditer les fichiers et métadonnées réellement utilisés (`favicon.ico`, icônes Next.js, Apple Touch Icon, manifest et metadata éventuels), puis vérifier leur cohérence avec la nouvelle identité PatriGest sur navigateur desktop, onglets, favoris et mobile.
 
-Le LOT 1F doit rester ciblé : pas d’audit métier général, pas de refonte fonctionnelle et pas de modification hors des exigences transversales ci-dessus.
+Le LOT 1F doit rester ciblé : pas d’audit métier général, pas de refonte fonctionnelle et pas de modification hors des exigences transversales ci-dessus. Pour les e-mails et les icônes, commencer par l’inventaire de l’existant avant toute modification afin de ne pas créer de doublons ni remplacer à tort un mécanisme externe.
 
 # LOT 2 — Navigation principale et tableau de bord
 
@@ -579,6 +581,8 @@ Puis donner à Codex un prompt ciblé demandant audit minimal, implémentation, 
 - statuts lisibles par libellé et couleur ;
 - droits owner / manager / read_only / platform_admin préservés ;
 - responsive vérifié ;
+- e-mails PatriGest contrôlés par l’application cohérents avec l’identité visuelle v0.9.0, après inventaire des e-mails applicatifs et Supabase Auth ;
+- favicon, icônes navigateur/mobile, metadata et manifest éventuel vérifiés et cohérents avec l’identité PatriGest ;
 - tests ciblés réussis ;
 - lint réussi ;
 - TypeScript réussi ;
