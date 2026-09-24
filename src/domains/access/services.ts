@@ -1,11 +1,70 @@
 import "server-only";
 import { createHash } from "node:crypto";
+import type { User } from "@supabase/supabase-js";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getProtectedPerson } from "@/domains/protected-persons/services/protected-person-service";
 import { getDossierInvitationStatus } from "./invitation-status";
 import { canRecoverDossierInvitations } from "./invitation-recovery-policy";
+import {
+  getInvitationHistoryPageMetadata,
+  INVITATION_HISTORY_PAGE_SIZE,
+} from "./access-pagination";
+
+const PROFILE_BATCH_SIZE = 100;
+const DATABASE_PAGE_SIZE = 500;
+
+function chunks<T>(items: readonly T[], size: number) {
+  const result: T[][] = [];
+  for (let offset = 0; offset < items.length; offset += size) result.push(items.slice(offset, offset + size));
+  return result;
+}
+
+async function getAuthUsersById(admin: ReturnType<typeof createAdminClient>, userIds: string[]) {
+  const targetIds = new Set(userIds);
+  const users = new Map<string, User>();
+  const perPage = 1000;
+  for (let page = 1; ; page += 1) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+    if (error) throw new Error("Impossible de charger les accès du dossier.");
+    for (const user of data.users) {
+      if (targetIds.has(user.id)) users.set(user.id, user);
+    }
+    if (users.size === targetIds.size || data.users.length < perPage) return users;
+  }
+}
+
+async function getProfilesById(admin: ReturnType<typeof createAdminClient>, userIds: string[]) {
+  const results = await Promise.all(chunks(userIds, PROFILE_BATCH_SIZE).map((batch) =>
+    admin.from("profiles").select("id,first_name,last_name").in("id", batch),
+  ));
+  if (results.some((result) => result.error)) throw new Error("Impossible de charger les accès du dossier.");
+  return new Map(results.flatMap((result) => result.data ?? []).map((profile) => [profile.id, profile]));
+}
+
+async function getAllPendingInvitations(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  protectedPersonId: string,
+  now: string,
+) {
+  const invitations = [];
+  for (let page = 0; ; page += 1) {
+    const from = page * DATABASE_PAGE_SIZE;
+    const { data, error } = await supabase.from("protected_person_invitations")
+      .select("id,email,role,expires_at,accepted_at,revoked_at,invited_by,created_at")
+      .eq("protected_person_id", protectedPersonId)
+      .is("accepted_at", null)
+      .is("revoked_at", null)
+      .gt("expires_at", now)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, from + DATABASE_PAGE_SIZE - 1);
+    if (error) throw new Error("Impossible de charger les accès du dossier.");
+    invitations.push(...data);
+    if (data.length < DATABASE_PAGE_SIZE) return invitations;
+  }
+}
 
 export type RecoverableDossierInvitation = {
   id: string;
@@ -130,7 +189,7 @@ export async function getInvitationPreview(token: string) {
   };
 }
 
-export async function getDossierAccess(protectedPersonId: string) {
+export async function getDossierAccess(protectedPersonId: string, requestedHistoryPage = 1) {
   const person = await getProtectedPerson(protectedPersonId);
   if (!person || person.accessRole === "read_only") notFound();
   const supabase = await createClient();
@@ -138,22 +197,53 @@ export async function getDossierAccess(protectedPersonId: string) {
   const userId = claims?.claims?.sub;
   if (!userId) notFound();
   const admin = createAdminClient();
-  const [ownerResult, accessResult, invitationResult] = await Promise.all([
-    admin.auth.admin.getUserById(person.owner_id),
+  const now = new Date().toISOString();
+  const [accessResult, pendingInvitations, historyCountResult] = await Promise.all([
     admin.from("protected_person_access").select("*").eq("protected_person_id", protectedPersonId).order("created_at"),
-    supabase.from("protected_person_invitations").select("id,email,role,expires_at,accepted_at,revoked_at,invited_by,created_at").eq("protected_person_id", protectedPersonId).order("created_at", { ascending: false }),
+    getAllPendingInvitations(supabase, protectedPersonId, now),
+    supabase.from("protected_person_invitations")
+      .select("id", { count: "exact", head: true })
+      .eq("protected_person_id", protectedPersonId)
+      .or(`accepted_at.not.is.null,revoked_at.not.is.null,expires_at.lte.${now}`),
   ]);
-  if (accessResult.error || invitationResult.error) throw new Error("Impossible de charger les accès du dossier.");
-  const access = accessResult.data;
-  const collaborators = await Promise.all((access ?? []).map(async (entry) => { const { data: authUser } = await admin.auth.admin.getUserById(entry.user_id); const { data: profile } = await admin.from("profiles").select("first_name,last_name").eq("id", entry.user_id).maybeSingle(); return { ...entry, email: authUser.user?.email ?? "", name: [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") }; }));
+  if (accessResult.error || historyCountResult.error) throw new Error("Impossible de charger les accès du dossier.");
+
+  const history = getInvitationHistoryPageMetadata(historyCountResult.count ?? 0, requestedHistoryPage);
+  const from = (history.page - 1) * INVITATION_HISTORY_PAGE_SIZE;
+  const access = accessResult.data ?? [];
+  const identityIds = [...new Set([person.owner_id, ...access.map((entry) => entry.user_id)])];
+  const [historyInvitationResult, authUsersById, profilesById] = await Promise.all([
+    supabase.from("protected_person_invitations")
+      .select("id,email,role,expires_at,accepted_at,revoked_at,invited_by,created_at")
+      .eq("protected_person_id", protectedPersonId)
+      .or(`accepted_at.not.is.null,revoked_at.not.is.null,expires_at.lte.${now}`)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, from + INVITATION_HISTORY_PAGE_SIZE - 1),
+    getAuthUsersById(admin, identityIds),
+    getProfilesById(admin, identityIds),
+  ]);
+  if (historyInvitationResult.error) throw new Error("Impossible de charger les accès du dossier.");
+
+  const identity = (id: string) => {
+    const profile = profilesById.get(id);
+    return {
+      email: authUsersById.get(id)?.email ?? "",
+      name: [profile?.first_name, profile?.last_name].filter(Boolean).join(" "),
+    };
+  };
+  const collaborators = access.map((entry) => ({ ...entry, ...identity(entry.user_id) }));
+  const invitation = (entry: (typeof pendingInvitations)[number]) => ({
+    ...entry,
+    status: getDossierInvitationStatus(entry),
+    canManage: person.accessRole === "owner" || (entry.role === "read_only" && entry.invited_by === userId),
+  });
   return {
     person,
-    ownerEmail: ownerResult.data.user?.email ?? "",
+    owner: identity(person.owner_id),
     collaborators,
-    invitations: invitationResult.data.map((invitation) => ({
-      ...invitation,
-      status: getDossierInvitationStatus(invitation),
-      canManage: person.accessRole === "owner" || (invitation.role === "read_only" && invitation.invited_by === userId),
-    })),
+    pendingInvitations: pendingInvitations.map(invitation),
+    invitationHistory: historyInvitationResult.data.map(invitation),
+    history,
   };
 }

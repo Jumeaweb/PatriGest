@@ -179,7 +179,6 @@ export async function reissueDossierInvitationAction(protectedPersonId: string, 
     if (error) return { status: "error", message: isAutonomousAccountInvitationError(error) ? invitationCreationErrorMessage(error) : "Impossible de renvoyer cette invitation." };
 
     const invitationUrl = `${await getApplicationOrigin()}${getDossierInvitationPath(invitation.token)}`;
-    revalidatePath(`/dossiers/${actor.protectedPersonId}/acces`);
     try {
       await sendDossierInvitationEmail({ email: source.email, role: source.role, ...displayContext, invitationUrl, expiresAt: invitation.expiresAt });
       return { status: "success", message: "Nouvelle invitation envoyée." };
@@ -210,7 +209,6 @@ export async function revokeDossierInvitationAction(protectedPersonId: string, i
     }
     const { error } = await actor.supabase.rpc("revoke_protected_person_invitation", { p_invitation_id: parsedInvitationId });
     if (error) return { status: "error", message: "Impossible d’annuler cette invitation." };
-    revalidatePath(`/dossiers/${actor.protectedPersonId}/acces`);
     return { status: "success", message: "Invitation annulée." };
   } catch {
     return { status: "error", message: "Impossible d’annuler cette invitation." };
@@ -281,13 +279,29 @@ export async function continueDossierInvitationAsIntendedUserAction(token: strin
   redirect(getDossierInvitationPath(parsedToken));
 }
 
-export async function updateCollaboratorRoleAction(protectedPersonId: string, formData: FormData) {
-  const id = z.string().uuid().parse(formData.get("id"));
-  const role = z.enum(["manager", "read_only"]).parse(formData.get("role"));
-  const supabase = await createClient();
-  const { data, error } = await supabase.from("protected_person_access").update({ role }).eq("id", id).eq("protected_person_id", z.uuid().parse(protectedPersonId)).select("id").maybeSingle();
-  if (error || !data) throw new Error("Impossible de modifier ce rôle.");
-  revalidatePath(`/dossiers/${protectedPersonId}/acces`);
+export async function updateCollaboratorRoleAction(
+  protectedPersonId: string,
+  accessId: string,
+  _state: AccessActionState,
+  formData: FormData,
+): Promise<AccessActionState> {
+  void _state;
+  try {
+    const parsedPersonId = z.uuid().parse(protectedPersonId);
+    const parsedAccessId = z.uuid().parse(accessId);
+    const role = z.enum(["manager", "read_only"]).parse(formData.get("role"));
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("protected_person_access")
+      .update({ role })
+      .eq("id", parsedAccessId)
+      .eq("protected_person_id", parsedPersonId)
+      .select("id")
+      .maybeSingle();
+    if (error || !data) return { status: "error", message: "Impossible de modifier ce rôle." };
+    return { status: "success", message: "Le rôle du collaborateur a été modifié." };
+  } catch {
+    return { status: "error", message: "Impossible de modifier ce rôle." };
+  }
 }
 
 export async function removeCollaboratorAction(protectedPersonId: string, accessId: string, _state: AccessActionState, _formData: FormData): Promise<AccessActionState> {
@@ -302,7 +316,6 @@ export async function removeCollaboratorAction(protectedPersonId: string, access
       p_access_id: parsedAccessId,
     });
     if (error) return { status: "error", message: "Impossible de retirer cet accès." };
-    revalidatePath(`/dossiers/${parsedPersonId}/acces`);
     return { status: "success", message: "L’accès au dossier a été retiré." };
   } catch {
     return { status: "error", message: "Impossible de retirer cet accès." };
