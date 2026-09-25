@@ -84,6 +84,7 @@ export async function reviewApplicationRegistration(userId: string, decision: "a
     await sendApplicationActivationEmail({
       email: targetResult.user.email ?? "",
       firstName: profile?.first_name ?? "",
+      lastName: profile?.last_name ?? "",
     });
     return { emailSent: true };
   } catch {
@@ -97,12 +98,12 @@ export async function resendApplicationActivationEmail(userId: string) {
   const [{ data: targetResult, error: targetError }, { data: authorization, error: authorizationError }, { data: profile, error: profileError }] = await Promise.all([
     admin.auth.admin.getUserById(userId),
     admin.from("application_user_authorizations").select("status").eq("user_id", userId).maybeSingle(),
-    admin.from("profiles").select("first_name").eq("id", userId).maybeSingle(),
+    admin.from("profiles").select("first_name,last_name").eq("id", userId).maybeSingle(),
   ]);
   if (targetError || !targetResult.user || authorizationError || profileError) throw new Error("Compte utilisateur introuvable.");
   if (authorization?.status !== "active") throw new Error("L’accès de ce compte n’est pas actif.");
   if (!targetResult.user.email) throw new Error("Aucune adresse e-mail n’est disponible pour ce compte.");
-  await sendApplicationActivationEmail({ email: targetResult.user.email, firstName: profile?.first_name ?? "" });
+  await sendApplicationActivationEmail({ email: targetResult.user.email, firstName: profile?.first_name ?? "", lastName: profile?.last_name ?? "" });
 }
 
 export type PlatformUserSummary = {

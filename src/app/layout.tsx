@@ -9,11 +9,16 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
+  applicationName: APP_NAME,
   title: {
     default: APP_NAME,
     template: `%s | ${APP_NAME}`,
   },
   description: APP_SLOGAN,
+  appleWebApp: {
+    title: APP_NAME,
+    statusBarStyle: "default",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

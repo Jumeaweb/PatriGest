@@ -26,6 +26,10 @@ test("l'e-mail de release reprend la source AppRelease en texte et HTML", () => 
   assert.match(content.html, /https:\/\/patrigest\.fr\/historique-versions/);
   assert.match(content.text, /Voici les nouveautés de la version PatriGest v0\.8\.0\./);
   assert.match(content.html, /Voici les nouveautés de la version PatriGest v0\.8\.0\./);
+  assert.match(content.html, /\/logos\/patrigest-symbol\.png/);
+  assert.match(content.html, /background:#dcecea/);
+  assert.match(content.html, /background:#ea580c/);
+  assert.match(content.html, /name="viewport"/);
 });
 
 test("l'e-mail de release échappe tout contenu éditorial", () => {

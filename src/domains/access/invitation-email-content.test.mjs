@@ -17,6 +17,10 @@ test("l'e-mail identifie l'invitant, le dossier et le rôle", () => {
     assert.match(content.html, new RegExp(value));
   }
   assert.equal(content.subject, "Invitation à accéder à un dossier PatriGest");
+  assert.match(content.html, /\/logos\/patrigest-symbol\.png/);
+  assert.match(content.html, /background:#dcecea/);
+  assert.match(content.html, /background:#ea580c/);
+  assert.match(content.html, /name="viewport"/);
 });
 
 test("le contenu HTML échappe les noms et conserve uniquement l'URL d'invitation fournie", () => {
