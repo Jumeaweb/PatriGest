@@ -509,6 +509,91 @@ Supprimer l'utilisateur : rouge, jamais immédiat, confirmation détaillée. Exp
 
 Mon compte, déconnexion et dialogues réutilisent les conventions utilisateur.
 
+# LOT 0C-3 — Supervision des services externes
+
+**Priorité : moyenne — administration technique**
+
+Créer une vue réservée aux `platform_admin` permettant de centraliser les informations utiles au suivi technique de PatriGest, sans exposer de secret dans le navigateur.
+
+Cette supervision concerne en priorité :
+
+### Supabase
+Étudier les informations réellement accessibles et pertinentes, notamment :
+- état du projet ;
+- taille réelle de la base PostgreSQL ;
+- stockage utilisé lorsque l'information est disponible ;
+- éventuels indicateurs de consommation ou de quota utiles.
+
+Privilégier les informations obtenables depuis l'infrastructure déjà autorisée avant d'ajouter un nouveau secret de Management API.
+
+### Vercel
+Étudier l'accès aux informations de déploiement, notamment :
+- état du dernier déploiement Production ;
+- date du dernier déploiement ;
+- commit Git correspondant ;
+- éventuel échec de déploiement ;
+- consommation ou quota uniquement si l'API et le plan permettent de les obtenir proprement.
+
+### Resend
+Étudier les métriques accessibles par API, notamment :
+- nombre d'e-mails envoyés sur la période pertinente ;
+- délivrés ;
+- échecs / bounces lorsque disponibles ;
+- consommation ou limite du plan lorsque cette information est exposée par l'API.
+
+Ne pas modifier le mécanisme existant de notification des versions pour construire cette supervision.
+
+### Gandi
+Étudier les informations accessibles pour `patrigest.fr`, notamment :
+- date d'expiration / fin d'enregistrement ;
+- état du renouvellement automatique ;
+- éventuels états nécessitant une attention administrative.
+
+### Présentation
+Prévoir une entrée dédiée dans le menu `ADMINISTRATION`, par exemple **Infrastructure**.
+
+Présenter les services sous forme de cartes ou blocs synthétiques avec :
+- nom du service ;
+- état explicite en texte ;
+- principales informations utiles ;
+- date/heure de dernière actualisation ;
+- message clair lorsque l'information est indisponible.
+
+La couleur ne doit jamais être le seul indicateur d'état.
+
+### Sécurité et architecture
+- accès strictement réservé aux `platform_admin` ;
+- appels aux API externes exclusivement côté serveur ;
+- aucun token ou secret transmis au navigateur ;
+- aucun secret journalisé ;
+- ne pas ajouter un token externe si l'information recherchée peut être obtenue de manière plus sûre avec l'infrastructure existante ;
+- prévoir timeout, gestion des erreurs et indisponibilité indépendante de chaque service ;
+- une panne d'un fournisseur ne doit pas empêcher l'affichage des autres ;
+- prévoir cache ou fréquence de rafraîchissement raisonnable afin de ne pas interroger inutilement les fournisseurs ;
+- ne jamais exposer les valeurs des variables d'environnement dans l'interface.
+
+### Audit préalable obligatoire
+Avant toute implémentation :
+1. inventorier les API et informations réellement accessibles avec les comptes/plans PatriGest actuels ;
+2. identifier les secrets déjà disponibles et ceux qu'il faudrait éventuellement ajouter ;
+3. distinguer les informations fiables par API de celles disponibles uniquement dans les tableaux de bord fournisseurs ;
+4. proposer le périmètre minimal utile avant d'écrire le code.
+
+Ne pas créer de dépendance artificielle ni reproduire intégralement les tableaux de bord Supabase, Vercel, Resend ou Gandi.
+
+### Critères de sortie
+- aucune information sensible exposée côté client ;
+- aucune valeur secrète stockée en base pour les besoins de l'écran ;
+- informations provenant des fournisseurs clairement identifiées ;
+- erreurs partielles correctement gérées ;
+- responsive vérifié ;
+- tests ciblés ;
+- lint ;
+- TypeScript ;
+- build ;
+- `git diff --check` ;
+- validation visuelle.
+
 # LOT 10 — Historique des versions
 
 **Priorité : basse**
