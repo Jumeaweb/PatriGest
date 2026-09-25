@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect } from "react";
+import { useActionState } from "react";
 import {
   forgotPasswordAction,
   loginAction,
   signupAction,
   updatePasswordAction,
 } from "@/app/(auth)/actions";
+import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
 import { getDossierInvitationLoginPath, getDossierInvitationPath } from "@/lib/auth/invitation-destination";
 import { initialAuthState, type AuthActionState } from "@/lib/auth/state";
 import { FieldError, FormMessage, SubmitButton } from "./form-controls";
@@ -103,21 +104,30 @@ export function ForgotPasswordForm({ nextPath }: { nextPath?: string }) {
 export function UpdatePasswordForm({ nextPath }: { nextPath?: string }) {
   const [state, action] = useActionState(updatePasswordAction, initialAuthState);
   const router = useRouter();
-
-  useEffect(() => {
-    if (!state.redirectTo) return;
-    const timeout = window.setTimeout(() => router.replace(state.redirectTo!), 1400);
-    return () => window.clearTimeout(timeout);
-  }, [router, state.redirectTo]);
+  const succeeded = state.status === "success" && Boolean(state.redirectTo);
+  const closeSuccessDialog = () => {
+    if (state.redirectTo) router.replace(state.redirectTo);
+  };
 
   return (
-    <form action={action} className="space-y-4">
-      {nextPath && <input type="hidden" name="next" value={nextPath} />}
-      <Field id="password" label="Nouveau mot de passe" type="password" autoComplete="new-password" errors={state.fieldErrors?.password} />
-      <Field id="passwordConfirmation" label="Confirmation du mot de passe" type="password" autoComplete="new-password" errors={state.fieldErrors?.passwordConfirmation} />
-      <FormMessage state={state} />
-      <SubmitButton pendingLabel="Modification…">Modifier le mot de passe</SubmitButton>
-      <Link className="auth-back-link" href="/connexion">Retour à la connexion</Link>
-    </form>
+    <>
+      <form action={action} className="space-y-4">
+        {nextPath && <input type="hidden" name="next" value={nextPath} />}
+        <Field id="password" label="Nouveau mot de passe" type="password" autoComplete="new-password" errors={state.fieldErrors?.password} />
+        <Field id="passwordConfirmation" label="Confirmation du mot de passe" type="password" autoComplete="new-password" errors={state.fieldErrors?.passwordConfirmation} />
+        {!succeeded && <FormMessage state={state} />}
+        <SubmitButton pendingLabel="Modification…">Modifier le mot de passe</SubmitButton>
+        <Link className="auth-back-link" href="/connexion">Retour à la connexion</Link>
+      </form>
+      <AppConfirmDialog
+        open={succeeded}
+        title="Mot de passe modifié"
+        description="Votre mot de passe a été modifié."
+        cancelLabel="Fermer"
+        actions={null}
+        onClose={closeSuccessDialog}
+        requireExplicitClose
+      />
+    </>
   );
 }

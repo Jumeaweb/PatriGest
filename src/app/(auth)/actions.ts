@@ -174,7 +174,7 @@ export async function updatePasswordAction(_state: AuthActionState, formData: Fo
   if (error) {
     return { status: "error", message: getAuthErrorMessage(error, "Impossible de modifier le mot de passe. Demandez un nouveau lien.") };
   }
-  return { status: "success", message: "Votre mot de passe a bien été modifié. Redirection en cours…", redirectTo: getSafeNextPath(typeof formData.get("next") === "string" ? String(formData.get("next")) : null, "/tableau-de-bord") };
+  return { status: "success", message: "Votre mot de passe a été modifié.", redirectTo: getSafeNextPath(typeof formData.get("next") === "string" ? String(formData.get("next")) : null, "/tableau-de-bord") };
 }
 
 export async function logoutAction() {
