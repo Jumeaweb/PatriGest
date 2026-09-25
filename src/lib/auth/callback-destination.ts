@@ -14,6 +14,14 @@ export function getSafeInternalPath(value: string | null | undefined) {
 
 const directlyAllowedCallbackPaths = new Set(["/parametres/compte", "/invitations"]);
 
+function getSafeAccountCallbackPath(destination: URL) {
+  if (destination.pathname !== "/parametres/compte" || destination.hash) return null;
+  if (!destination.search) return destination.pathname;
+  if (destination.searchParams.size !== 1 || destination.searchParams.get("vue") !== "email") return null;
+
+  return "/parametres/compte?vue=email";
+}
+
 export function getSafeAuthCallbackNextPath(value: string | null) {
   const safePath = getSafeInternalPath(value);
   if (!safePath) return null;
@@ -21,6 +29,8 @@ export function getSafeAuthCallbackNextPath(value: string | null) {
   try {
     const base = new URL("https://patrigest.invalid");
     const destination = new URL(safePath, base);
+    const accountPath = getSafeAccountCallbackPath(destination);
+    if (accountPath) return accountPath;
     if (directlyAllowedCallbackPaths.has(destination.pathname) && !destination.search && !destination.hash) {
       return destination.pathname;
     }

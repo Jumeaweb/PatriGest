@@ -31,7 +31,9 @@ export async function GET(request: NextRequest) {
       ]);
       const hasApplicationAccess = Boolean(administrator || authorization?.status === "active");
       const authFlowPath = nextPath?.startsWith("/invitation/") || nextPath?.startsWith("/nouveau-mot-de-passe") ? nextPath : null;
-      const accountPath = nextPath === "/parametres/compte" && hasApplicationAccess ? nextPath : null;
+      const accountPath = (nextPath === "/parametres/compte" || nextPath === "/parametres/compte?vue=email") && hasApplicationAccess
+        ? nextPath
+        : null;
       let invitationRecoveryPath: string | null = null;
       if (!authFlowPath && !accountPath) {
         try {
