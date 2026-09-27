@@ -11,13 +11,14 @@ const dashboard = read("./components/administration-dashboard.tsx");
 const requests = read("../../app/administration/demandes/page.tsx");
 const usersPage = read("../../app/administration/utilisateurs/page.tsx");
 const communicationPage = read("../../app/administration/communication/page.tsx");
+const infrastructurePage = read("../../app/administration/infrastructure/page.tsx");
 const service = read("./services/administration-service.ts");
 const registrationActions = read("./components/registration-review-actions.tsx");
 const deletion = read("./components/delete-user-button.tsx");
 const releasePanel = read("./components/release-notification-panel.tsx");
 
-test("le menu ADMINISTRATION expose les quatre entrées dans l’ordre validé", () => {
-  const labels = ["Tableau de bord", "Inscriptions à valider", "Comptes utilisateurs", "Communication utilisateurs"];
+test("le menu ADMINISTRATION expose les cinq entrées dans l’ordre validé", () => {
+  const labels = ["Tableau de bord", "Inscriptions à valider", "Comptes utilisateurs", "Communication utilisateurs", "Infrastructure"];
   let previous = -1;
   for (const label of labels) {
     const index = navigation.indexOf(`label: "${label}"`, previous + 1);
@@ -31,7 +32,7 @@ test("le menu ADMINISTRATION expose les quatre entrées dans l’ordre validé",
 
 test("utilise le menu gauche sans onglets redondants et sans breadcrumb à la racine", () => {
   assert.doesNotMatch(dashboardPage, /AppBreadcrumb/);
-  for (const source of [dashboardPage, requests, usersPage, communicationPage]) {
+  for (const source of [dashboardPage, requests, usersPage, communicationPage, infrastructurePage]) {
     assert.doesNotMatch(source, /role="tablist"|NavigationTabs|AdministrationTabs/);
   }
 });

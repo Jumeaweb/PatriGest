@@ -4,12 +4,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { ClipboardList, FolderOpen, History, LayoutDashboard, LayoutGrid, LogOut, Megaphone, Menu, Settings, ShieldCheck, UserRound, Users, WalletCards, X, type LucideIcon } from "lucide-react";
+import { ClipboardList, FolderOpen, History, LayoutDashboard, LayoutGrid, LogOut, Megaphone, Menu, ServerCog, Settings, ShieldCheck, UserRound, Users, WalletCards, X, type LucideIcon } from "lucide-react";
 import { logoutAction } from "@/app/(auth)/actions";
 import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
 import { APP_NAME, APP_VERSION } from "@/lib/app";
 
-export type PrivateSection = "dashboard" | "dossiers" | "settings" | "account" | "administration" | "administration-requests" | "administration-users" | "administration-communications" | "history";
+export type PrivateSection = "dashboard" | "dossiers" | "settings" | "account" | "administration" | "administration-requests" | "administration-users" | "administration-communications" | "administration-infrastructure" | "history";
 export type DossierSection = "dashboard" | "overview" | "accounts" | "operations" | "periods" | "access" | "properties" | "debts" | "reports";
 export type PrivateDossierContext = { id: string; name: string; current: DossierSection; accessRole?: "owner" | "manager" | "read_only" };
 type NavigationItem = { label: string; href: string; icon: LucideIcon; active: boolean };
@@ -24,6 +24,7 @@ export function PrivateNavigation({ current, dossier, isPlatformAdmin = false }:
     { label: "Inscriptions à valider", href: "/administration/demandes", icon: ShieldCheck, active: current === "administration-requests" },
     { label: "Comptes utilisateurs", href: "/administration/utilisateurs", icon: Users, active: current === "administration-users" },
     { label: "Communication utilisateurs", href: "/administration/communication", icon: Megaphone, active: current === "administration-communications" },
+    { label: "Infrastructure", href: "/administration/infrastructure", icon: ServerCog, active: current === "administration-infrastructure" },
   ] : [
     { label: "Tableau de bord", href: "/tableau-de-bord", icon: LayoutDashboard, active: current === "dashboard" },
     { label: "Dossiers", href: "/dossiers", icon: FolderOpen, active: current === "dossiers" && !dossier },

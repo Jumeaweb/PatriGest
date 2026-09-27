@@ -83,6 +83,7 @@ test("platform_admin dispose du menu Administration partagé par les navigations
   assert.match(navigation, /id="mobile-private-navigation"[\s\S]*?\{navigation\}/);
   assert.match(navigation, /const homeHref = isPlatformAdmin \? "\/administration" : "\/tableau-de-bord"/);
   assert.match(navigation, /label === "Administration" \? "text-red-700" : "text-brand-foreground\/65"/);
+  assert.match(navigation, /label: "Infrastructure", href: "\/administration\/infrastructure"/);
 });
 
 test("la déconnexion utilisateur et platform_admin passe par la même confirmation", () => {

@@ -291,6 +291,7 @@ export type Database = {
     Functions: {
       is_platform_admin: { Args: Record<string, never>; Returns: boolean };
       is_application_user_active: { Args: Record<string, never>; Returns: boolean };
+      get_infrastructure_usage_metrics: { Args: Record<string, never>; Returns: Array<{ database_size_bytes: number; storage_size_bytes: number }> };
       check_own_email_change_availability: { Args: { p_new_email: string }; Returns: boolean };
       activate_complete_bank_reconciliation: { Args: { p_reconciliation_id: string }; Returns: Database["public"]["Tables"]["bank_reconciliations"]["Row"] };
       add_bank_reconciliation_outstanding_transaction: { Args: { p_reconciliation_id: string; p_transaction_id: string }; Returns: Database["public"]["Tables"]["bank_reconciliation_outstanding_transactions"]["Row"] };
