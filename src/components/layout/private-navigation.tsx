@@ -3,8 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { ClipboardList, FolderOpen, History, LayoutDashboard, LayoutGrid, LogOut, Megaphone, Menu, Settings, ShieldCheck, UserRound, Users, WalletCards, X, type LucideIcon } from "lucide-react";
 import { logoutAction } from "@/app/(auth)/actions";
+import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
 import { APP_NAME, APP_VERSION } from "@/lib/app";
 
 export type PrivateSection = "dashboard" | "dossiers" | "settings" | "account" | "administration" | "administration-requests" | "administration-users" | "administration-communications" | "history";
@@ -79,8 +81,28 @@ function NavigationContent({ current, principal, principalLabel, homeHref, dossi
     <Link href={homeHref} onClick={onNavigate} className="focus-ring mb-7 flex items-center gap-3 rounded-xl px-2"><span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/85 p-1"><Image src="/logos/patrigest-symbol.png" alt="" width={298} height={270} className="h-8 w-auto" /></span><span className="min-w-0"><span className="block font-bold leading-tight">{APP_NAME}</span><span className="block text-xs text-brand-foreground/70">v{APP_VERSION}</span></span></Link>
     <NavigationGroup label={principalLabel} items={principal} onNavigate={onNavigate} />
     {dossier && <div className="mt-7 min-w-0"><p className="px-3 text-xs font-bold uppercase tracking-[0.12em] text-brand-foreground/65">Dossier en cours</p><p className="mt-2 truncate px-3 text-sm font-bold text-brand-foreground" title={dossier.name}>{dossier.name}</p><div className="mt-2 space-y-1"><NavigationLinks items={dossierItems} onNavigate={onNavigate} /></div></div>}
-    <div className="mt-auto space-y-1 border-t border-brand-accent/25 pt-4"><NavigationLinks items={[{ label: "Mon compte", href: "/parametres/compte", icon: UserRound, active: current === "account" }, { label: "Historique des versions", href: "/historique-versions", icon: History, active: current === "history" }]} onNavigate={onNavigate} /><form action={logoutAction}><button type="submit" className="focus-ring flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-brand-foreground/80 transition-colors hover:bg-white/35 hover:text-brand-foreground"><LogOut aria-hidden="true" size={18} />Déconnexion</button></form><Link href="/historique-versions" onClick={onNavigate} className="focus-ring ml-3 inline-block rounded text-xs text-brand-foreground/65 hover:text-brand-foreground">{APP_NAME} v{APP_VERSION}</Link></div>
+    <div className="mt-auto space-y-1 border-t border-brand-accent/25 pt-4"><NavigationLinks items={[{ label: "Mon compte", href: "/parametres/compte", icon: UserRound, active: current === "account" }, { label: "Historique des versions", href: "/historique-versions", icon: History, active: current === "history" }]} onNavigate={onNavigate} /><LogoutConfirmation /><Link href="/historique-versions" onClick={onNavigate} className="focus-ring ml-3 inline-block rounded text-xs text-brand-foreground/65 hover:text-brand-foreground">{APP_NAME} v{APP_VERSION}</Link></div>
   </div>;
+}
+
+function LogoutConfirmation() {
+  const [open, setOpen] = useState(false);
+
+  return <>
+    <button type="button" className="focus-ring flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-brand-foreground/80 transition-colors hover:bg-white/35 hover:text-brand-foreground" onClick={() => setOpen(true)}><LogOut aria-hidden="true" size={18} />Déconnexion</button>
+    <AppConfirmDialog
+      open={open}
+      title="Se déconnecter ?"
+      description="Vous allez être déconnecté de PatriGest."
+      onClose={() => setOpen(false)}
+      actions={<form action={logoutAction}><LogoutSubmitButton /></form>}
+    />
+  </>;
+}
+
+function LogoutSubmitButton() {
+  const { pending } = useFormStatus();
+  return <button type="submit" className="button button-primary" disabled={pending}>{pending ? "Déconnexion…" : "Se déconnecter"}</button>;
 }
 
 function NavigationGroup({ label, items, onNavigate }: { label: string; items: NavigationItem[]; onNavigate: () => void }) { return <div><p className="px-3 text-xs font-bold uppercase tracking-[0.12em] text-brand-foreground/65">{label}</p><div className="mt-2 space-y-1"><NavigationLinks items={items} onNavigate={onNavigate} /></div></div>; }

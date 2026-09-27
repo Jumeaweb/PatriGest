@@ -84,6 +84,21 @@ test("platform_admin dispose du menu Administration partagé par les navigations
   assert.match(navigation, /const homeHref = isPlatformAdmin \? "\/administration" : "\/tableau-de-bord"/);
 });
 
+test("la déconnexion utilisateur et platform_admin passe par la même confirmation", () => {
+  assert.match(navigation, /<LogoutConfirmation \/>/);
+  assert.match(navigation, /function LogoutConfirmation\(\)/);
+  assert.match(navigation, /type="button"[^>]+onClick=\{\(\) => setOpen\(true\)\}[^>]*><LogOut[^>]*\/>Déconnexion<\/button>/);
+  assert.match(navigation, /<AppConfirmDialog[\s\S]*?title="Se déconnecter \?"[\s\S]*?description="Vous allez être déconnecté de PatriGest\."/);
+});
+
+test("annuler ferme le dialogue sans appeler la déconnexion et confirmer appelle l'action existante une seule fois", () => {
+  assert.match(navigation, /onClose=\{\(\) => setOpen\(false\)\}/);
+  assert.match(navigation, /actions=\{<form action=\{logoutAction\}><LogoutSubmitButton \/><\/form>\}/);
+  assert.doesNotMatch(navigation, /<form action=\{logoutAction\}><button[^>]*>[^<]*Déconnexion/);
+  assert.match(navigation, /const \{ pending \} = useFormStatus\(\)/);
+  assert.match(navigation, /type="submit"[^>]+disabled=\{pending\}>\{pending \? "Déconnexion…" : "Se déconnecter"\}/);
+});
+
 test("les utilisateurs ordinaires conservent leur navigation sans entrée Administration", () => {
   const ordinaryStart = navigation.indexOf("] : [");
   const ordinaryEnd = navigation.indexOf("\n  ];", ordinaryStart);
