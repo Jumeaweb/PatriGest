@@ -1,7 +1,7 @@
 # PatriGest — Plan de suite
 
-**Statut :** document de pilotage actif  
-**Point de départ :** v0.9.0  
+**Statut :** document de pilotage actif
+**Point de départ :** v0.9.0
 **Date :** 27 septembre 2026
 
 > Ce document devient le point d'entrée pour les travaux postérieurs à la v0.9.0.
@@ -42,9 +42,9 @@ Le chantier UX/UI v0.9.0 est donc **clos**.
 
 # 2. Prochain chantier — Supervision des services externes
 
-**Origine :** ancien LOT0C-3  
-**Priorité :** moyenne — administration technique  
-**État :** À auditer  
+**Origine :** ancien LOT0C-3
+**Priorité :** moyenne — administration technique
+**État :** À auditer
 **Prochaine étape recommandée :** audit préalable uniquement
 
 ## Objectif
@@ -149,7 +149,7 @@ Avant d'écrire du code :
 
 # 3. Chantiers métier à réexaminer
 
-**Origine :** ancien LOT11  
+**Origine :** ancien LOT11
 **État général :** À qualifier
 
 Ces sujets ont été volontairement conservés pendant la refonte UX afin de ne perdre aucune décision métier.
