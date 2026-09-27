@@ -10,6 +10,22 @@ export type AppRelease = {
 
 export const APP_RELEASES: readonly AppRelease[] = [
   {
+    version: "0.9.0",
+    date: "2026-09-27",
+    title: "Navigation et expérience utilisateur repensées",
+    summary: `${APP_NAME} propose une navigation plus claire et cohérente dans l’ensemble de l’application, avec des parcours simplifiés pour les dossiers, la gestion financière, le partage, le compte utilisateur et l’administration.`,
+    changes: [
+      "Nouvelle organisation de la navigation générale et des parcours propres à chaque dossier",
+      "Tableaux de bord et informations du dossier réorganisés pour accéder plus directement aux actions utiles",
+      "Navigation financière harmonisée entre opérations, relevés, rapprochements et informations du compte",
+      "Gestion du partage et des collaborateurs simplifiée avec une présentation plus claire des rôles et invitations",
+      "Espace Mon compte réorganisé pour le profil, l’adresse e-mail, la sécurité et la suppression du compte",
+      "Administration restructurée avec une identification visuelle claire et une navigation dédiée",
+      "Confirmations et actions sensibles renforcées, notamment pour la déconnexion et l’abandon d’une saisie en cours",
+      "Nouvelle identité visuelle PatriGest et amélioration générale de la cohérence sur ordinateur et mobile",
+    ],
+  },
+  {
     version: "0.8.0",
     date: "2026-09-21",
     title: "Contrôle et rapprochement bancaires",
