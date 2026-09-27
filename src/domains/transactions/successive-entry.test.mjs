@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { nextSuccessiveDraft } from "./successive-draft.ts";
+import { hasUnsavedSuccessiveDraft, nextSuccessiveDraft } from "./successive-draft.ts";
 
 const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const links = source("./components/transaction-quick-actions.tsx");
@@ -77,6 +77,30 @@ test("la suivante conserve compte, date et type mais vide les autres champs", ()
   assert.match(component, /transactionType: mode, categoryId: "", classificationPrecision: ""/);
 });
 
+test("le brouillon courant détecte uniquement les données modifiées non enregistrées", () => {
+  const initial = { transactionType: "expense", financialAccountId: "account", transactionDate: "2026-09-15", label: "", amount: "", categoryId: "", classificationPrecision: "" };
+  assert.equal(hasUnsavedSuccessiveDraft(initial, initial), false);
+  assert.equal(hasUnsavedSuccessiveDraft({ ...initial, label: "Pain" }, initial), true);
+  assert.equal(hasUnsavedSuccessiveDraft({ ...initial, transactionType: "income" }, initial), true);
+  assert.equal(hasUnsavedSuccessiveDraft({ ...initial, label: "" }, initial), false);
+});
+
+test("annuler quitte directement un brouillon vierge et demande confirmation sinon", () => {
+  assert.match(component, /if \(hasUnsavedSuccessiveDraft\(draft, initialDraft\.current\)\) setAbandonOpen\(true\);\s*else router\.push\(returnHref\)/);
+  assert.match(component, /type="button" disabled=\{pending\} onClick=\{cancel\}>Annuler<\/button>/);
+  assert.match(component, /title="Abandonner la saisie en cours \?"/);
+  assert.match(component, /Les informations non enregistrées de cette opération seront perdues\. Les opérations déjà enregistrées seront conservées\./);
+});
+
+test("refuser l'abandon conserve le formulaire et confirmer revient aux opérations sans mutation", () => {
+  assert.match(component, /onClose=\{\(\) => setAbandonOpen\(false\)\}/);
+  assert.match(component, /cancelLabel="Rester dans la saisie"/);
+  assert.match(component, /actions=\{<button[^>]+type="button"[^>]+onClick=\{\(\) => router\.push\(returnHref\)\}>Abandonner la saisie<\/button>\}/);
+  assert.match(component, /value=\{draft\.label\}/);
+  assert.match(component, /value=\{draft\.amount\}/);
+  assert.doesNotMatch(component, /deleteTransaction|updateTransaction|method:\s*"DELETE"|method:\s*"PATCH"/);
+});
+
 test("une erreur conserve le brouillon et ne modifie pas l'historique", () => {
   assert.match(component, /value=\{draft\.label\}/);
   assert.match(component, /value=\{draft\.amount\}/);
@@ -103,4 +127,5 @@ test("terminer ramène au journal par la destination interne sûre", () => {
   assert.match(component, /href=\{returnHref\} aria-disabled=\{pending\}/);
   assert.match(component, /href=\{onFinishHref\}/);
   assert.match(links, /withTransactionReturnTo\(/);
+  assert.equal((component.match(/>Terminer la saisie<\/Link>/g) ?? []).length, 2);
 });

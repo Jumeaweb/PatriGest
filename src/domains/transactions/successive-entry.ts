@@ -1,6 +1,6 @@
 import type { FinancialAccount, Transaction } from "@/types/database";
 import { isValuationAccount } from "@/domains/financial-accounts/utils/financial-account-utils";
-export { nextSuccessiveDraft } from "./successive-draft";
+export { hasUnsavedSuccessiveDraft, nextSuccessiveDraft } from "./successive-draft";
 export type { SuccessiveDraft } from "./successive-draft";
 
 export type CreatedSuccessiveTransaction = Pick<Transaction, "id" | "transaction_type" | "transaction_date" | "label" | "amount" | "financial_account_id" | "proof_reference">;

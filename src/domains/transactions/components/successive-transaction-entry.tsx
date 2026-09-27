@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState } from "react";
 import type { Category, FinancialAccount } from "@/types/database";
 import { FieldError } from "@/components/auth/form-controls";
+import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
 import { formatCurrency, formatFinancialDate } from "@/domains/financial-accounts/utils/financial-account-utils";
 import { getEffectiveOfficialCategory, getPrecisionAfterCategoryChange } from "./transaction-classification-form";
 import { createSuccessiveTransactionAction } from "../successive-actions";
-import { initialSuccessiveActionState, isSuccessiveAccountEligible, nextSuccessiveDraft, type CreatedSuccessiveTransaction, type SuccessiveDraft } from "../successive-entry";
+import { hasUnsavedSuccessiveDraft, initialSuccessiveActionState, isSuccessiveAccountEligible, nextSuccessiveDraft, type CreatedSuccessiveTransaction, type SuccessiveDraft } from "../successive-entry";
 
 type Props = { personId: string; accounts: FinancialAccount[]; categories: Category[]; defaultAccountId?: string; returnHref: string };
 
@@ -43,7 +45,10 @@ function EntryForm({ personId, accounts, categories, draft, onDraftChange, onCre
   personId: string; accounts: FinancialAccount[]; categories: Category[]; draft: SuccessiveDraft;
   onDraftChange: (draft: SuccessiveDraft) => void; onCreated: (created: CreatedSuccessiveTransaction, draft: SuccessiveDraft) => void; returnHref: string;
 }) {
+  const router = useRouter();
   const [state, formAction, pending] = useActionState(createSuccessiveTransactionAction.bind(null, personId), initialSuccessiveActionState);
+  const [abandonOpen, setAbandonOpen] = useState(false);
+  const initialDraft = useRef(draft);
   const submitted = useRef(false);
   const submittedDraft = useRef(draft);
   const reported = useRef<string | null>(null);
@@ -60,21 +65,28 @@ function EntryForm({ personId, accounts, categories, draft, onDraftChange, onCre
   const precisionRequired = official?.requires_precision === true;
   const usableCategories = categories.filter((category) => category.active && (category.usage === draft.transactionType || category.usage === "both"));
   const change = (patch: Partial<SuccessiveDraft>) => onDraftChange({ ...draft, ...patch });
+  const cancel = () => {
+    if (hasUnsavedSuccessiveDraft(draft, initialDraft.current)) setAbandonOpen(true);
+    else router.push(returnHref);
+  };
   const errors = state.fieldErrors;
   const field = (name: string) => errors?.[name]?.length ? `${name}-error` : undefined;
-  return <form action={formAction} onSubmit={(event) => { if (submitted.current || pending) event.preventDefault(); else { submitted.current = true; submittedDraft.current = draft; } }} className="grid gap-3 sm:grid-cols-2">
-    <h2 className="sm:col-span-2 text-base font-bold">Opération suivante</h2>
-    <div className="sm:col-span-2"><span className="auth-label">Type d’opération</span><div className="flex gap-2" role="group" aria-label="Type d’opération">{(["income", "expense"] as const).map((mode) => <button key={mode} type="button" className={`button ${draft.transactionType === mode ? "button-primary" : "button-secondary"}`} onClick={() => change({ transactionType: mode, categoryId: "", classificationPrecision: "" })} aria-pressed={draft.transactionType === mode}>{mode === "income" ? "Recette" : "Dépense"}</button>)}</div><input type="hidden" name="transactionType" value={draft.transactionType} /></div>
-    <div><label className="auth-label" htmlFor="financialAccountId">Compte *</label><select ref={accountRef} className="auth-input" id="financialAccountId" name="financialAccountId" value={draft.financialAccountId} onChange={(event) => change({ financialAccountId: event.target.value })} aria-describedby={field("financialAccountId")} required><option value="">Choisir un compte</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.account_name} — {account.institution_name}</option>)}</select><span id="financialAccountId-error"><FieldError messages={errors?.financialAccountId} /></span></div>
-    <div><label className="auth-label" htmlFor="transactionDate">Date *</label><input className="auth-input" id="transactionDate" name="transactionDate" type="date" value={draft.transactionDate} onChange={(event) => change({ transactionDate: event.target.value })} aria-describedby={field("transactionDate")} required /><span id="transactionDate-error"><FieldError messages={errors?.transactionDate} /></span></div>
-    <div><label className="auth-label" htmlFor="label">Libellé *</label><input ref={labelRef} className="auth-input" id="label" name="label" value={draft.label} onChange={(event) => change({ label: event.target.value })} maxLength={160} aria-describedby={field("label")} required /><span id="label-error"><FieldError messages={errors?.label} /></span></div>
-    <div><label className="auth-label" htmlFor="amount">Montant *</label><input className="auth-input" id="amount" name="amount" type="number" step="0.01" min="0.01" value={draft.amount} onChange={(event) => change({ amount: event.target.value })} aria-describedby={field("amount")} required /><span id="amount-error"><FieldError messages={errors?.amount} /></span></div>
-    <div><label className="auth-label" htmlFor="categoryId">Catégorie facultative</label><select className="auth-input" id="categoryId" name="categoryId" value={draft.categoryId} onChange={(event) => change({ categoryId: event.target.value, classificationPrecision: getPrecisionAfterCategoryChange(categories, event.target.value) })} aria-describedby={field("categoryId")}><option value="">Sans catégorie</option><optgroup label="Mes catégories personnelles">{usableCategories.filter((category) => !category.is_system).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</optgroup><optgroup label="Rubriques officielles">{usableCategories.filter((category) => category.is_system && category.official_code).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</optgroup></select><span id="categoryId-error"><FieldError messages={errors?.categoryId} /></span></div>
-    {precisionRequired ? <div><label className="auth-label" htmlFor="classificationPrecision">Précision *</label><input className="auth-input" id="classificationPrecision" name="classificationPrecision" value={draft.classificationPrecision} onChange={(event) => change({ classificationPrecision: event.target.value })} maxLength={160} required aria-describedby={field("classificationPrecision")} /><span id="classificationPrecision-error"><FieldError messages={errors?.classificationPrecision} /></span></div> : <input type="hidden" name="classificationPrecision" value="" />}
-    {selected && !official && <p className="sm:col-span-2 text-xs text-[#DC2626]">Cette catégorie ne peut pas être utilisée.</p>}
-    {state.status === "error" && <p role="alert" className="sm:col-span-2 text-sm text-[#DC2626]">{state.message}</p>}
-    <div className="sm:col-span-2 flex flex-wrap gap-2"><button className="button button-primary" type="submit" disabled={pending}>{pending ? "Enregistrement…" : "Enregistrer cette opération"}</button><Link className="button button-secondary" href={returnHref} aria-disabled={pending} onClick={(event) => { if (pending) event.preventDefault(); }}>Terminer la saisie</Link></div>
-  </form>;
+  return <>
+    <form action={formAction} onSubmit={(event) => { if (submitted.current || pending) event.preventDefault(); else { submitted.current = true; submittedDraft.current = draft; } }} className="grid gap-3 sm:grid-cols-2">
+      <h2 className="sm:col-span-2 text-base font-bold">Opération suivante</h2>
+      <div className="sm:col-span-2"><span className="auth-label">Type d’opération</span><div className="flex gap-2" role="group" aria-label="Type d’opération">{(["income", "expense"] as const).map((mode) => <button key={mode} type="button" className={`button ${draft.transactionType === mode ? "button-primary" : "button-secondary"}`} onClick={() => change({ transactionType: mode, categoryId: "", classificationPrecision: "" })} aria-pressed={draft.transactionType === mode}>{mode === "income" ? "Recette" : "Dépense"}</button>)}</div><input type="hidden" name="transactionType" value={draft.transactionType} /></div>
+      <div><label className="auth-label" htmlFor="financialAccountId">Compte *</label><select ref={accountRef} className="auth-input" id="financialAccountId" name="financialAccountId" value={draft.financialAccountId} onChange={(event) => change({ financialAccountId: event.target.value })} aria-describedby={field("financialAccountId")} required><option value="">Choisir un compte</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.account_name} — {account.institution_name}</option>)}</select><span id="financialAccountId-error"><FieldError messages={errors?.financialAccountId} /></span></div>
+      <div><label className="auth-label" htmlFor="transactionDate">Date *</label><input className="auth-input" id="transactionDate" name="transactionDate" type="date" value={draft.transactionDate} onChange={(event) => change({ transactionDate: event.target.value })} aria-describedby={field("transactionDate")} required /><span id="transactionDate-error"><FieldError messages={errors?.transactionDate} /></span></div>
+      <div><label className="auth-label" htmlFor="label">Libellé *</label><input ref={labelRef} className="auth-input" id="label" name="label" value={draft.label} onChange={(event) => change({ label: event.target.value })} maxLength={160} aria-describedby={field("label")} required /><span id="label-error"><FieldError messages={errors?.label} /></span></div>
+      <div><label className="auth-label" htmlFor="amount">Montant *</label><input className="auth-input" id="amount" name="amount" type="number" step="0.01" min="0.01" value={draft.amount} onChange={(event) => change({ amount: event.target.value })} aria-describedby={field("amount")} required /><span id="amount-error"><FieldError messages={errors?.amount} /></span></div>
+      <div><label className="auth-label" htmlFor="categoryId">Catégorie facultative</label><select className="auth-input" id="categoryId" name="categoryId" value={draft.categoryId} onChange={(event) => change({ categoryId: event.target.value, classificationPrecision: getPrecisionAfterCategoryChange(categories, event.target.value) })} aria-describedby={field("categoryId")}><option value="">Sans catégorie</option><optgroup label="Mes catégories personnelles">{usableCategories.filter((category) => !category.is_system).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</optgroup><optgroup label="Rubriques officielles">{usableCategories.filter((category) => category.is_system && category.official_code).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</optgroup></select><span id="categoryId-error"><FieldError messages={errors?.categoryId} /></span></div>
+      {precisionRequired ? <div><label className="auth-label" htmlFor="classificationPrecision">Précision *</label><input className="auth-input" id="classificationPrecision" name="classificationPrecision" value={draft.classificationPrecision} onChange={(event) => change({ classificationPrecision: event.target.value })} maxLength={160} required aria-describedby={field("classificationPrecision")} /><span id="classificationPrecision-error"><FieldError messages={errors?.classificationPrecision} /></span></div> : <input type="hidden" name="classificationPrecision" value="" />}
+      {selected && !official && <p className="sm:col-span-2 text-xs text-[#DC2626]">Cette catégorie ne peut pas être utilisée.</p>}
+      {state.status === "error" && <p role="alert" className="sm:col-span-2 text-sm text-[#DC2626]">{state.message}</p>}
+      <div className="sm:col-span-2 flex flex-wrap gap-2"><button className="button button-primary" type="submit" disabled={pending}>{pending ? "Enregistrement…" : "Enregistrer cette opération"}</button><Link className="button button-secondary" href={returnHref} aria-disabled={pending} onClick={(event) => { if (pending) event.preventDefault(); }}>Terminer la saisie</Link><button className="button button-secondary" type="button" disabled={pending} onClick={cancel}>Annuler</button></div>
+    </form>
+    <AppConfirmDialog open={abandonOpen} onClose={() => setAbandonOpen(false)} title="Abandonner la saisie en cours ?" description="Les informations non enregistrées de cette opération seront perdues. Les opérations déjà enregistrées seront conservées." cancelLabel="Rester dans la saisie" actions={<button className="button button-danger" type="button" onClick={() => router.push(returnHref)}>Abandonner la saisie</button>} />
+  </>;
 }
 
 function CreatedStep({ personId, transaction, onNext, onFinishHref }: { personId: string; transaction: CreatedSuccessiveTransaction; onNext: () => void; onFinishHref: string }) {
