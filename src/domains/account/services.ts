@@ -6,6 +6,7 @@ import type { AccountDeletionInput, EmailChangeInput, PasswordInput, ProfileInpu
 import {
   loadAccountDataForUser,
   requestOwnEmailChangeWithAuth,
+  resendOwnEmailChangeWithAuth,
   updateOwnPasswordWithAuth,
   updateOwnProfileRow,
 } from "./account-operations";
@@ -33,6 +34,11 @@ export async function updateOwnPassword(input: PasswordInput) {
 export async function requestOwnEmailChange(input: EmailChangeInput, emailRedirectTo: string) {
   const { supabase, userId } = await getAuthenticatedUser();
   return requestOwnEmailChangeWithAuth(supabase, userId, input, emailRedirectTo);
+}
+
+export async function resendOwnEmailChange(emailRedirectTo: string) {
+  const { supabase, userId } = await getAuthenticatedUser();
+  await resendOwnEmailChangeWithAuth(supabase, userId, emailRedirectTo);
 }
 
 export async function deleteOwnAccount(input: AccountDeletionInput) {

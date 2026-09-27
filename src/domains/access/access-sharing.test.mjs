@@ -142,3 +142,10 @@ test("les protections d’accès et LOT 0A existantes restent utilisées", async
   assert.match(actions, /remove_protected_person_access/);
   assert.match(actions, /Un compte autonome ne peut pas être invité comme collaborateur/);
 });
+
+test("les collisions de réservation d’adresse échouent avec un message neutre", async () => {
+  const actions = await source("domains/access/actions.ts");
+  assert.match(actions, /isEmailReservationError/);
+  assert.match(actions, /Cette adresse e-mail est déjà utilisée ou réservée dans PatriGest\./);
+  assert.doesNotMatch(actions, /adresse réservée par (?:un propriétaire|un collaborateur|un administrateur)/i);
+});

@@ -15,7 +15,14 @@ function isAutonomousAccountInvitationError(error: { message?: string } | null) 
   return error?.message?.includes("Un compte autonome ne peut pas être invité comme collaborateur.") ?? false;
 }
 
+function isEmailReservationError(error: { message?: string } | null) {
+  return error?.message?.includes("Cette adresse e-mail est déjà utilisée ou réservée dans PatriGest.") ?? false;
+}
+
 function invitationCreationErrorMessage(error: { message?: string } | null) {
+  if (isEmailReservationError(error)) {
+    return "Cette adresse e-mail est déjà utilisée ou réservée dans PatriGest.";
+  }
   return isAutonomousAccountInvitationError(error)
     ? "Cette adresse correspond à un compte autonome et ne peut pas recevoir d’accès collaborateur."
     : "Impossible de créer cette invitation.";
@@ -45,6 +52,7 @@ export async function submitAccountRequestAction(_state: AccessActionState, form
   const supabase = await createClient();
   const { error } = await supabase.from("account_requests").insert({ first_name: parsed.data.firstName, last_name: parsed.data.lastName, email: parsed.data.email, message: parsed.data.message || null });
   if (error?.code === "23505") return { status: "error", message: "Une demande est déjà en attente pour cette adresse email." };
+  if (isEmailReservationError(error)) return { status: "error", message: "Cette adresse e-mail est déjà utilisée ou réservée dans PatriGest." };
   if (error) return { status: "error", message: "Impossible d’envoyer votre demande. Réessayez dans quelques instants." };
   return { status: "success", message: "Votre demande a bien été envoyée. Vous recevrez un email lorsqu’elle aura été traitée." };
 }

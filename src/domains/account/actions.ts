@@ -3,14 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAuthCallbackOrigin } from "@/lib/auth/redirects";
-import { EmailReauthenticationError, EmailUnchangedError } from "./account-operations";
+import { EmailAddressCollisionError, EmailReauthenticationError, EmailUnchangedError, PendingEmailChangeError } from "./account-operations";
 import { AccountDeletionBlockedError, AccountDeletionReauthenticationError } from "./account-deletion-operations";
 import { accountDeletionSchema, emailChangeSchema, passwordSchema, profileSchema } from "./schemas";
-import { deleteOwnAccount, requestOwnEmailChange, updateOwnPassword, updateOwnProfile } from "./services";
+import { deleteOwnAccount, requestOwnEmailChange, resendOwnEmailChange, updateOwnPassword, updateOwnProfile } from "./services";
 import type { AccountActionState } from "./state";
 
 function validationError(fieldErrors: Record<string, string[] | undefined>): AccountActionState {
   return { status: "error", message: "Vérifiez les informations saisies.", fieldErrors: Object.fromEntries(Object.entries(fieldErrors).filter((entry): entry is [string, string[]] => Boolean(entry[1]))) };
+}
+
+async function getEmailChangeRedirectUrl() {
+  const origin = await getAuthCallbackOrigin();
+  return `${origin}/auth/email-change/confirm?next=${encodeURIComponent("/parametres/compte?vue=email")}`;
 }
 
 export async function updateProfileAction(_state: AccountActionState, formData: FormData): Promise<AccountActionState> {
@@ -57,8 +62,7 @@ export async function requestEmailChangeAction(_state: AccountActionState, formD
   if (!parsed.success) return validationError(parsed.error.flatten().fieldErrors);
 
   try {
-    const origin = await getAuthCallbackOrigin();
-    const emailRedirectTo = `${origin}/auth/callback?next=${encodeURIComponent("/parametres/compte?vue=email")}`;
+    const emailRedirectTo = await getEmailChangeRedirectUrl();
     const result = await requestOwnEmailChange(parsed.data, emailRedirectTo);
     revalidatePath("/parametres/compte");
     if (result.status === "pending") {
@@ -83,7 +87,32 @@ export async function requestEmailChangeAction(_state: AccountActionState, formD
         fieldErrors: { currentPassword: ["Vérifiez votre mot de passe actuel."] },
       };
     }
+    if (error instanceof PendingEmailChangeError) {
+      return { status: "error", message: "Un changement d’adresse e-mail est déjà en attente. Terminez-le avant d’en demander un autre." };
+    }
+    if (error instanceof EmailAddressCollisionError) {
+      return {
+        status: "error",
+        message: "Cette adresse e-mail est déjà utilisée ou réservée dans PatriGest. Utilisez une autre adresse.",
+        fieldErrors: { newEmail: ["Choisissez une autre adresse e-mail."] },
+      };
+    }
     return { status: "error", message: "Impossible d’enregistrer la demande de changement d’adresse e-mail. Réessayez ultérieurement." };
+  }
+}
+
+export async function resendEmailChangeAction(): Promise<AccountActionState> {
+  try {
+    await resendOwnEmailChange(await getEmailChangeRedirectUrl());
+    return {
+      status: "success",
+      message: "Les confirmations du changement d’adresse e-mail ont été renvoyées aux adresses concernées.",
+    };
+  } catch (error) {
+    if (error instanceof PendingEmailChangeError) {
+      return { status: "error", message: "Aucun changement d’adresse e-mail en attente n’a été trouvé. Rechargez la page." };
+    }
+    return { status: "error", message: "Impossible de renvoyer les confirmations. Réessayez ultérieurement." };
   }
 }
 
