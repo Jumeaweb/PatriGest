@@ -17,7 +17,8 @@ type Props = {
 export function ReleaseNotificationPanel({ release, recipients, notificationState }: Props) {
   const router = useRouter();
   const [dialog, setDialog] = useState<"test" | "global" | null>(null);
-  const [testUserId, setTestUserId] = useState(recipients[0]?.userId ?? "");
+  const [testUserId, setTestUserId] = useState("");
+  const testRecipient = recipients.find((recipient) => recipient.userId === testUserId);
   function closeDialog(refresh: boolean) {
     setDialog(null);
     if (refresh) router.refresh();
@@ -30,22 +31,22 @@ export function ReleaseNotificationPanel({ release, recipients, notificationStat
     </div>
     <div className="mt-3 flex flex-wrap gap-3 text-xs text-[#64748B]"><span>{notificationState.sent} envoyé(s)</span><span>{notificationState.failed} échec(s)</span><span>{notificationState.inProgress} en cours</span></div>
     <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-      <label className="min-w-0 flex-1"><span className="auth-label">Destinataire du test</span><select className="auth-input" value={testUserId} onChange={(event) => setTestUserId(event.target.value)} disabled={recipients.length === 0}>{recipients.map((recipient) => <option key={recipient.userId} value={recipient.userId}>{recipient.email}</option>)}</select></label>
-      <button className="button button-secondary" type="button" disabled={!testUserId} onClick={() => setDialog("test")}>Envoyer un e-mail de test</button>
+      <label className="min-w-0 flex-1"><span className="auth-label">Destinataire du test</span><select className="auth-input" value={testUserId} onChange={(event) => setTestUserId(event.target.value)} disabled={recipients.length === 0}><option value="" disabled>Sélectionner un destinataire de test</option>{recipients.map((recipient) => <option key={recipient.userId} value={recipient.userId}>{recipient.email}</option>)}</select></label>
+      <button className="button button-secondary" type="button" disabled={!testRecipient} onClick={() => setDialog("test")}>Envoyer un e-mail de test</button>
       <button className="button button-primary" type="button" disabled={recipients.length === 0} onClick={() => setDialog("global")}>Informer les utilisateurs</button>
     </div>
-    {dialog === "test" && <TestReleaseDialog release={release} recipient={recipients.find((recipient) => recipient.userId === testUserId)} onClose={closeDialog} />}
+    {dialog === "test" && testRecipient && <TestReleaseDialog release={release} recipient={testRecipient} onClose={closeDialog} />}
     {dialog === "global" && <GlobalReleaseDialog release={release} recipientsCount={recipients.length} onClose={closeDialog} />}
   </section>;
 }
 
-function TestReleaseDialog({ release, recipient, onClose }: { release: Props["release"]; recipient: ReleaseRecipient | undefined; onClose: (refresh: boolean) => void }) {
+function TestReleaseDialog({ release, recipient, onClose }: { release: Props["release"]; recipient: ReleaseRecipient; onClose: (refresh: boolean) => void }) {
   const [state, action] = useActionState(sendTestReleaseNotificationAction, initialReleaseNotificationActionState);
   const succeeded = state.status === "success";
   return <form action={action}>
     <input type="hidden" name="version" value={release.version} />
-    <input type="hidden" name="userId" value={recipient?.userId ?? ""} />
-    <AppConfirmDialog open title="Envoyer l’e-mail de test ?" description={succeeded ? "L’e-mail de test a été envoyé." : "Cet envoi individuel ne marquera pas la notification globale comme envoyée."} subject={recipient?.email} onClose={() => onClose(succeeded)} cancelLabel={succeeded ? "Fermer" : "Annuler"} actions={succeeded ? null : <SubmitButton label="Envoyer le test" pendingLabel="Envoi…" />}>
+    <input type="hidden" name="userId" value={recipient.userId} />
+    <AppConfirmDialog open title="Envoyer l’e-mail de test ?" description={succeeded ? "L’e-mail de test a été envoyé." : "Cet envoi individuel ne marquera pas la notification globale comme envoyée."} subject={recipient.email} onClose={() => onClose(succeeded)} cancelLabel={succeeded ? "Fermer" : "Annuler"} actions={succeeded ? null : <SubmitButton label="Envoyer le test" pendingLabel="Envoi…" />}>
       <ActionMessage state={state} />
     </AppConfirmDialog>
   </form>;

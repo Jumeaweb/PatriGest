@@ -54,9 +54,26 @@ test("le test et chaque envoi global utilisent le même générateur avec leur d
 test("l'interface n'envoie rien à l'affichage et exige deux confirmations", () => {
   assert.match(panel, /Envoyer un e-mail de test/);
   assert.match(panel, /Informer les utilisateurs/);
-  assert.match(panel, /dialog === "test" && <TestReleaseDialog/);
+  assert.match(panel, /dialog === "test" && testRecipient && <TestReleaseDialog/);
   assert.match(panel, /dialog === "global" && <GlobalReleaseDialog/);
   assert.match(panel, /cancelLabel=\{succeeded \? "Fermer" : "Annuler"\}/);
   assert.match(panel, /actions=\{succeeded \? null : <SubmitButton/);
   assert.doesNotMatch(panel, /useEffect/);
+});
+
+test("le destinataire de test exige une sélection explicite et valide", () => {
+  assert.match(panel, /useState\(""\)/);
+  assert.doesNotMatch(panel, /useState\(recipients\[0\]/);
+  assert.match(panel, /<option value="" disabled>Sélectionner un destinataire de test<\/option>/);
+  assert.match(panel, /value=\{testUserId\} onChange=\{\(event\) => setTestUserId\(event\.target\.value\)\}/);
+  assert.match(panel, /const testRecipient = recipients\.find\(\(recipient\) => recipient\.userId === testUserId\)/);
+  assert.match(panel, /disabled=\{!testRecipient\} onClick=\{\(\) => setDialog\("test"\)\}/);
+  assert.match(panel, /dialog === "test" && testRecipient && <TestReleaseDialog[^>]+recipient=\{testRecipient\}/);
+  assert.match(panel, /name="userId" value=\{recipient\.userId\}/);
+});
+
+test("le déclenchement de l'envoi global reste inchangé", () => {
+  assert.match(panel, /disabled=\{recipients\.length === 0\} onClick=\{\(\) => setDialog\("global"\)\}>Informer les utilisateurs<\/button>/);
+  assert.match(panel, /dialog === "global" && <GlobalReleaseDialog release=\{release\} recipientsCount=\{recipients\.length\}/);
+  assert.match(actions, /sendGlobalReleaseNotifications\(parsed\.data\.version\)/);
 });
