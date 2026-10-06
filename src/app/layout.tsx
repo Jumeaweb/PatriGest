@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
-import { APP_NAME, APP_SLOGAN } from "@/lib/app";
+import { APP_NAME, APP_PUBLISHER_NAME, APP_SLOGAN } from "@/lib/app";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -10,6 +10,7 @@ const geistSans = Geist({
 
 export const metadata: Metadata = {
   applicationName: APP_NAME,
+  publisher: APP_PUBLISHER_NAME,
   title: {
     default: APP_NAME,
     template: `%s | ${APP_NAME}`,

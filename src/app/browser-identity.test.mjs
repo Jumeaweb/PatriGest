@@ -6,11 +6,15 @@ const fromApp = (name) => new URL(name, import.meta.url);
 
 test("les métadonnées et icônes navigateur utilisent l’identité PatriGest", () => {
   const layout = readFileSync(fromApp("./layout.tsx"), "utf8");
+  const appIdentity = readFileSync(fromApp("../lib/app.ts"), "utf8");
   const favicon = readFileSync(fromApp("./favicon.ico"));
   const sourceIcon = readFileSync(fromApp("../../public/logos/patrigest-icon-32.png"));
   const embeddedSize = favicon.readUInt32LE(14);
   const embeddedOffset = favicon.readUInt32LE(18);
   assert.match(layout, /applicationName: APP_NAME/);
+  assert.match(layout, /publisher: APP_PUBLISHER_NAME/);
+  assert.match(appIdentity, /APP_NAME = "PatriGest"/);
+  assert.match(appIdentity, /APP_PUBLISHER_NAME = "Jumeaweb"/);
   assert.match(layout, /appleWebApp:[\s\S]*title: APP_NAME/);
   assert.equal(existsSync(fromApp("./favicon.ico")), true);
   assert.equal(existsSync(fromApp("./apple-icon.png")), true);

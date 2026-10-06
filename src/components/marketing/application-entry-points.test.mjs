@@ -14,6 +14,7 @@ const authShell = source("../auth/auth-shell.tsx");
 const privateNavigation = source("../layout/private-navigation.tsx");
 const releaseNotice = source("../releases/release-notice.tsx");
 const globals = source("../../app/globals.css");
+const appIdentity = source("../../lib/app.ts");
 
 test("ouvrir un dossier depuis les listes mène à son tableau de bord", () => {
   assert.match(dashboard, /href=\{`\/dossiers\/\$\{dossier\.id\}\/tableau-de-bord`\}>Ouvrir le dossier/);
@@ -45,9 +46,24 @@ test("la nouvelle identité visuelle est partagée sans modifier les destination
   assert.match(privateNavigation, /bg-brand-navigation/);
   assert.match(privateNavigation, /src="\/logos\/patrigest-symbol\.png"/);
   assert.match(authShell, /src="\/logos\/patrigest-logo-full\.png"/);
-  assert.match(publicFooter, /src="\/logos\/patrigest-logo-full\.png"/);
   assert.ok(existsSync(new URL("../../../public/logos/source/patrigest-logo.png", import.meta.url)));
   assert.ok(existsSync(new URL("../../../public/logos/source/patrigest-logo-texte.png", import.meta.url)));
+});
+
+test("le pied de page public identifie Jumeaweb et expose les contacts validés", () => {
+  const identityLine = publicFooter.match(/<p className="mt-4 border-t[^"]*">[\s\S]*?<\/p>/)?.[0] ?? "";
+  assert.match(appIdentity, /APP_PUBLISHER_NAME = "Jumeaweb"/);
+  assert.match(appIdentity, /APP_PUBLISHER_URL = "https:\/\/jumeaweb\.fr"/);
+  assert.match(appIdentity, /APP_CONTACT_EMAIL = "contact@jumeaweb\.fr"/);
+  assert.match(appIdentity, /APP_SUPPORT_EMAIL = "support@jumeaweb\.fr"/);
+  assert.match(identityLine, /© 2026 \{APP_NAME\}\. Tous droits réservés\. \{APP_NAME\} est édité par /);
+  assert.match(identityLine, /href=\{`\$\{APP_PUBLISHER_URL\}\/`\} target="_blank" rel="noopener noreferrer"[\s\S]*?\{APP_PUBLISHER_NAME\}<\/a>\. <Link href="\/historique-versions"[\s\S]*?\{APP_NAME\} v\{APP_VERSION\}<\/Link>/);
+  assert.doesNotMatch(identityLine, /<span|\bflex\b|\bgrid\b|justify-|\bgap-/);
+  assert.doesNotMatch(publicFooter, /<Image|patrigest-logo-full|APP_SLOGAN/);
+  assert.match(publicFooter, /<nav className="flex flex-wrap items-center justify-center[^"]*lg:justify-between"/);
+  assert.match(publicFooter, /href=\{`mailto:\$\{APP_CONTACT_EMAIL\}`\}>Contact<\/a>/);
+  assert.match(publicFooter, /href=\{`mailto:\$\{APP_SUPPORT_EMAIL\}`\}>Assistance<\/a>/);
+  assert.doesNotMatch(publicFooter, /LRTeam83|jumeaweb@gmail\.com|jerome\.lucet@ik\.me/);
 });
 
 test("la bannière de nouveautés conserve volontairement son identité bleue", () => {
