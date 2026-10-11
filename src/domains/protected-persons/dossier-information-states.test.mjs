@@ -54,6 +54,19 @@ test("un bien connu à zéro et un bien sans valeur restent distingués", () => 
   });
 });
 
+test("caractérisation : un bien cédé reste inclus dans la synthèse immobilière", () => {
+  // PAT-PATRIMOINE-01C devra faire évoluer cette attente : le helper actuel
+  // ignore le statut et additionne encore la dernière estimation du bien cédé.
+  assert.deepEqual(getDossierPropertyState([
+    { status: "active", estimated_value: 100_000 },
+    { status: "disposed", estimated_value: 75_000 },
+  ]), {
+    label: "2 biens renseignés",
+    knownValue: 175_000,
+    missingValues: 0,
+  });
+});
+
 test("dettes vides : non renseigné, et non aucune dette active", () => {
   assert.deepEqual(getDossierDebtState([]), { label: "Non renseigné", knownBalance: null, missingBalances: 0 });
 });
