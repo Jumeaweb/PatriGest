@@ -10,7 +10,7 @@ export async function getDossierDashboardData(protectedPersonId: string) {
   if (!person) return null;
 
   const { supabase } = await getAuthenticatedUser();
-  const [accounts, reports, recentTransactions, propertiesResult, debtsResult] =
+  const [accounts, reports, recentTransactions, activePropertiesResult, disposedPropertiesResult, debtsResult] =
     await Promise.all([
       getFinancialAccounts(protectedPersonId),
       getManagementReports(protectedPersonId),
@@ -18,7 +18,13 @@ export async function getDossierDashboardData(protectedPersonId: string) {
       supabase
         .from("real_estate_properties")
         .select("id", { count: "exact", head: true })
-        .eq("protected_person_id", protectedPersonId),
+        .eq("protected_person_id", protectedPersonId)
+        .eq("status", "active"),
+      supabase
+        .from("real_estate_properties")
+        .select("id", { count: "exact", head: true })
+        .eq("protected_person_id", protectedPersonId)
+        .eq("status", "disposed"),
       supabase
         .from("debts")
         .select("id", { count: "exact", head: true })
@@ -26,7 +32,7 @@ export async function getDossierDashboardData(protectedPersonId: string) {
         .eq("status", "active"),
     ]);
 
-  if (propertiesResult.error || debtsResult.error)
+  if (activePropertiesResult.error || disposedPropertiesResult.error || debtsResult.error)
     throw new Error("Impossible de charger la synthèse du dossier.");
 
   const activeReport = reports.find((report) =>
@@ -47,7 +53,8 @@ export async function getDossierDashboardData(protectedPersonId: string) {
     recentTransactions,
     tasks,
     actionCounts: getDashboardActionCounts(tasks),
-    propertyCount: propertiesResult.count ?? 0,
+    activePropertyCount: activePropertiesResult.count ?? 0,
+    disposedPropertyCount: disposedPropertiesResult.count ?? 0,
     activeDebtCount: debtsResult.count ?? 0,
   };
 }

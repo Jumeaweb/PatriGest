@@ -42,28 +42,57 @@ test("une résidence distincte renseignée apparaît avec le domicile", () => {
 });
 
 test("immobilier vide : non renseigné et aucune valeur prétendue manquante", () => {
-  assert.deepEqual(getDossierPropertyState([]), { label: "Non renseigné", knownValue: null, missingValues: 0 });
+  assert.deepEqual(getDossierPropertyState([]), {
+    label: "Non renseigné", currentKnownValue: null, missingActiveValues: 0, activeCount: 0, disposedCount: 0,
+  });
 });
 
 test("un bien connu à zéro et un bien sans valeur restent distingués", () => {
-  assert.deepEqual(getDossierPropertyState([{ estimated_value: 0 }, { estimated_value: null }]), {
-    label: "2 biens renseignés", knownValue: 0, missingValues: 1,
+  assert.deepEqual(getDossierPropertyState([
+    { status: "active", estimated_value: 0 },
+    { status: "active", estimated_value: null },
+  ]), {
+    label: "2 biens actifs", currentKnownValue: 0, missingActiveValues: 1, activeCount: 2, disposedCount: 0,
   });
-  assert.deepEqual(getDossierPropertyState([{ estimated_value: null }]), {
-    label: "1 bien renseigné", knownValue: null, missingValues: 1,
+  assert.deepEqual(getDossierPropertyState([{ status: "active", estimated_value: null }]), {
+    label: "1 bien actif", currentKnownValue: null, missingActiveValues: 1, activeCount: 1, disposedCount: 0,
   });
 });
 
-test("caractérisation : un bien cédé reste inclus dans la synthèse immobilière", () => {
-  // PAT-PATRIMOINE-01C devra faire évoluer cette attente : le helper actuel
-  // ignore le statut et additionne encore la dernière estimation du bien cédé.
+test("un bien cédé conserve son estimation mais reste exclu de la valeur actuelle", () => {
   assert.deepEqual(getDossierPropertyState([
     { status: "active", estimated_value: 100_000 },
     { status: "disposed", estimated_value: 75_000 },
   ]), {
-    label: "2 biens renseignés",
-    knownValue: 175_000,
-    missingValues: 0,
+    label: "1 bien actif · 1 bien cédé",
+    currentKnownValue: 100_000,
+    missingActiveValues: 0,
+    activeCount: 1,
+    disposedCount: 1,
+  });
+  assert.deepEqual(getDossierPropertyState([
+    { status: "disposed", estimated_value: 75_000 },
+    { status: "disposed", estimated_value: null },
+  ]), {
+    label: "Aucun bien actif · 2 biens cédés",
+    currentKnownValue: null,
+    missingActiveValues: 0,
+    activeCount: 0,
+    disposedCount: 2,
+  });
+});
+
+test("une estimation active manquante rend le total actuel incomplet sans valoir zéro", () => {
+  assert.deepEqual(getDossierPropertyState([
+    { status: "active", estimated_value: 125_000 },
+    { status: "active", estimated_value: null },
+    { status: "disposed", estimated_value: 80_000 },
+  ]), {
+    label: "2 biens actifs · 1 bien cédé",
+    currentKnownValue: 125_000,
+    missingActiveValues: 1,
+    activeCount: 2,
+    disposedCount: 1,
   });
 });
 
@@ -111,4 +140,24 @@ test("la fiche conserve routes, permissions et accès aux exercices", () => {
   assert.match(page, /href=\{`\/dossiers\/\$\{protectedPersonId\}\/exercices`\}/);
   assert.match(page, /person\.protectionMeasures\.length \? "Aucune mesure active" : "Non renseigné"/);
   assert.match(page, /person\.managementPeriods\.length \? "Aucun exercice ouvert" : "Non renseigné"/);
+});
+
+test("les synthèses affichent séparément les biens actifs, cédés et les valeurs incomplètes", () => {
+  const dossierPage = source("../../app/dossiers/[protectedPersonId]/page.tsx");
+  const dashboardPage = source("../../app/dossiers/[protectedPersonId]/tableau-de-bord/page.tsx");
+  const dashboardService = source("../dashboard/services/dossier-dashboard-service.ts");
+  const propertyManager = source("../assets-liabilities/components/property-manager.tsx");
+  const propertyPage = source("../../app/dossiers/[protectedPersonId]/patrimoine-immobilier/[propertyId]/page.tsx");
+
+  assert.match(dossierPage, /Valeur immobilière actuelle retenue/);
+  assert.match(dossierPage, /Valeur connue des biens actifs/);
+  assert.match(dossierPage, /Total actuel incomplet/);
+  assert.doesNotMatch(dossierPage, /Valeurs connues :/);
+  assert.doesNotMatch(dossierPage, /currentKnownValue \?\? 0/);
+  assert.match(dashboardService, /\.eq\("status", "active"\)/);
+  assert.match(dashboardService, /\.eq\("status", "disposed"\)/);
+  assert.match(dashboardPage, /propertyCountsLabel\(data\.activePropertyCount, data\.disposedPropertyCount\)/);
+  assert.match(propertyManager, /Dernière estimation connue/);
+  assert.match(propertyManager, /Estimation retenue dans la synthèse actuelle/);
+  assert.match(propertyPage, /property\.status === "disposed" \? "Dernière estimation connue" : "Estimation retenue dans la synthèse actuelle"/);
 });

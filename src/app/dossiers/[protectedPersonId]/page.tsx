@@ -135,9 +135,11 @@ export default async function ProtectedPersonDetailPage({
       </InfoCard>
       <InfoCard icon={Building2} title="Patrimoine immobilier">
         <p className="text-sm font-semibold">{propertyState.label}</p>
-        {properties.length > 0 && <>
-          <p className="mt-1 text-xs text-[#64748B]">{propertyState.knownValue === null ? "Valeur non renseignée" : `Valeurs connues : ${formatCurrency(propertyState.knownValue)}`}</p>
-          {propertyState.missingValues > 0 && propertyState.knownValue !== null && <p className="mt-1 text-xs text-[#64748B]">{propertyState.missingValues} bien(s) sans valeur renseignée</p>}
+        {propertyState.activeCount === 0 && properties.length > 0 && <p className="mt-1 text-xs text-[#64748B]">Aucune valeur immobilière actuelle retenue.</p>}
+        {propertyState.activeCount > 0 && propertyState.missingActiveValues === 0 && propertyState.currentKnownValue !== null && <p className="mt-1 text-xs text-[#64748B]">Valeur immobilière actuelle retenue : {formatCurrency(propertyState.currentKnownValue)}</p>}
+        {propertyState.activeCount > 0 && propertyState.missingActiveValues > 0 && <>
+          <p className="mt-1 text-xs text-[#64748B]">{propertyState.currentKnownValue === null ? "Valeur immobilière actuelle non calculable." : `Valeur connue des biens actifs : ${formatCurrency(propertyState.currentKnownValue)}`}</p>
+          <p className="mt-1 text-xs font-semibold text-amber-700">Total actuel incomplet : {propertyState.missingActiveValues} bien{propertyState.missingActiveValues > 1 ? "s" : ""} actif{propertyState.missingActiveValues > 1 ? "s" : ""} sans estimation.</p>
         </>}
         <Link href={`/dossiers/${protectedPersonId}/patrimoine-immobilier`} className="auth-link mt-3 inline-block text-xs">{getDossierAssetActionLabel("properties", properties.length, canManage)} →</Link>
       </InfoCard>

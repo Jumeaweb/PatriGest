@@ -19,13 +19,23 @@ export function getDossierAddressStates(person: AddressFields) {
   return { domicile, residence };
 }
 
-export function getDossierPropertyState(properties: ReadonlyArray<{ estimated_value: number | null }>) {
-  if (!properties.length) return { label: "Non renseigné", knownValue: null, missingValues: 0 };
-  const values = properties.flatMap((property) => property.estimated_value === null ? [] : [property.estimated_value]);
+export function getDossierPropertyState(properties: ReadonlyArray<{ status: "active" | "disposed"; estimated_value: number | null }>) {
+  if (!properties.length) return { label: "Non renseigné", currentKnownValue: null, missingActiveValues: 0, activeCount: 0, disposedCount: 0 };
+  const active = properties.filter((property) => property.status === "active");
+  const disposedCount = properties.length - active.length;
+  const values = active.flatMap((property) => property.estimated_value === null ? [] : [property.estimated_value]);
+  const activeLabel = active.length
+    ? `${active.length} bien${active.length > 1 ? "s" : ""} actif${active.length > 1 ? "s" : ""}`
+    : "Aucun bien actif";
+  const disposedLabel = disposedCount
+    ? ` · ${disposedCount} bien${disposedCount > 1 ? "s" : ""} cédé${disposedCount > 1 ? "s" : ""}`
+    : "";
   return {
-    label: `${properties.length} bien${properties.length > 1 ? "s" : ""} renseigné${properties.length > 1 ? "s" : ""}`,
-    knownValue: values.length ? values.reduce((total, value) => total + value, 0) : null,
-    missingValues: properties.length - values.length,
+    label: `${activeLabel}${disposedLabel}`,
+    currentKnownValue: values.length ? values.reduce((total, value) => total + value, 0) : null,
+    missingActiveValues: active.length - values.length,
+    activeCount: active.length,
+    disposedCount,
   };
 }
 
