@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(22);
+select extensions.plan(23);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -236,6 +236,16 @@ select extensions.throws_ok(
   '42501',
   'new row violates row-level security policy for table "property_events"',
   'le lecteur ne peut pas ajouter un événement'
+);
+
+update public.property_events
+set description = 'Modification interdite'
+where id = '81000000-0000-4000-8000-000000000502';
+
+select extensions.is(
+  (select description from public.property_events where id = '81000000-0000-4000-8000-000000000502'),
+  'Événement gestionnaire',
+  'le lecteur ne peut pas modifier un événement immobilier'
 );
 
 select extensions.throws_ok(

@@ -6,7 +6,9 @@ import { getDebtCompleteness, getPropertyCompleteness } from "./completeness.ts"
 import {
   debtBalanceSchema,
   debtSchema,
+  editablePropertyEventTypes,
   propertyEventSchema,
+  propertyEventUpdateSchema,
   propertySchema,
 } from "./schemas.ts";
 
@@ -119,6 +121,65 @@ test("une vente exige son prix et sa persistance est synchronisée par le trigge
   assert.match(migration, /get diagnostics updated_property_count = row_count/);
   assert.match(migration, /new\.event_date > current_date/);
   assert.match(migration, /set status = 'disposed',[\s\S]*disposal_date = new\.event_date/);
+});
+
+test("l'édition accepte uniquement les quatre types d'événements hors vente", () => {
+  for (const eventType of editablePropertyEventTypes) {
+    assert.equal(propertyEventUpdateSchema.safeParse({
+      eventType,
+      eventDate: "2026-03-15",
+      description: "Événement corrigé",
+      amount: "1200.50",
+      documentReference: "ACTE-15",
+    }).success, true);
+  }
+  assert.equal(propertyEventUpdateSchema.safeParse({
+    eventType: "sale",
+    eventDate: "2026-03-15",
+    description: "Vente interdite",
+    amount: "1200",
+    documentReference: "",
+  }).success, false);
+  assert.equal(propertyEventUpdateSchema.safeParse({
+    eventType: "donation",
+    eventDate: "15/03/2026",
+    description: "",
+    amount: "-1",
+    documentReference: "",
+  }).success, false);
+});
+
+test("le parcours d'édition vérifie droits, rattachements, vente et périodes clôturées", () => {
+  const services = source("./services.ts");
+  const actions = source("./actions.ts");
+  const updateAction = actions.slice(actions.indexOf("export async function updatePropertyEventAction"), actions.indexOf("export async function saveDebtAction"));
+  const manager = source("./components/property-manager.tsx");
+  const page = source("../../app/dossiers/[protectedPersonId]/patrimoine-immobilier/[propertyId]/page.tsx");
+
+  assert.match(services, /rpc\("can_manage_protected_person"/);
+  assert.match(services, /\.eq\("id",eventId\)\.eq\("property_id",propertyId\)\.eq\("protected_person_id",personId\)/);
+  assert.match(services, /existing\.event_type === "sale"/);
+  assert.match(services, /\.neq\("event_type","sale"\)/);
+  assert.match(services, /ensurePropertyEventDateIsOpen\(supabase, personId, existing\.event_date\)/);
+  assert.match(services, /ensurePropertyEventDateIsOpen\(supabase, personId, input\.eventDate\)/);
+  assert.doesNotMatch(services, /property_events"\)\.update\(\{[^}]*property_id/);
+  assert.doesNotMatch(services, /property_events"\)\.update\(\{[^}]*protected_person_id/);
+
+  assert.match(actions, /propertyEventUpdateSchema\.safeParse/);
+  assert.match(actions, /revalidatePath\(`\/dossiers\/\$\{id\}\/patrimoine-immobilier\/\$\{propertyId\}`\)/);
+  assert.match(actions, /Les événements de vente ne sont pas modifiables/);
+  assert.match(actions, /exercice clôturé et ne peut plus être modifié/);
+  assert.doesNotMatch(updateAction, /e\.message/);
+
+  assert.match(manager, /updatePropertyEventAction\.bind\(null,personId,item\.id,event\.id\)/);
+  assert.match(manager, /value=\{event\?\.event_type\?\?"significant_change"\}/);
+  assert.match(manager, /value=\{event\?\.event_date\}/);
+  assert.match(manager, /value=\{event\?\.description\}/);
+  assert.match(manager, /value=\{event\?\.amount\}/);
+  assert.match(manager, /value=\{event\?\.document_reference\}/);
+  assert.match(manager, /errors=\{state\.fieldErrors\?\.eventDate\}/);
+  assert.match(manager, /<FieldError messages=\{errors\}/);
+  assert.match(page, /person\.accessRole !== "read_only" && event\.event_type !== "sale"/);
 });
 
 test("la complétude immobilière dépend seulement de la désignation, du type et de la ville", () => {
