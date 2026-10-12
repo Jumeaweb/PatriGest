@@ -86,7 +86,7 @@ test("caractérisation : statut et date de cession peuvent actuellement se contr
   assert.equal(propertySchema.safeParse(propertyInput({ status: "active", disposalDate: "2026-02-15" })).success, true);
 });
 
-test("un événement de vente accepte son montant sans modifier lui-même la fiche", () => {
+test("une vente exige son prix et sa persistance est synchronisée par le trigger transactionnel", () => {
   const parsed = propertyEventSchema.parse({
     eventType: "sale",
     eventDate: "2026-02-15",
@@ -95,6 +95,13 @@ test("un événement de vente accepte son montant sans modifier lui-même la fic
     documentReference: "ACTE-2026-15",
   });
   assert.equal(parsed.amount, 195000);
+  assert.equal(propertyEventSchema.safeParse({
+    eventType: "sale",
+    eventDate: "2026-02-15",
+    description: "Vente du bien",
+    amount: "",
+    documentReference: "",
+  }).success, false);
 
   const services = source("./services.ts");
   const start = services.indexOf("export async function addPropertyEvent");
@@ -102,6 +109,16 @@ test("un événement de vente accepte son montant sans modifier lui-même la fic
   const saleService = services.slice(start, end);
   assert.match(saleService, /from\("property_events"\)\.insert/);
   assert.doesNotMatch(saleService, /from\("real_estate_properties"\)\.update/);
+
+  const migration = source("../../../supabase/migrations/20261011100000_synchronize_property_sales.sql");
+  assert.match(migration, /before insert on public\.property_events/);
+  assert.match(migration, /before update on public\.property_events/);
+  assert.match(migration, /before update on public\.real_estate_properties/);
+  assert.match(migration, /security invoker/);
+  assert.match(migration, /for update/);
+  assert.match(migration, /get diagnostics updated_property_count = row_count/);
+  assert.match(migration, /new\.event_date > current_date/);
+  assert.match(migration, /set status = 'disposed',[\s\S]*disposal_date = new\.event_date/);
 });
 
 test("la complétude immobilière dépend seulement de la désignation, du type et de la ville", () => {

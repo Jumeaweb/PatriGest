@@ -82,14 +82,14 @@ values (
 
 select extensions.is(
   (select status from public.real_estate_properties where id = '81000000-0000-4000-8000-000000000301'),
-  'active',
-  'caractérisation : un événement de vente laisse actuellement le bien actif'
+  'disposed',
+  'un événement de vente fait passer le bien au statut cédé'
 );
 
 select extensions.is(
   (select disposal_date from public.real_estate_properties where id = '81000000-0000-4000-8000-000000000301'),
-  null::date,
-  'caractérisation : un événement de vente ne renseigne actuellement aucune date de cession'
+  '2026-02-15'::date,
+  'la date de vente devient la date de cession'
 );
 
 select extensions.throws_ok(
