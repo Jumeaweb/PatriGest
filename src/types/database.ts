@@ -214,6 +214,12 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["property_events"]["Insert"]>;
         Relationships: [];
       };
+      property_sale_price_corrections: {
+        Row: { id: string; property_event_id: string; property_id: string; protected_person_id: string; old_price: number; new_price: number; reason: string; corrected_by: string; corrected_by_name: string; corrected_at: string };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       debts: {
         Row: { id: string; protected_person_id: string; creditor: string; debt_type: DebtType; designation: string; start_date: string | null; initial_amount: number | null; initial_duration_months: number | null; monthly_payment: number | null; interest_rate: number | null; current_balance: number | null; current_balance_date: string | null; remaining_duration_months: number | null; status: DebtStatus; settled_at: string | null; notes: string | null; created_at: string; updated_at: string };
         Insert: { id?: string; protected_person_id: string; creditor: string; debt_type: DebtType; designation: string; start_date?: string | null; initial_amount?: number | null; initial_duration_months?: number | null; monthly_payment?: number | null; interest_rate?: number | null; current_balance?: number | null; current_balance_date?: string | null; remaining_duration_months?: number | null; status?: DebtStatus; settled_at?: string | null; notes?: string | null; created_at?: string; updated_at?: string };
@@ -302,6 +308,7 @@ export type Database = {
       is_protected_person_owner: { Args: { person_id: string }; Returns: boolean };
       can_read_protected_person: { Args: { person_id: string }; Returns: boolean };
       can_manage_protected_person: { Args: { person_id: string }; Returns: boolean };
+      correct_property_sale_price: { Args: { p_protected_person_id: string; p_property_id: string; p_event_id: string; p_expected_price: number; p_new_price: number; p_reason: string }; Returns: string };
       accept_protected_person_invitation: { Args: { p_token_hash: string }; Returns: string };
       issue_protected_person_invitation: { Args: { p_protected_person_id: string; p_email: string; p_role: SharedAccessRole; p_token_hash: string; p_expires_at: string }; Returns: string };
       reissue_protected_person_invitation: { Args: { p_invitation_id: string; p_token_hash: string; p_expires_at: string }; Returns: string };
@@ -340,6 +347,7 @@ export type ProtectedPersonAccess = Database["public"]["Tables"]["protected_pers
 export type ProtectedPersonInvitation = Database["public"]["Tables"]["protected_person_invitations"]["Row"];
 export type RealEstateProperty = Database["public"]["Tables"]["real_estate_properties"]["Row"];
 export type PropertyEvent = Database["public"]["Tables"]["property_events"]["Row"];
+export type PropertySalePriceCorrection = Database["public"]["Tables"]["property_sale_price_corrections"]["Row"];
 export type Debt = Database["public"]["Tables"]["debts"]["Row"];
 export type DebtBalance = Database["public"]["Tables"]["debt_balances"]["Row"];
 export type BankStatement = Database["public"]["Tables"]["bank_statements"]["Row"];

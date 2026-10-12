@@ -9,6 +9,7 @@ import {
   editablePropertyEventTypes,
   propertyEventSchema,
   propertyEventUpdateSchema,
+  propertySalePriceCorrectionSchema,
   propertySchema,
 } from "./schemas.ts";
 
@@ -180,6 +181,75 @@ test("le parcours d'édition vérifie droits, rattachements, vente et périodes 
   assert.match(manager, /errors=\{state\.fieldErrors\?\.eventDate\}/);
   assert.match(manager, /<FieldError messages=\{errors\}/);
   assert.match(page, /person\.accessRole !== "read_only" && event\.event_type !== "sale"/);
+});
+
+test("la correction du prix exige un nouveau montant positif différent et un motif", () => {
+  assert.deepEqual(propertySalePriceCorrectionSchema.parse({
+    expectedPrice: 205000,
+    newPrice: "210000,50",
+    reason: "Erreur relevée dans l’acte authentique",
+  }), {
+    expectedPrice: 205000,
+    newPrice: 210000.5,
+    reason: "Erreur relevée dans l’acte authentique",
+  });
+  for (const input of [
+    { expectedPrice: 205000, newPrice: "", reason: "Motif" },
+    { expectedPrice: 205000, newPrice: "-1", reason: "Motif" },
+    { expectedPrice: 205000, newPrice: "210000.123", reason: "Motif" },
+    { expectedPrice: 205000, newPrice: "205000", reason: "Motif" },
+    { expectedPrice: 205000, newPrice: "210000", reason: "   " },
+  ]) assert.equal(propertySalePriceCorrectionSchema.safeParse(input).success, false);
+});
+
+test("la correction passe par une RPC transactionnelle auditée et conserve les protections de vente", () => {
+  const migration = source("../../../supabase/migrations/20261012100000_correct_property_sale_prices.sql");
+  const services = source("./services.ts");
+  const actions = source("./actions.ts");
+  const action = actions.slice(actions.indexOf("export async function correctPropertySalePriceAction"), actions.indexOf("export async function saveDebtAction"));
+
+  assert.match(migration, /create table public\.property_sale_price_corrections/);
+  assert.match(migration, /create or replace function public\.correct_property_sale_price/);
+  assert.match(migration, /security invoker/);
+  assert.match(migration, /for update/);
+  assert.match(migration, /p_expected_price/);
+  assert.match(migration, /period\.status = 'closed'/);
+  assert.match(migration, /property_events_audit_sale_price_correction/);
+  assert.match(migration, /property_sale_price_corrections_immutable/);
+  assert.match(migration, /revoke insert, update, delete on public\.property_sale_price_corrections from authenticated/);
+  assert.match(migration, /Le prix de vente doit être corrigé par le parcours dédié/);
+  assert.match(migration, /if updated_event_count <> 1/);
+  assert.match(migration, /La trace de correction n’a pas été enregistrée/);
+
+  assert.match(services, /rpc\("correct_property_sale_price"/);
+  assert.match(services, /p_expected_price: input\.expectedPrice/);
+  assert.match(services, /p_protected_person_id: personId/);
+  assert.match(services, /p_property_id: propertyId/);
+  assert.match(services, /p_event_id: eventId/);
+  assert.match(services, /from\("property_sale_price_corrections"\)/);
+  assert.match(actions, /propertySalePriceCorrectionSchema\.safeParse/);
+  assert.match(action, /refresh\(personId,propertyId\)/);
+  assert.doesNotMatch(action, /e\.message/);
+});
+
+test("l’interface réserve Corriger le prix aux ventes modifiables et affiche chaque trace", () => {
+  const manager = source("./components/property-manager.tsx");
+  const actions = source("./actions.ts");
+  const page = source("../../app/dossiers/[protectedPersonId]/patrimoine-immobilier/[propertyId]/page.tsx");
+
+  assert.match(manager, /Corriger le prix/);
+  assert.match(manager, /Prix actuel/);
+  assert.match(manager, /name="newPrice"/);
+  assert.match(manager, /name="reason"/);
+  assert.match(manager, /Enregistrer la correction/);
+  assert.match(manager, /disabled=\{pending\}/);
+  assert.match(actions, /Le prix de vente a été corrigé/);
+  assert.match(page, /person\.accessRole !== "read_only" && event\.event_type === "sale"/);
+  assert.match(page, /event\.priceCorrections\.map/);
+  assert.match(page, /correction\.old_price/);
+  assert.match(page, /correction\.new_price/);
+  assert.match(page, /correction\.reason/);
+  assert.match(page, /correction\.corrected_by_name/);
 });
 
 test("la complétude immobilière dépend seulement de la désignation, du type et de la ville", () => {
