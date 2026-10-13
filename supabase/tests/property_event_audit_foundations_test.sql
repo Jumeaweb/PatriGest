@@ -96,7 +96,7 @@ insert into public.property_events (
 )
 values
   ('84000000-0000-4000-8000-000000000501', '84000000-0000-4000-8000-000000000301', '84000000-0000-4000-8000-000000000101', 'significant_change', '2025-05-01', 'Événement qui sera clôturé', 1000),
-  ('84000000-0000-4000-8000-000000000502', '84000000-0000-4000-8000-000000000302', '84000000-0000-4000-8000-000000000101', 'acquisition', '2026-02-01', 'Acquisition ouverte', 120000),
+  ('84000000-0000-4000-8000-000000000502', '84000000-0000-4000-8000-000000000302', '84000000-0000-4000-8000-000000000101', 'significant_change', '2026-02-01', 'Modification ouverte', 120000),
   ('84000000-0000-4000-8000-000000000503', '84000000-0000-4000-8000-000000000305', '84000000-0000-4000-8000-000000000102', 'inheritance', '2026-01-10', 'Événement étranger', 80000),
   ('84000000-0000-4000-8000-000000000504', '84000000-0000-4000-8000-000000000303', '84000000-0000-4000-8000-000000000101', 'sale', '2026-08-15', 'Vente positive', 150000),
   ('84000000-0000-4000-8000-000000000506', '84000000-0000-4000-8000-000000000306', '84000000-0000-4000-8000-000000000101', 'sale', '2025-07-01', 'Vente avant clôture', 175000);
@@ -186,8 +186,15 @@ select extensions.throws_ok(
   'la date d’un événement ne peut pas entrer dans un exercice clôturé'
 );
 select extensions.lives_ok(
-  $$update public.property_events set description = 'Acquisition corrigée en période ouverte' where id = '84000000-0000-4000-8000-000000000502'$$,
-  'un événement d’un exercice ouvert reste modifiable par le propriétaire'
+  $$select public.correct_property_event(
+      '84000000-0000-4000-8000-000000000101',
+      '84000000-0000-4000-8000-000000000302',
+      '84000000-0000-4000-8000-000000000502',
+      1, 'significant_change', '2026-02-01',
+      'Modification corrigée en période ouverte', 120000, null,
+      'Correction par le propriétaire'
+    )$$,
+  'un événement d’un exercice ouvert reste corrigeable par le propriétaire via la RPC auditée'
 );
 select extensions.is((select revision from public.property_events where id = '84000000-0000-4000-8000-000000000502'), 2::bigint, 'une modification réussie incrémente la révision');
 select extensions.throws_ok(
@@ -240,8 +247,15 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '84000000-0000-4000-8000-000000000002', true);
 select set_config('request.jwt.claims', '{"sub":"84000000-0000-4000-8000-000000000002","role":"authenticated"}', true);
 select extensions.lives_ok(
-  $$update public.property_events set description = 'Acquisition modifiée par le gestionnaire' where id = '84000000-0000-4000-8000-000000000502'$$,
-  'le gestionnaire peut encore modifier un événement ouvert'
+  $$select public.correct_property_event(
+      '84000000-0000-4000-8000-000000000101',
+      '84000000-0000-4000-8000-000000000302',
+      '84000000-0000-4000-8000-000000000502',
+      2, 'significant_change', '2026-02-01',
+      'Modification corrigée par le gestionnaire', 120000, null,
+      'Correction par le gestionnaire'
+    )$$,
+  'le gestionnaire peut corriger un événement ouvert via la RPC auditée'
 );
 select extensions.is((select revision from public.property_events where id = '84000000-0000-4000-8000-000000000502'), 3::bigint, 'la modification du gestionnaire incrémente la révision');
 
@@ -252,8 +266,8 @@ select set_config('request.jwt.claims', '{"sub":"84000000-0000-4000-8000-0000000
 update public.property_events
 set description = 'Modification interdite au lecteur'
 where id = '84000000-0000-4000-8000-000000000502';
-select extensions.is((select description from public.property_events where id = '84000000-0000-4000-8000-000000000502'), 'Acquisition modifiée par le gestionnaire', 'le lecteur ne peut pas modifier un événement');
-select extensions.is((select count(*) from public.property_event_changes), 1::bigint, 'le lecteur peut consulter le journal autorisé');
+select extensions.is((select description from public.property_events where id = '84000000-0000-4000-8000-000000000502'), 'Modification corrigée par le gestionnaire', 'le lecteur ne peut pas modifier un événement');
+select extensions.is((select count(*) from public.property_event_changes), 3::bigint, 'le lecteur peut consulter le journal autorisé');
 
 reset role;
 set local role authenticated;

@@ -143,15 +143,15 @@ select extensions.throws_ok(
 );
 select extensions.throws_ok(
   $$update public.property_events set amount = 211000 where id = '83000000-0000-4000-8000-000000000501'$$,
-  'P0001', 'Le prix de vente doit être corrigé par le parcours dédié.', 'le prix ne peut pas être modifié directement'
+  '42501', 'La correction d’un événement immobilier doit utiliser le parcours dédié.', 'le prix ne peut pas être modifié directement'
 );
 select extensions.throws_ok(
   $$update public.property_events set event_type = 'significant_change' where id = '83000000-0000-4000-8000-000000000501'$$,
-  'P0001', 'Le type d’un événement de vente ne peut pas être modifié.', 'la protection du type de vente reste active'
+  '42501', 'La correction d’un événement immobilier doit utiliser le parcours dédié.', 'la protection du type de vente reste active'
 );
 select extensions.throws_ok(
   $$update public.property_events set event_date = '2025-06-16' where id = '83000000-0000-4000-8000-000000000501'$$,
-  'P0001', 'La date d’un événement de vente ne peut pas être modifiée.', 'la protection de la date de vente reste active'
+  '42501', 'La correction d’un événement immobilier doit utiliser le parcours dédié.', 'la protection de la date de vente reste active'
 );
 select extensions.throws_ok(
   $$select public.correct_property_sale_price('83000000-0000-4000-8000-000000000101', '83000000-0000-4000-8000-000000000302', '83000000-0000-4000-8000-000000000502', 95000, 96000, 'Correction interdite')$$,

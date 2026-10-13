@@ -107,15 +107,15 @@ select extensions.is((select count(*) from public.property_events where property
 
 select extensions.throws_ok(
   $$update public.property_events set event_type = 'significant_change' where property_id = '82000000-0000-4000-8000-000000000301' and event_type = 'sale'$$,
-  'P0001', 'Le type d’un événement de vente ne peut pas être modifié.', 'une vente ne peut pas devenir un autre événement'
+  '42501', 'La correction d’un événement immobilier doit utiliser le parcours dédié.', 'une vente ne peut pas devenir un autre événement par écriture directe'
 );
 select extensions.throws_ok(
   $$update public.property_events set event_date = '2026-02-16' where property_id = '82000000-0000-4000-8000-000000000301' and event_type = 'sale'$$,
-  'P0001', 'La date d’un événement de vente ne peut pas être modifiée.', 'la date d’une vente ne peut pas être modifiée directement'
+  '42501', 'La correction d’un événement immobilier doit utiliser le parcours dédié.', 'la date d’une vente ne peut pas être modifiée directement'
 );
 select extensions.throws_ok(
   $$update public.property_events set amount = null where property_id = '82000000-0000-4000-8000-000000000301' and event_type = 'sale'$$,
-  '23514', 'Le prix de vente doit être renseigné.', 'une vente ne peut pas perdre son prix'
+  '42501', 'La correction d’un événement immobilier doit utiliser le parcours dédié.', 'une vente ne peut pas perdre son prix par écriture directe'
 );
 select extensions.throws_ok(
   $$update public.real_estate_properties set status = 'active', disposal_date = null where id = '82000000-0000-4000-8000-000000000301'$$,
@@ -181,11 +181,15 @@ select extensions.is((select count(*) from public.property_events where property
 select extensions.is((select status from public.real_estate_properties where id = '82000000-0000-4000-8000-000000000305'), 'active', 'un autre événement ne modifie pas le statut du bien');
 select extensions.throws_ok(
   $$update public.property_events set event_type = 'sale', amount = 15000 where property_id = '82000000-0000-4000-8000-000000000305'$$,
-  'P0001', 'Le type d’un événement de vente ne peut pas être modifié.', 'un autre événement ne peut pas être transformé en vente'
+  '42501', 'La correction d’un événement immobilier doit utiliser le parcours dédié.', 'un autre événement ne peut pas être transformé directement en vente'
 );
-update public.property_events
-set event_date = '2026-03-02', description = 'Travaux actualisés'
-where property_id = '82000000-0000-4000-8000-000000000305';
+select public.correct_property_event(
+  '82000000-0000-4000-8000-000000000101',
+  '82000000-0000-4000-8000-000000000305',
+  (select id from public.property_events where property_id = '82000000-0000-4000-8000-000000000305'),
+  1, 'significant_change', '2026-03-02', 'Travaux actualisés', 10000, null,
+  'Actualisation des travaux'
+);
 select extensions.is((select event_date from public.property_events where property_id = '82000000-0000-4000-8000-000000000305'), '2026-03-02'::date, 'les autres événements restent modifiables');
 
 select extensions.throws_ok(

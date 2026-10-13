@@ -137,6 +137,7 @@ export default async function Page({
         status={report.status}
         canManage={person.accessRole !== "read_only"}
         hasDocument={Boolean(document)}
+        refreshRequiredAt={report.refresh_required_at}
       />
       {["finalized", "transmitted", "approved", "difficulty"].includes(report.status) && (
         <ReportTransmission

@@ -7,6 +7,7 @@ import {
   debtBalanceSchema,
   debtSchema,
   editablePropertyEventTypes,
+  propertyEventCorrectionSchema,
   propertyEventSchema,
   propertyEventUpdateSchema,
   propertySalePriceCorrectionSchema,
@@ -157,42 +158,41 @@ test("l'édition accepte uniquement les quatre types d'événements hors vente",
   }).success, false);
 });
 
-test("le parcours d'édition vérifie droits, rattachements, vente et périodes clôturées", () => {
+test("le parcours de correction utilise la RPC auditée, la révision et un motif obligatoire", () => {
   const services = source("./services.ts");
   const actions = source("./actions.ts");
-  const updateAction = actions.slice(actions.indexOf("export async function updatePropertyEventAction"), actions.indexOf("export async function saveDebtAction"));
+  const correctionAction = actions.slice(actions.indexOf("export async function correctPropertyEventAction"), actions.indexOf("export async function correctPropertySalePriceAction"));
   const manager = source("./components/property-manager.tsx");
   const page = source("../../app/dossiers/[protectedPersonId]/patrimoine-immobilier/[propertyId]/page.tsx");
 
-  assert.match(services, /rpc\("can_manage_protected_person"/);
-  assert.match(services, /\.eq\("id",eventId\)\.eq\("property_id",propertyId\)\.eq\("protected_person_id",personId\)/);
-  assert.match(services, /existing\.event_type === "sale"/);
-  assert.match(services, /\.neq\("event_type","sale"\)/);
-  assert.match(services, /ensurePropertyEventDateIsOpen\(supabase, personId, existing\.event_date\)/);
-  assert.match(services, /ensurePropertyEventDateIsOpen\(supabase, personId, input\.eventDate\)/);
-  assert.doesNotMatch(services, /property_events"\)\.update\(\{[^}]*property_id/);
-  assert.doesNotMatch(services, /property_events"\)\.update\(\{[^}]*protected_person_id/);
-
-  assert.match(actions, /propertyEventUpdateSchema\.safeParse/);
+  assert.match(services, /rpc\("correct_property_event"/);
+  assert.match(services, /p_expected_revision:expectedRevision/);
+  assert.match(services, /PropertyEventCorrectionError\("stale_revision"\)/);
+  assert.match(actions, /propertyEventCorrectionSchema\.safeParse/);
   assert.match(actions, /revalidatePath\(`\/dossiers\/\$\{id\}\/patrimoine-immobilier\/\$\{propertyId\}`\)/);
-  assert.match(actions, /Les événements de vente ne sont pas modifiables/);
+  assert.match(actions, /revalidatePath\(`\/dossiers\/\$\{id\}\/comptes-de-gestion`\)/);
   assert.match(actions, /exercice clôturé\. Il ne peut plus être modifié ni annulé/);
-  assert.doesNotMatch(updateAction, /e\.message/);
+  assert.doesNotMatch(correctionAction, /message:e instanceof Error\?e\.message/);
 
-  assert.match(manager, /updatePropertyEventAction\.bind\(null,personId,item\.id,event\.id\)/);
+  assert.match(manager, /correctPropertyEventAction\.bind\(null,personId,item\.id,event\.id,event\.revision\)/);
   assert.match(manager, /value=\{event\?\.event_type\?\?"significant_change"\}/);
   assert.match(manager, /value=\{event\?\.event_date\}/);
   assert.match(manager, /value=\{event\?\.description\}/);
   assert.match(manager, /value=\{event\?\.amount\}/);
   assert.match(manager, /value=\{event\?\.document_reference\}/);
+  assert.match(manager, /Motif de la correction/);
   assert.match(manager, /errors=\{state\.fieldErrors\?\.eventDate\}/);
   assert.match(manager, /<FieldError messages=\{errors\}/);
-  assert.match(page, /person\.accessRole !== "read_only" && event\.event_type !== "sale"/);
+  assert.match(page, /person\.accessRole !== "read_only" && <PropertyEventEditButton/);
+  assert.match(page, /Corrections de l’événement/);
+  assert.match(page, /event\.changes/);
+
+  assert.equal(propertyEventCorrectionSchema.safeParse({eventType:"inheritance",eventDate:"2026-03-15",description:"Succession rectifiée",amount:"1200",documentReference:"ACTE-2",reason:"Acte reçu tardivement"}).success,true);
+  assert.equal(propertyEventCorrectionSchema.safeParse({eventType:"inheritance",eventDate:"2026-03-15",description:"Succession rectifiée",amount:"1200",documentReference:"ACTE-2",reason:"   "}).success,false);
 });
 
 test("les fondations PostgreSQL protègent clôtures, révision, annulation et audit", () => {
   const migration = source("../../../supabase/migrations/20261013100000_create_property_event_audit_foundations.sql");
-  const services = source("./services.ts");
 
   assert.match(migration, /add column revision bigint not null default 1/);
   assert.match(migration, /add column cancelled_at timestamptz/);
@@ -215,8 +215,27 @@ test("les fondations PostgreSQL protègent clôtures, révision, annulation et a
   assert.match(migration, /revoke update on public\.property_events from authenticated/);
   assert.match(migration, /grant update \([\s\S]*amount,[\s\S]*\) on public\.property_events to authenticated/);
   assert.doesNotMatch(migration, /set_config\('patrigest\..*event/);
-  assert.match(services, /PROPERTY_EVENT_CLOSED_PERIOD_MESSAGE/);
-  assert.match(services, /updateError\?\.message\.includes\("Cet événement appartient à un exercice clôturé\."\)/);
+});
+
+test("3B-2 synchronise les fiches, écrit l’audit atomique et bloque un projet obsolète", () => {
+  const migration = source("../../../supabase/migrations/20261013200000_correct_property_events.sql");
+  const reportActions = source("../management-reports/report-document-actions.tsx");
+  const documentRoute = source("../../app/api/dossiers/[protectedPersonId]/comptes-de-gestion/[reportId]/document/route.ts");
+
+  assert.match(migration, /create or replace function public\.correct_property_event/);
+  assert.match(migration, /security definer/);
+  assert.match(migration, /old_event\.revision <> p_expected_revision/);
+  assert.match(migration, /set entry_date = new_event\.event_date/);
+  assert.match(migration, /entry_mode = new_event\.event_type/);
+  assert.match(migration, /set disposal_date = new_event\.event_date/);
+  assert.match(migration, /insert into public\.property_event_changes/);
+  assert.match(migration, /auth\.uid\(\)/);
+  assert.match(migration, /set refresh_required_at = clock_timestamp\(\)/);
+  assert.match(migration, /doit être actualisé et son projet régénéré avant finalisation/);
+  assert.doesNotMatch(migration, /set_config\('patrigest\.property_event/);
+  assert.match(reportActions, /Compte de gestion à actualiser/);
+  assert.match(reportActions, /!refreshRequiredAt&&<button/);
+  assert.match(documentRoute, /if \(refreshRequiredAt\) return NextResponse\.json/);
 });
 
 test("la correction du prix exige un nouveau montant positif différent et un motif", () => {

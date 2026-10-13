@@ -17,7 +17,7 @@ async function livePreview(personId: string, reportId: string, targetStatus: "ge
   const snapshot = await getManagementReportSnapshot(personId, reportId);
   if (!snapshot) return null;
   const parsed = parseManagementReportSnapshot(toJsonValue({ ...buildManagementReportPreview(snapshot), report: { ...snapshot.report, status: targetStatus } }));
-  return parsed.success ? { preview: parsed.data, accessRole: snapshot.person.accessRole, currentStatus: snapshot.report.status } : null;
+  return parsed.success ? { preview: parsed.data, accessRole: snapshot.person.accessRole, currentStatus: snapshot.report.status, refreshRequiredAt: snapshot.report.refresh_required_at } : null;
 }
 
 export async function POST(_request: Request, { params }: Params) {
@@ -53,9 +53,10 @@ export async function PATCH(_request: Request, { params }: Params) {
   if (!ids) return NextResponse.json({ message: "Compte de gestion introuvable." }, { status: 404 });
   const finalized = await livePreview(ids.protectedPersonId, ids.reportId, "finalized");
   if (!finalized) return NextResponse.json({ message: "Compte de gestion introuvable." }, { status: 404 });
-  const { preview, accessRole, currentStatus } = finalized;
+  const { preview, accessRole, currentStatus, refreshRequiredAt } = finalized;
   if (accessRole === "read_only") return NextResponse.json({ message: "Vous ne pouvez pas finaliser ce compte de gestion." }, { status: 403 });
   if (currentStatus !== "generated") return NextResponse.json({ message: "Un projet doit être généré avant la finalisation." }, { status: 409 });
+  if (refreshRequiredAt) return NextResponse.json({ message: "Le compte de gestion doit être actualisé et son projet régénéré avant finalisation." }, { status: 409 });
   if (!preview.complete || !preview.checks.consistent) return NextResponse.json({ message: "Les contrôles du compte de gestion ne permettent plus sa finalisation." }, { status: 409 });
   const draft = await getManagementReportDocument(ids.protectedPersonId, ids.reportId, "management_report_draft");
   if (!draft) return NextResponse.json({ message: "Le PDF projet est introuvable." }, { status: 409 });
