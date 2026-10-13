@@ -209,9 +209,15 @@ export type Database = {
         Relationships: [];
       };
       property_events: {
-        Row: { id: string; property_id: string; protected_person_id: string; event_type: PropertyEventType; event_date: string; description: string; amount: number | null; document_reference: string | null; created_at: string };
-        Insert: { id?: string; property_id: string; protected_person_id: string; event_type: PropertyEventType; event_date: string; description: string; amount?: number | null; document_reference?: string | null; created_at?: string };
+        Row: { id: string; property_id: string; protected_person_id: string; event_type: PropertyEventType; event_date: string; description: string; amount: number | null; document_reference: string | null; created_at: string; revision: number; cancelled_at: string | null; cancelled_by: string | null; cancellation_reason: string | null };
+        Insert: { id?: string; property_id: string; protected_person_id: string; event_type: PropertyEventType; event_date: string; description: string; amount?: number | null; document_reference?: string | null; created_at?: string; revision?: number; cancelled_at?: string | null; cancelled_by?: string | null; cancellation_reason?: string | null };
         Update: Partial<Database["public"]["Tables"]["property_events"]["Insert"]>;
+        Relationships: [];
+      };
+      property_event_changes: {
+        Row: { id: string; property_event_id: string; property_id: string; protected_person_id: string; change_type: "correction" | "sale_date_correction" | "cancellation" | "restoration"; old_values: Json; new_values: Json; reason: string; changed_by: string; changed_by_name: string; changed_at: string };
+        Insert: never;
+        Update: never;
         Relationships: [];
       };
       property_sale_price_corrections: {
@@ -347,6 +353,7 @@ export type ProtectedPersonAccess = Database["public"]["Tables"]["protected_pers
 export type ProtectedPersonInvitation = Database["public"]["Tables"]["protected_person_invitations"]["Row"];
 export type RealEstateProperty = Database["public"]["Tables"]["real_estate_properties"]["Row"];
 export type PropertyEvent = Database["public"]["Tables"]["property_events"]["Row"];
+export type PropertyEventChange = Database["public"]["Tables"]["property_event_changes"]["Row"];
 export type PropertySalePriceCorrection = Database["public"]["Tables"]["property_sale_price_corrections"]["Row"];
 export type Debt = Database["public"]["Tables"]["debts"]["Row"];
 export type DebtBalance = Database["public"]["Tables"]["debt_balances"]["Row"];

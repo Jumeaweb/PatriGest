@@ -163,7 +163,9 @@ select set_config('patrigest.sale_price_correction_expected_price', '95000', tru
 select set_config('patrigest.sale_price_correction_reason', 'Tentative de contournement', true);
 select extensions.throws_ok(
   $$update public.property_events set amount = 96000 where id = '83000000-0000-4000-8000-000000000502'$$,
-  'P0001', 'Cette vente appartient à un exercice clôturé.', 'forger le contexte d’audit ne contourne pas la clôture'
+  'P0001',
+  'Cet événement appartient à un exercice clôturé. Il ne peut plus être modifié ni annulé. Si vous constatez une erreur, veuillez contacter l''assistance PatriGest.',
+  'forger le contexte d’audit ne contourne pas la clôture'
 );
 
 reset role;

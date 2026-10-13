@@ -105,6 +105,13 @@ test("une vente exige son prix et sa persistance est synchronisée par le trigge
     amount: "",
     documentReference: "",
   }).success, false);
+  assert.equal(propertyEventSchema.safeParse({
+    eventType: "sale",
+    eventDate: "2026-02-15",
+    description: "Transfert gratuit mal qualifié",
+    amount: "0",
+    documentReference: "",
+  }).success, false);
 
   const services = source("./services.ts");
   const start = services.indexOf("export async function addPropertyEvent");
@@ -169,7 +176,7 @@ test("le parcours d'édition vérifie droits, rattachements, vente et périodes 
   assert.match(actions, /propertyEventUpdateSchema\.safeParse/);
   assert.match(actions, /revalidatePath\(`\/dossiers\/\$\{id\}\/patrimoine-immobilier\/\$\{propertyId\}`\)/);
   assert.match(actions, /Les événements de vente ne sont pas modifiables/);
-  assert.match(actions, /exercice clôturé et ne peut plus être modifié/);
+  assert.match(actions, /exercice clôturé\. Il ne peut plus être modifié ni annulé/);
   assert.doesNotMatch(updateAction, /e\.message/);
 
   assert.match(manager, /updatePropertyEventAction\.bind\(null,personId,item\.id,event\.id\)/);
@@ -181,6 +188,35 @@ test("le parcours d'édition vérifie droits, rattachements, vente et périodes 
   assert.match(manager, /errors=\{state\.fieldErrors\?\.eventDate\}/);
   assert.match(manager, /<FieldError messages=\{errors\}/);
   assert.match(page, /person\.accessRole !== "read_only" && event\.event_type !== "sale"/);
+});
+
+test("les fondations PostgreSQL protègent clôtures, révision, annulation et audit", () => {
+  const migration = source("../../../supabase/migrations/20261013100000_create_property_event_audit_foundations.sql");
+  const services = source("./services.ts");
+
+  assert.match(migration, /add column revision bigint not null default 1/);
+  assert.match(migration, /add column cancelled_at timestamptz/);
+  assert.match(migration, /add column cancelled_by uuid/);
+  assert.match(migration, /add column cancellation_reason text/);
+  assert.match(migration, /create table public\.property_event_changes/);
+  assert.match(migration, /old_values jsonb not null/);
+  assert.match(migration, /new_values jsonb not null/);
+  assert.match(migration, /changed_by uuid not null/);
+  assert.match(migration, /actor_id uuid := auth\.uid\(\)/);
+  assert.match(migration, /new\.changed_by := actor_id/);
+  assert.match(migration, /new\.changed_by_name := coalesce\(actor_name/);
+  assert.match(migration, /property_event_changes_immutable/);
+  assert.match(migration, /revoke all on public\.property_event_changes from anon, authenticated/);
+  assert.match(migration, /property_events_protect_closed_period/);
+  assert.match(migration, /old\.event_date between period\.start_date and period\.end_date/);
+  assert.match(migration, /new\.event_date between period\.start_date and period\.end_date/);
+  assert.match(migration, /property_events_sale_price_positive/);
+  assert.match(migration, /new\.amount <= 0/);
+  assert.match(migration, /revoke update on public\.property_events from authenticated/);
+  assert.match(migration, /grant update \([\s\S]*amount,[\s\S]*\) on public\.property_events to authenticated/);
+  assert.doesNotMatch(migration, /set_config\('patrigest\..*event/);
+  assert.match(services, /PROPERTY_EVENT_CLOSED_PERIOD_MESSAGE/);
+  assert.match(services, /updateError\?\.message\.includes\("Cet événement appartient à un exercice clôturé\."\)/);
 });
 
 test("la correction du prix exige un nouveau montant positif différent et un motif", () => {
