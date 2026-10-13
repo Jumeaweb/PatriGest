@@ -19,11 +19,13 @@ export async function getDossierDashboardData(protectedPersonId: string) {
         .from("real_estate_properties")
         .select("id", { count: "exact", head: true })
         .eq("protected_person_id", protectedPersonId)
+        .is("archived_at", null)
         .eq("status", "active"),
       supabase
         .from("real_estate_properties")
         .select("id", { count: "exact", head: true })
         .eq("protected_person_id", protectedPersonId)
+        .is("archived_at", null)
         .eq("status", "disposed"),
       supabase
         .from("debts")

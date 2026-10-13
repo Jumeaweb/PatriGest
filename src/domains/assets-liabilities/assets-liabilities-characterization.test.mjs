@@ -270,6 +270,30 @@ test("3B-3 annule les événements via une RPC auditée et conserve leur histori
   assert.equal(propertyEventCancellationSchema.safeParse({ reason: "   " }).success, false);
 });
 
+test("3C-1 archive les biens indépendamment de leur statut et les exclut des lectures courantes", () => {
+  const migration = source("../../../supabase/migrations/20261014100000_archive_real_estate_properties.sql");
+  const services = source("./services.ts");
+  const dashboard = source("../dashboard/services/dossier-dashboard-service.ts");
+
+  assert.match(migration, /add column archive_revision bigint not null default 1/);
+  assert.match(migration, /add column archived_at timestamptz/);
+  assert.match(migration, /create table public\.property_archive_changes/);
+  assert.match(migration, /property_archive_changes_immutable/);
+  assert.match(migration, /create or replace function public\.archive_real_estate_property/);
+  assert.match(migration, /create or replace function public\.restore_real_estate_property/);
+  assert.match(migration, /property_row\.archive_revision <> p_expected_revision/);
+  assert.match(migration, /set refresh_required_at = clock_timestamp\(\)/);
+  assert.match(migration, /property_row\.status = 'disposed'/);
+  assert.match(migration, /event\.cancelled_at is null/);
+  assert.doesNotMatch(migration, /set status =/);
+
+  const currentList = services.slice(services.indexOf("export async function getProperties"), services.indexOf("export async function getProperty"));
+  const historicalDetail = services.slice(services.indexOf("export async function getProperty"), services.indexOf("export async function saveProperty"));
+  assert.match(currentList, /\.is\("archived_at",null\)/);
+  assert.doesNotMatch(historicalDetail, /\.is\("archived_at",null\)/);
+  assert.equal((dashboard.match(/\.is\("archived_at", null\)/g) ?? []).length, 2);
+});
+
 test("la correction du prix exige un nouveau montant positif différent et un motif", () => {
   assert.deepEqual(propertySalePriceCorrectionSchema.parse({
     expectedPrice: 205000,

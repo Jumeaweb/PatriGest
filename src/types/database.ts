@@ -203,8 +203,8 @@ export type Database = {
         Relationships: [];
       };
       real_estate_properties: {
-        Row: { id: string; protected_person_id: string; property_type: PropertyType; designation: string; address_line1: string | null; address_line2: string | null; postal_code: string | null; city: string | null; country: string; entry_date: string | null; entry_mode: PropertyEntryMode | null; estimated_value: number | null; valuation_date: string | null; status: PropertyStatus; disposal_date: string | null; notes: string | null; created_at: string; updated_at: string };
-        Insert: { id?: string; protected_person_id: string; property_type: PropertyType; designation: string; address_line1?: string | null; address_line2?: string | null; postal_code?: string | null; city?: string | null; country?: string; entry_date?: string | null; entry_mode?: PropertyEntryMode | null; estimated_value?: number | null; valuation_date?: string | null; status?: PropertyStatus; disposal_date?: string | null; notes?: string | null; created_at?: string; updated_at?: string };
+        Row: { id: string; protected_person_id: string; property_type: PropertyType; designation: string; address_line1: string | null; address_line2: string | null; postal_code: string | null; city: string | null; country: string; entry_date: string | null; entry_mode: PropertyEntryMode | null; estimated_value: number | null; valuation_date: string | null; status: PropertyStatus; disposal_date: string | null; notes: string | null; created_at: string; updated_at: string; archive_revision: number; archived_at: string | null; archived_by: string | null; archive_reason: string | null };
+        Insert: { id?: string; protected_person_id: string; property_type: PropertyType; designation: string; address_line1?: string | null; address_line2?: string | null; postal_code?: string | null; city?: string | null; country?: string; entry_date?: string | null; entry_mode?: PropertyEntryMode | null; estimated_value?: number | null; valuation_date?: string | null; status?: PropertyStatus; disposal_date?: string | null; notes?: string | null; created_at?: string; updated_at?: string; archive_revision?: number; archived_at?: string | null; archived_by?: string | null; archive_reason?: string | null };
         Update: Partial<Database["public"]["Tables"]["real_estate_properties"]["Insert"]>;
         Relationships: [];
       };
@@ -216,6 +216,12 @@ export type Database = {
       };
       property_event_changes: {
         Row: { id: string; property_event_id: string; property_id: string; protected_person_id: string; change_type: "correction" | "sale_date_correction" | "cancellation" | "restoration"; old_values: Json; new_values: Json; reason: string; changed_by: string; changed_by_name: string; changed_at: string };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      property_archive_changes: {
+        Row: { id: string; property_id: string; protected_person_id: string; operation: "archive" | "restore"; old_values: Json; new_values: Json; reason: string; changed_by: string; changed_by_name: string; changed_at: string };
         Insert: never;
         Update: never;
         Relationships: [];
@@ -317,6 +323,8 @@ export type Database = {
       correct_property_sale_price: { Args: { p_protected_person_id: string; p_property_id: string; p_event_id: string; p_expected_price: number; p_new_price: number; p_reason: string }; Returns: string };
       correct_property_event: { Args: { p_protected_person_id: string; p_property_id: string; p_event_id: string; p_expected_revision: number; p_event_type: PropertyEventType; p_event_date: string; p_description: string; p_amount: number | null; p_document_reference: string | null; p_reason: string }; Returns: number };
       cancel_property_event: { Args: { p_protected_person_id: string; p_property_id: string; p_event_id: string; p_expected_revision: number; p_reason: string }; Returns: number };
+      archive_real_estate_property: { Args: { p_protected_person_id: string; p_property_id: string; p_expected_revision: number; p_reason: string }; Returns: number };
+      restore_real_estate_property: { Args: { p_protected_person_id: string; p_property_id: string; p_expected_revision: number; p_reason: string }; Returns: number };
       accept_protected_person_invitation: { Args: { p_token_hash: string }; Returns: string };
       issue_protected_person_invitation: { Args: { p_protected_person_id: string; p_email: string; p_role: SharedAccessRole; p_token_hash: string; p_expires_at: string }; Returns: string };
       reissue_protected_person_invitation: { Args: { p_invitation_id: string; p_token_hash: string; p_expires_at: string }; Returns: string };
@@ -356,6 +364,7 @@ export type ProtectedPersonInvitation = Database["public"]["Tables"]["protected_
 export type RealEstateProperty = Database["public"]["Tables"]["real_estate_properties"]["Row"];
 export type PropertyEvent = Database["public"]["Tables"]["property_events"]["Row"];
 export type PropertyEventChange = Database["public"]["Tables"]["property_event_changes"]["Row"];
+export type PropertyArchiveChange = Database["public"]["Tables"]["property_archive_changes"]["Row"];
 export type PropertySalePriceCorrection = Database["public"]["Tables"]["property_sale_price_corrections"]["Row"];
 export type Debt = Database["public"]["Tables"]["debts"]["Row"];
 export type DebtBalance = Database["public"]["Tables"]["debt_balances"]["Row"];
