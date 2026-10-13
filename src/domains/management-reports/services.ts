@@ -302,6 +302,7 @@ export async function getManagementReportSnapshot(
     property.events
       .filter(
         (event) =>
+          event.cancelled_at === null &&
           event.event_date >= report.period_start &&
           event.event_date <= report.period_end,
       )

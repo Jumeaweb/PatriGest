@@ -7,6 +7,7 @@ import {
   debtBalanceSchema,
   debtSchema,
   editablePropertyEventTypes,
+  propertyEventCancellationSchema,
   propertyEventCorrectionSchema,
   propertyEventSchema,
   propertyEventUpdateSchema,
@@ -236,6 +237,37 @@ test("3B-2 synchronise les fiches, écrit l’audit atomique et bloque un projet
   assert.match(reportActions, /Compte de gestion à actualiser/);
   assert.match(reportActions, /!refreshRequiredAt&&<button/);
   assert.match(documentRoute, /if \(refreshRequiredAt\) return NextResponse\.json/);
+});
+
+test("3B-3 annule les événements via une RPC auditée et conserve leur historique", () => {
+  const migration = source("../../../supabase/migrations/20261013300000_cancel_property_events.sql");
+  const services = source("./services.ts");
+  const actions = source("./actions.ts");
+  const manager = source("./components/property-manager.tsx");
+  const page = source("../../app/dossiers/[protectedPersonId]/patrimoine-immobilier/[propertyId]/page.tsx");
+  const reports = source("../management-reports/services.ts");
+
+  assert.match(migration, /create or replace function public\.cancel_property_event/);
+  assert.match(migration, /security definer/);
+  assert.match(migration, /old_event\.revision <> p_expected_revision/);
+  assert.match(migration, /set cancelled_at = clock_timestamp\(\), cancelled_by = auth\.uid\(\)/);
+  assert.match(migration, /change_type,[\s\S]*'cancellation'/);
+  assert.match(migration, /set status = 'active', disposal_date = null/);
+  assert.match(migration, /event\.cancelled_at is null/);
+  assert.match(migration, /set refresh_required_at = clock_timestamp\(\)/);
+  assert.doesNotMatch(migration, /set_config\('patrigest\..*cancell/);
+
+  assert.match(services, /rpc\("cancel_property_event"/);
+  assert.match(services, /\.is\("cancelled_at",null\)/);
+  assert.match(actions, /propertyEventCancellationSchema\.safeParse/);
+  assert.match(manager, /Annuler l’événement/);
+  assert.match(manager, /L’événement restera visible dans l’historique/);
+  assert.match(page, />Annulée</);
+  assert.match(page, /event\.cancellation_reason/);
+  assert.match(page, /change\.change_type==="cancellation"/);
+  assert.match(reports, /event\.cancelled_at === null/);
+  assert.equal(propertyEventCancellationSchema.safeParse({ reason: "Saisie erronée confirmée" }).success, true);
+  assert.equal(propertyEventCancellationSchema.safeParse({ reason: "   " }).success, false);
 });
 
 test("la correction du prix exige un nouveau montant positif différent et un motif", () => {
