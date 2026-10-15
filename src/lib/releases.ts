@@ -10,6 +10,20 @@ export type AppRelease = {
 
 export const APP_RELEASES: readonly AppRelease[] = [
   {
+    version: "0.9.1",
+    date: "2026-10-15",
+    title: "Synthèse patrimoniale et gestion immobilière",
+    summary: `${APP_NAME} améliore le suivi du patrimoine avec une synthèse du patrimoine net estimé, des confirmations explicites d’absence et de nouvelles possibilités de correction et d’archivage des biens immobiliers.`,
+    changes: [
+      "Nouvelle synthèse du patrimoine net estimé à partir des comptes bancaires, des biens immobiliers actuels et des dettes actives",
+      "Confirmation explicite de l’absence de biens immobiliers ou de dettes actives",
+      "Signalement des informations manquantes afin de ne pas présenter un patrimoine incomplet comme nul",
+      "Navigation harmonisée entre patrimoine, comptes bancaires, immobilier et dettes, avec améliorations sur mobile",
+      "Correction et annulation auditées des événements immobiliers",
+      "Archivage et restauration des biens immobiliers avec conservation de l’historique",
+    ],
+  },
+  {
     version: "0.9.0",
     date: "2026-09-27",
     title: "Navigation et expérience utilisateur repensées",
