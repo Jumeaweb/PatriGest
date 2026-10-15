@@ -291,7 +291,7 @@ test("3C-1 archive les biens indépendamment de leur statut et les exclut des le
   const historicalDetail = services.slice(services.indexOf("export async function getProperty"), services.indexOf("export async function saveProperty"));
   assert.match(currentList, /\.is\("archived_at",null\)/);
   assert.doesNotMatch(historicalDetail, /\.is\("archived_at",null\)/);
-  assert.equal((dashboard.match(/\.is\("archived_at", null\)/g) ?? []).length, 2);
+  assert.equal((dashboard.match(/\.is\("archived_at", null\)/g) ?? []).length, 1);
 });
 
 test("la correction du prix exige un nouveau montant positif différent et un motif", () => {

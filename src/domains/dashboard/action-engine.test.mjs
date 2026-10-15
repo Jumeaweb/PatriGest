@@ -111,7 +111,7 @@ test("les deux dashboards consomment le moteur partagé et ses compteurs", () =>
 
 test("le tableau de bord du dossier place les modules avant les panneaux et affiche toutes les tâches", () => {
   const dossierPage = readFileSync(new URL("../../app/dossiers/[protectedPersonId]/tableau-de-bord/page.tsx", import.meta.url), "utf8");
-  const modules = dossierPage.indexOf('aria-label="Patrimoine immobilier et dettes"');
+  const modules = dossierPage.indexOf("<PatrimonySummarySection");
   const details = dossierPage.indexOf("<RecentTransactions");
 
   assert.ok(modules >= 0 && details > modules);
@@ -119,9 +119,9 @@ test("le tableau de bord du dossier place les modules avant les panneaux et affi
   assert.match(dossierPage, /actionable\.map\(\(task\)/);
   assert.match(dossierPage, /information\.map\(\(task\)/);
   assert.match(dossierPage, /À faire \(\{actionCount\}\)/);
-  assert.match(dossierPage, /href=\{`\/dossiers\/\$\{protectedPersonId\}\/patrimoine-immobilier`\}/);
-  assert.match(dossierPage, /href=\{`\/dossiers\/\$\{protectedPersonId\}\/dettes`\}/);
-  assert.match(dossierPage, /focus-ring flex items-center justify-between/);
+  assert.match(dossierPage, /href=\{`\/dossiers\/\$\{personId\}\/patrimoine-immobilier`\} linkLabel="Voir les biens"/);
+  assert.match(dossierPage, /href=\{`\/dossiers\/\$\{personId\}\/dettes`\} linkLabel="Voir les dettes"/);
+  assert.doesNotMatch(dossierPage, /CountCard|Patrimoine immobilier et dettes/);
   assert.match(dossierPage, /Voir le journal/);
   assert.match(dossierPage, /Voir les exercices/);
   assert.doesNotMatch(dossierPage, />Voir tout</);
