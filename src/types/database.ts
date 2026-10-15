@@ -29,6 +29,7 @@ export type PropertyStatus = "active" | "disposed";
 export type PropertyEventType = "acquisition" | "sale" | "inheritance" | "donation" | "significant_change";
 export type DebtType = "bank_loan" | "tax_debt" | "institution_debt" | "personal_debt" | "other";
 export type DebtStatus = "active" | "settled";
+export type PatrimonyAbsenceCategory = "real_estate" | "active_debt";
 export type BankReconciliationStatus = "draft" | "validated";
 export type ManagementReportStatus = "draft" | "ready" | "generated" | "finalized" | "transmitted" | "approved" | "difficulty";
 export type ManagementReportDocumentType = "management_report_draft" | "management_report" | "approval_certificate" | "difficulty_report";
@@ -232,6 +233,12 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      patrimony_absence_confirmations: {
+        Row: { protected_person_id: string; category: PatrimonyAbsenceCategory; confirmed_at: string; confirmed_by: string; confirmed_by_name: string };
+        Insert: { protected_person_id: string; category: PatrimonyAbsenceCategory };
+        Update: never;
+        Relationships: [];
+      };
       debts: {
         Row: { id: string; protected_person_id: string; creditor: string; debt_type: DebtType; designation: string; start_date: string | null; initial_amount: number | null; initial_duration_months: number | null; monthly_payment: number | null; interest_rate: number | null; current_balance: number | null; current_balance_date: string | null; remaining_duration_months: number | null; status: DebtStatus; settled_at: string | null; notes: string | null; created_at: string; updated_at: string };
         Insert: { id?: string; protected_person_id: string; creditor: string; debt_type: DebtType; designation: string; start_date?: string | null; initial_amount?: number | null; initial_duration_months?: number | null; monthly_payment?: number | null; interest_rate?: number | null; current_balance?: number | null; current_balance_date?: string | null; remaining_duration_months?: number | null; status?: DebtStatus; settled_at?: string | null; notes?: string | null; created_at?: string; updated_at?: string };
@@ -325,6 +332,7 @@ export type Database = {
       cancel_property_event: { Args: { p_protected_person_id: string; p_property_id: string; p_event_id: string; p_expected_revision: number; p_reason: string }; Returns: number };
       archive_real_estate_property: { Args: { p_protected_person_id: string; p_property_id: string; p_expected_revision: number; p_reason: string }; Returns: number };
       restore_real_estate_property: { Args: { p_protected_person_id: string; p_property_id: string; p_expected_revision: number; p_reason: string }; Returns: number };
+      set_patrimony_absence_confirmation: { Args: { p_protected_person_id: string; p_category: PatrimonyAbsenceCategory; p_confirmed: boolean }; Returns: boolean };
       accept_protected_person_invitation: { Args: { p_token_hash: string }; Returns: string };
       issue_protected_person_invitation: { Args: { p_protected_person_id: string; p_email: string; p_role: SharedAccessRole; p_token_hash: string; p_expires_at: string }; Returns: string };
       reissue_protected_person_invitation: { Args: { p_invitation_id: string; p_token_hash: string; p_expires_at: string }; Returns: string };
@@ -366,6 +374,7 @@ export type PropertyEvent = Database["public"]["Tables"]["property_events"]["Row
 export type PropertyEventChange = Database["public"]["Tables"]["property_event_changes"]["Row"];
 export type PropertyArchiveChange = Database["public"]["Tables"]["property_archive_changes"]["Row"];
 export type PropertySalePriceCorrection = Database["public"]["Tables"]["property_sale_price_corrections"]["Row"];
+export type PatrimonyAbsenceConfirmation = Database["public"]["Tables"]["patrimony_absence_confirmations"]["Row"];
 export type Debt = Database["public"]["Tables"]["debts"]["Row"];
 export type DebtBalance = Database["public"]["Tables"]["debt_balances"]["Row"];
 export type BankStatement = Database["public"]["Tables"]["bank_statements"]["Row"];

@@ -1,5 +1,6 @@
 import { getAuthenticatedUser } from "@/domains/protected-persons/services/authenticated-user";
-import type { DebtBalanceInput, DebtInput, PropertyArchiveChangeInput, PropertyEventCancellationInput, PropertyEventCorrectionInput, PropertyEventInput, PropertyInput, PropertySalePriceCorrectionInput } from "./schemas";
+import type { DebtBalanceInput, DebtInput, PatrimonyAbsenceConfirmationInput, PropertyArchiveChangeInput, PropertyEventCancellationInput, PropertyEventCorrectionInput, PropertyEventInput, PropertyInput, PropertySalePriceCorrectionInput } from "./schemas";
+import { buildPatrimonyAbsenceConfirmationState, type PatrimonyAbsenceConfirmationState } from "./patrimony-absence";
 
 export type PropertyEventCorrectionErrorCode = "forbidden" | "not_found" | "stale_revision" | "invalid" | "closed_period" | "incompatible_transition" | "ambiguous_entry" | "inconsistent" | "sale_price" | "technical";
 export class PropertyEventCorrectionError extends Error {
@@ -16,6 +17,10 @@ export class PropertyEventCancellationError extends Error {
 export type PropertyArchiveChangeErrorCode = "forbidden" | "not_found" | "stale_revision" | "invalid" | "already_archived" | "not_archived" | "inconsistent" | "technical";
 export class PropertyArchiveChangeError extends Error {
   constructor(readonly code: PropertyArchiveChangeErrorCode) { super(code); this.name = "PropertyArchiveChangeError"; }
+}
+export type PatrimonyAbsenceConfirmationErrorCode = "forbidden" | "invalid" | "technical";
+export class PatrimonyAbsenceConfirmationError extends Error {
+  constructor(readonly code: PatrimonyAbsenceConfirmationErrorCode) { super(code); this.name = "PatrimonyAbsenceConfirmationError"; }
 }
 const PROPERTY_EVENT_CLOSED_PERIOD_MESSAGE = "Cet événement appartient à un exercice clôturé. Il ne peut plus être modifié ni annulé. Si vous constatez une erreur, veuillez contacter l’assistance PatriGest.";
 export async function getProperties(personId:string){const{supabase}=await getAuthenticatedUser();const{data,error}=await supabase.from("real_estate_properties").select("*").eq("protected_person_id",personId).is("archived_at",null).order("status").order("designation");if(error)throw new Error("Impossible de charger le patrimoine immobilier.");const ids=data.map(v=>v.id);const result=ids.length?await supabase.from("property_events").select("*").in("property_id",ids).is("cancelled_at",null).order("event_date",{ascending:false}).order("created_at",{ascending:false}).order("id",{ascending:false}):{data:[],error:null};if(result.error)throw new Error("Impossible de charger l’historique immobilier.");return data.map(property=>({...property,events:result.data.filter(event=>event.property_id===property.id)}));}
@@ -104,6 +109,32 @@ export async function changePropertyArchiveState(personId:string,propertyId:stri
   if (error.message.includes("incohérent avec")) throw new PropertyArchiveChangeError("inconsistent");
   if (error.code === "23514") throw new PropertyArchiveChangeError("invalid");
   throw new PropertyArchiveChangeError("technical");
+}
+export async function getPatrimonyAbsenceConfirmations(personId: string): Promise<PatrimonyAbsenceConfirmationState> {
+  const { supabase } = await getAuthenticatedUser();
+  const { data, error } = await supabase
+    .from("patrimony_absence_confirmations")
+    .select("*")
+    .eq("protected_person_id", personId);
+  if (error) throw new Error("Impossible de charger les confirmations d’absence patrimoniale.");
+  return buildPatrimonyAbsenceConfirmationState(data);
+}
+export async function setPatrimonyAbsenceConfirmation(input: PatrimonyAbsenceConfirmationInput) {
+  let auth: Awaited<ReturnType<typeof getAuthenticatedUser>>;
+  try { auth = await getAuthenticatedUser(); }
+  catch (error) {
+    if (error instanceof Error && ["UNAUTHENTICATED", "APPLICATION_ACCESS_DENIED"].includes(error.message)) throw new PatrimonyAbsenceConfirmationError("forbidden");
+    throw new PatrimonyAbsenceConfirmationError("technical");
+  }
+  const { data, error } = await auth.supabase.rpc("set_patrimony_absence_confirmation", {
+    p_protected_person_id: input.personId,
+    p_category: input.category,
+    p_confirmed: input.confirmed,
+  });
+  if (!error) return data;
+  if (error.code === "42501") throw new PatrimonyAbsenceConfirmationError("forbidden");
+  if (error.code === "23514") throw new PatrimonyAbsenceConfirmationError("invalid");
+  throw new PatrimonyAbsenceConfirmationError("technical");
 }
 export async function getDebts(personId:string){const{supabase}=await getAuthenticatedUser();const{data,error}=await supabase.from("debts").select("*").eq("protected_person_id",personId).order("status").order("creditor");if(error)throw new Error("Impossible de charger les dettes.");const ids=data.map(v=>v.id);const result=ids.length?await supabase.from("debt_balances").select("*").in("debt_id",ids).order("balance_date",{ascending:false}):{data:[],error:null};if(result.error)throw new Error("Impossible de charger les situations de dette.");return data.map(debt=>({...debt,balances:result.data.filter(balance=>balance.debt_id===debt.id)}));}
 export async function saveDebt(personId:string,input:DebtInput,id?:string){const{supabase}=await getAuthenticatedUser();const payload={creditor:input.creditor,debt_type:input.debtType,designation:input.designation,start_date:input.startDate,initial_amount:input.initialAmount,initial_duration_months:input.initialDurationMonths,monthly_payment:input.monthlyPayment,interest_rate:input.interestRate,status:input.status,settled_at:input.settledAt,notes:input.notes};const query=id?supabase.from("debts").update(payload).eq("id",id).eq("protected_person_id",personId):supabase.from("debts").insert({...payload,protected_person_id:personId});const{error}=await query.select("id").single();if(error)throw new Error("Impossible d’enregistrer la dette.");}
