@@ -30,6 +30,7 @@ test("le header mobile privilégie la connexion sur la route existante", () => {
   assert.doesNotMatch(publicHeader, /mobile-hide" href="\/connexion"/);
   assert.match(publicHeader, /<span className="hidden sm:inline-flex"><Link className="button button-primary whitespace-nowrap" href="\/inscription">Créer un compte/);
   assert.doesNotMatch(publicHeader, /button button-primary hidden/);
+  assert.match(publicHeader, /lg:hidden" href="\/tarifs">Tarifs<\/Link>/);
 });
 
 test("l'inscription reste disponible plus bas sur la page publique", () => {
@@ -63,6 +64,7 @@ test("le pied de page public identifie Jumeaweb et expose les contacts validés"
   assert.match(publicFooter, /<nav className="flex flex-wrap items-center justify-center[^"]*lg:justify-between"/);
   assert.match(publicFooter, /href=\{`mailto:\$\{APP_CONTACT_EMAIL\}`\}>Contact<\/a>/);
   assert.match(publicFooter, /href=\{`mailto:\$\{APP_SUPPORT_EMAIL\}`\}>Assistance<\/a>/);
+  assert.match(publicFooter, /href="\/tarifs">Tarifs<\/Link>/);
   assert.doesNotMatch(publicFooter, /LRTeam83|jumeaweb@gmail\.com|jerome\.lucet@ik\.me/);
 });
 

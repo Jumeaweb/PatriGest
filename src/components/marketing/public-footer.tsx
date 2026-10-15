@@ -6,9 +6,10 @@ export function PublicFooter() {
     <footer className="border-t border-brand-accent/20 bg-white">
       <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8 lg:px-10">
         <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm font-semibold text-[#64748B] lg:justify-between" aria-label="Navigation de pied de page">
-          <a className="focus-ring rounded-md hover:text-brand-accent" href="#fonctionnalites">Fonctionnalités</a>
-          <a className="focus-ring rounded-md hover:text-brand-accent" href="#comment-ca-marche">Comment ça marche</a>
-          <a className="focus-ring rounded-md hover:text-brand-accent" href="#compte-de-gestion">Compte de gestion</a>
+          <Link className="focus-ring rounded-md hover:text-brand-accent" href="/#fonctionnalites">Fonctionnalités</Link>
+          <Link className="focus-ring rounded-md hover:text-brand-accent" href="/#comment-ca-marche">Comment ça marche</Link>
+          <Link className="focus-ring rounded-md hover:text-brand-accent" href="/#compte-de-gestion">Compte de gestion</Link>
+          <Link className="focus-ring rounded-md hover:text-brand-accent" href="/tarifs">Tarifs</Link>
           <a className="focus-ring rounded-md hover:text-brand-accent" href={`mailto:${APP_CONTACT_EMAIL}`}>Contact</a>
           <a className="focus-ring rounded-md hover:text-brand-accent" href={`mailto:${APP_SUPPORT_EMAIL}`}>Assistance</a>
           <Link className="focus-ring rounded-md hover:text-brand-accent" href="/connexion">Se connecter</Link>
