@@ -3,9 +3,10 @@ import { Mail, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import type { Metadata } from "next";
 import { PrivateShell } from "@/components/layout/private-shell";
 import { AppBreadcrumb } from "@/components/ui/app-breadcrumb";
-import { getAccountView } from "@/domains/account/account-navigation";
+import { getAccountView, isAccountProfileView } from "@/domains/account/account-navigation";
 import { AccountDeletionForm } from "@/domains/account/components/account-deletion-form";
-import { AccountNavigation } from "@/domains/account/components/account-navigation";
+import { AccountNavigation, AccountProfileNavigation } from "@/domains/account/components/account-navigation";
+import { AccountCancellationView, AccountDataView, AccountInvoicesView, AccountSubscriptionView } from "@/domains/account/components/account-service-views";
 import { EmailForm } from "@/domains/account/components/email-form";
 import { PasswordForm } from "@/domains/account/components/password-form";
 import { ProfileForm } from "@/domains/account/components/profile-form";
@@ -21,18 +22,20 @@ export default async function AccountPage({
 }) {
   const [account, query] = await Promise.all([getAccountData(), searchParams]);
   const current = getAccountView(query.vue);
+  const currentProfileView = isAccountProfileView(current) ? current : null;
 
   return (
     <PrivateShell current="account">
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-5xl">
         <AppBreadcrumb items={[{ label: "Tableau de bord", href: "/tableau-de-bord" }, { label: "Mon compte" }]} />
         <header>
           <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#2563EB]">Espace personnel</p>
           <h1 className="mt-1 font-bold tracking-tight">Mon compte</h1>
-          <p className="mt-1 text-sm text-[#64748B]">Gérez vos informations personnelles et la sécurité de votre compte.</p>
+          <p className="mt-1 text-sm text-[#64748B]">Gérez votre profil et consultez les futurs services liés à votre compte.</p>
         </header>
 
         <AccountNavigation current={current} />
+        {currentProfileView && <AccountProfileNavigation current={currentProfileView} />}
 
         <div className="mt-5">
           {current === "profile" && (
@@ -82,6 +85,11 @@ export default async function AccountPage({
               <AccountDeletionForm eligibility={account.deletionEligibility} />
             </section>
           )}
+
+          {current === "subscription" && <AccountSubscriptionView />}
+          {current === "invoices" && <AccountInvoicesView />}
+          {current === "cancellation" && <AccountCancellationView />}
+          {current === "data" && <AccountDataView />}
         </div>
       </div>
     </PrivateShell>
