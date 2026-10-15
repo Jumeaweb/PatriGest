@@ -8,6 +8,7 @@ function source(relativePath) {
 
 const navigation = source("./private-navigation.tsx");
 const dossierNavigation = source("../../domains/protected-persons/components/dossier-navigation.tsx");
+const dossierDetail = source("../../app/dossiers/[protectedPersonId]/page.tsx");
 const dossierList = source("../../app/dossiers/page.tsx");
 const compatibilityList = source("../../app/dossiers/gestion/page.tsx");
 const dashboard = source("../../app/tableau-de-bord/page.tsx");
@@ -23,6 +24,32 @@ const administrationCommunication = source("../../app/administration/communicati
 test("Dossiers est l'unique entrée du menu utilisateur", () => {
   assert.match(navigation, /label: "Dossiers", href: "\/dossiers"/);
   assert.doesNotMatch(navigation, /label: "Gérer les dossiers"|href: "\/dossiers\/gestion"/);
+});
+
+test("Patrimoine suit le tableau de bord dans les menus dossier et reflète la vue active", () => {
+  const desktopStart = navigation.indexOf("const dossierItems");
+  const desktopEnd = navigation.indexOf("] : [];", desktopStart);
+  const desktopItems = navigation.slice(desktopStart, desktopEnd);
+  const mobileStart = dossierNavigation.indexOf("const items = [");
+  const mobileEnd = dossierNavigation.indexOf("] as const;", mobileStart);
+  const mobileItems = dossierNavigation.slice(mobileStart, mobileEnd);
+
+  for (const items of [desktopItems, mobileItems]) {
+    const dashboard = items.indexOf('label: "Tableau de bord"');
+    const patrimony = items.indexOf('label: "Patrimoine"');
+    const financial = items.indexOf('label: "Gestion financière"');
+    const reports = items.indexOf('label: "Comptes de gestion"');
+    const overview = items.indexOf('label: "Informations du dossier"');
+    assert.ok(dashboard >= 0 && dashboard < patrimony && patrimony < financial && financial < reports && reports < overview);
+  }
+
+  assert.match(desktopItems, /href: `\/dossiers\/\$\{dossier\.id\}\?vue=patrimoine`/);
+  assert.match(mobileItems, /href: `\/dossiers\/\$\{protectedPersonId\}\?vue=patrimoine`/);
+  assert.match(desktopItems, /dossier\.current === "patrimony"/);
+  assert.match(dossierNavigation, /item\.key === "patrimony" \? current === "patrimony" \|\| current === "properties" \|\| current === "debts"/);
+  assert.match(dossierDetail, /const dossierSection = currentView === "assets" \? "patrimony" : "overview"/);
+  assert.match(dossierDetail, /current: dossierSection/);
+  assert.match(dossierDetail, /<DossierNavigation protectedPersonId=\{protectedPersonId\} current=\{dossierSection\} \/>/);
 });
 
 test("/dossiers affiche la liste même pour un seul dossier actif", () => {

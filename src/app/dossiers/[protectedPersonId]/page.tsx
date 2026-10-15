@@ -60,6 +60,7 @@ export default async function ProtectedPersonDetailPage({
       : requestedView === "suppression" && canDelete
         ? "deletion"
         : "person";
+  const dossierSection = currentView === "assets" ? "patrimony" : "overview";
 
   const activeMeasure = person.protectionMeasures.find((measure) => measure.active) ?? null;
   const openPeriod = person.managementPeriods.find((period) => period.status === "open") ?? null;
@@ -75,14 +76,14 @@ export default async function ProtectedPersonDetailPage({
   const activeAccounts = accounts.filter((account) => account.status === "active");
   const closedAccountCount = accounts.filter((account) => account.status === "closed").length;
 
-  return <PrivateShell current="dossiers" dossier={{ id: protectedPersonId, name: `${person.first_name} ${person.last_name}`, current: "overview", accessRole: person.accessRole }}>
+  return <PrivateShell current="dossiers" dossier={{ id: protectedPersonId, name: `${person.first_name} ${person.last_name}`, current: dossierSection, accessRole: person.accessRole }}>
     <AppBreadcrumb items={[{ label: "Dossiers", href: "/dossiers" }, { label: `${person.first_name} ${person.last_name}`, href: `/dossiers/${protectedPersonId}/tableau-de-bord` }, { label: "Informations du dossier" }]} />
     <header>
       <p className="text-sm font-bold uppercase tracking-[0.14em] text-[#2563EB]">Fiche dossier</p>
       <h1 className="mt-1 text-3xl font-bold tracking-tight">{person.first_name} {person.last_name}</h1>
       <p className="mt-1 text-sm text-[#64748B]">Dossier {person.status === "active" ? "actif" : "archivé"}</p>
     </header>
-    <DossierNavigation protectedPersonId={protectedPersonId} current="overview" />
+    <DossierNavigation protectedPersonId={protectedPersonId} current={dossierSection} />
     <DossierInformationNavigation protectedPersonId={protectedPersonId} current={currentView} canDelete={canDelete} />
     {currentView === "assets" && <PatrimonyNavigation protectedPersonId={protectedPersonId} current="patrimony" />}
 
@@ -121,9 +122,9 @@ export default async function ProtectedPersonDetailPage({
     </div>}
 
     {currentView === "assets" && <div className="mt-6 grid items-start gap-3 lg:grid-cols-2">
-      <InfoCard icon={WalletCards} title="Patrimoine actuel">
+      <InfoCard icon={WalletCards} title="Avoirs bancaires">
         <p className="text-2xl font-bold">{accounts.length ? formatCurrency(currentPatrimony) : "Non renseigné"}</p>
-        <p className="mt-1 text-xs text-[#64748B]">Valeur actuelle calculée à partir des comptes actifs.</p>
+        <p className="mt-1 text-xs text-[#64748B]">Solde total des comptes bancaires actifs.</p>
       </InfoCard>
       <InfoCard icon={WalletCards} title="Comptes">
         <p className="text-sm font-semibold">{activeAccounts.length} actif{activeAccounts.length > 1 ? "s" : ""} · {closedAccountCount} clôturé{closedAccountCount > 1 ? "s" : ""}</p>

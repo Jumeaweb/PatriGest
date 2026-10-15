@@ -35,9 +35,11 @@ test("Personne protégée conserve les trois cartes et les modifications autoris
 });
 
 test("Situation patrimoniale synthétise les comptes sans requête par compte", () => {
-  for (const title of ["Patrimoine actuel", "Comptes", "Patrimoine immobilier", "Dettes et emprunts"]) {
+  for (const title of ["Avoirs bancaires", "Comptes", "Patrimoine immobilier", "Dettes et emprunts"]) {
     assert.match(page, new RegExp(`title="${title}"`));
   }
+  assert.match(page, /Solde total des comptes bancaires actifs\./);
+  assert.doesNotMatch(page, /title="(?:Patrimoine actuel|Patrimoine bancaire)"/);
   assert.match(page, /activeAccounts\.length[\s\S]*closedAccountCount/);
   assert.match(page, /activeAccounts\.map\(\(account\)/);
   assert.match(page, /getCurrentAccountValue\(account, account\.valuations, account\.transactions\)/);

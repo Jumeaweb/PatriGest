@@ -10,6 +10,13 @@ const quickActions = source("../transactions/transaction-quick-actions.ts");
 const filters = source("../transactions/components/transaction-filters.tsx");
 const accountList = source("../../app/dossiers/[protectedPersonId]/comptes/page.tsx");
 
+test("la synthèse des comptes présente les avoirs bancaires actifs avec le libellé partagé", () => {
+  assert.match(accountList, />Avoirs bancaires<\/p>/);
+  assert.match(accountList, /Solde total des comptes bancaires actifs\./);
+  assert.match(accountList, /const total = getCurrentPatrimonyValue\(accounts\)/);
+  assert.doesNotMatch(accountList, /Patrimoine total actif/);
+});
+
 test("le journal ne duplique plus les destinations portées par les onglets", () => {
   assert.doesNotMatch(operations, />\s*Relevés\s*<\/Link>/);
   assert.doesNotMatch(operations, />\s*Informations du compte\s*<\/Link>/);
