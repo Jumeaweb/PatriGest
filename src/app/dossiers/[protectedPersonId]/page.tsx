@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Building2, CalendarDays, FileText, Landmark, MapPin, Scale, Trash2, UserRound, WalletCards } from "lucide-react";
 import { PrivateShell } from "@/components/layout/private-shell";
 import { AppBreadcrumb } from "@/components/ui/app-breadcrumb";
+import { PatrimonyNavigation } from "@/domains/assets-liabilities/components/patrimony-navigation";
 import { getDebts, getProperties } from "@/domains/assets-liabilities/services";
 import { getFinancialAccounts } from "@/domains/financial-accounts/services/financial-account-service";
 import { formatCurrency, getCurrentAccountValue, getCurrentPatrimonyValue } from "@/domains/financial-accounts/utils/financial-account-utils";
@@ -83,6 +84,7 @@ export default async function ProtectedPersonDetailPage({
     </header>
     <DossierNavigation protectedPersonId={protectedPersonId} current="overview" />
     <DossierInformationNavigation protectedPersonId={protectedPersonId} current={currentView} canDelete={canDelete} />
+    {currentView === "assets" && <PatrimonyNavigation protectedPersonId={protectedPersonId} current="patrimony" />}
 
     {currentView === "person" && <div className="mt-6 grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-3">
       <InfoCard icon={UserRound} title="Identité" action={canManage ? <EditProtectedPersonButton person={person} /> : undefined}>
