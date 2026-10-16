@@ -7,17 +7,20 @@ import { Pencil } from "lucide-react";
 import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
 import { updateCollaboratorRoleAction } from "@/domains/access/actions";
 import { initialAccessState, isCompletedAccessAction } from "@/domains/access/state";
+import type { SharedAccessRole } from "@/types/database";
 
 export function CollaboratorRoleButton({
   protectedPersonId,
   accessId,
   collaboratorName,
   role: persistedRole,
+  roleAvailability,
 }: {
   protectedPersonId: string;
   accessId: string;
   collaboratorName: string;
-  role: "manager" | "read_only";
+  role: SharedAccessRole;
+  roleAvailability: Record<SharedAccessRole, boolean>;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -53,11 +56,19 @@ export function CollaboratorRoleButton({
             id={`collaborator-role-${accessId}`}
             name="role"
             value={role}
-            onChange={(event) => setRole(event.target.value as "manager" | "read_only")}
+            onChange={(event) => setRole(event.target.value as SharedAccessRole)}
+            aria-describedby="collaborator-role-capacity"
           >
-            <option value="manager">Gestionnaire</option>
-            <option value="read_only">Lecture seule</option>
+            <option value="manager" disabled={persistedRole !== "manager" && !roleAvailability.manager}>
+              Gestionnaire{persistedRole !== "manager" && !roleAvailability.manager ? " (limite atteinte)" : ""}
+            </option>
+            <option value="read_only" disabled={persistedRole !== "read_only" && !roleAvailability.read_only}>
+              Lecture seule{persistedRole !== "read_only" && !roleAvailability.read_only ? " (limite atteinte)" : ""}
+            </option>
           </select>
+          <p id="collaborator-role-capacity" className="mt-1 text-xs text-[#64748B]">
+            Un rôle dont la limite est atteinte ne peut pas recevoir de collaborateur supplémentaire.
+          </p>
           {state.status === "error" && <ActionMessage status="error" message={state.message} />}
         </div>}
       </AppConfirmDialog>

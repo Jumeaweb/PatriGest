@@ -6,9 +6,11 @@ import { CollaboratorRemoveButton } from "@/domains/access/components/collaborat
 import { CollaboratorRoleButton } from "@/domains/access/components/collaborator-role-button";
 import { InvitationActions } from "@/domains/access/components/invitation-actions";
 import { InvitationHistoryPagination } from "@/domains/access/components/invitation-history-pagination";
+import { ShareCapacitySummary } from "@/domains/access/components/share-capacity-summary";
 import { parseInvitationHistoryPage, type AccessPageQuery } from "@/domains/access/access-pagination";
 import { dossierInvitationStatusLabels, type DossierInvitationStatus } from "@/domains/access/invitation-status";
-import { getDossierAccess } from "@/domains/access/services";
+import { getDossierAccess, getProtectedPersonShareCapacity } from "@/domains/access/services";
+import type { SharedAccessRole } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 
@@ -28,12 +30,21 @@ export default async function DossierAccessPage({
   const data = await getDossierAccess(protectedPersonId, requestedHistoryPage);
   const name = `${data.person.first_name} ${data.person.last_name}`;
   const owner = data.person.accessRole === "owner";
+  const shareCapacity = owner ? await getProtectedPersonShareCapacity(protectedPersonId) : null;
+  const roleAvailability = shareCapacity ? {
+    manager: shareCapacity.manager.remainingCount > 0,
+    read_only: shareCapacity.read_only.remainingCount > 0,
+  } satisfies Record<SharedAccessRole, boolean> : undefined;
+  const availableRoles = roleAvailability
+    ? (["read_only", "manager"] as const).filter((role) => roleAvailability[role])
+    : undefined;
   const pathname = `/dossiers/${protectedPersonId}/acces`;
 
   return <PrivateShell current="dossiers" dossier={{ id: protectedPersonId, name, current: "access", accessRole: data.person.accessRole }}>
     <AppBreadcrumb items={[{ label: "Dossiers", href: "/dossiers" }, { label: name, href: `/dossiers/${protectedPersonId}/comptes` }, { label: "Partage du dossier" }]} />
     <h1>Partage du dossier</h1>
     <AccessTabs pathname={pathname} values={query} current={view} />
+    {shareCapacity && <ShareCapacitySummary capacity={shareCapacity} />}
 
     {view === "invite" ? <>
       <section className="mt-5 rounded-xl border border-[#E2E8F0] bg-white p-4">
@@ -44,14 +55,14 @@ export default async function DossierAccessPage({
 
       <section className="mt-4 rounded-xl border border-[#E2E8F0] bg-white p-4">
         <h2 className="font-bold">Inviter un collaborateur</h2>
-        <CollaboratorInviteForm protectedPersonId={protectedPersonId} isOwner={owner} />
+        <CollaboratorInviteForm protectedPersonId={protectedPersonId} isOwner={owner} availableRoles={availableRoles} />
       </section>
 
       <section className="mt-4 rounded-xl border border-[#E2E8F0] bg-white p-4">
         <h2 className="font-bold">Invitations en attente</h2>
         <div className="mt-3 space-y-3">
           {data.pendingInvitations.length === 0 && <p className="text-sm text-[#64748B]">Aucune invitation en attente.</p>}
-          {data.pendingInvitations.map((invitation) => <InvitationRow key={invitation.id} protectedPersonId={protectedPersonId} invitation={invitation} />)}
+          {data.pendingInvitations.map((invitation) => <InvitationRow key={invitation.id} protectedPersonId={protectedPersonId} invitation={invitation} canCreateForRole={roleAvailability?.[invitation.role]} />)}
         </div>
       </section>
 
@@ -61,7 +72,7 @@ export default async function DossierAccessPage({
         <InvitationHistoryPagination pathname={pathname} values={query} page={data.history.page} totalPages={data.history.totalPages} />
         <div className="mt-3 space-y-3">
           {data.invitationHistory.length === 0 && <p className="text-sm text-[#64748B]">Aucune invitation dans l’historique.</p>}
-          {data.invitationHistory.map((invitation) => <InvitationRow key={invitation.id} protectedPersonId={protectedPersonId} invitation={invitation} />)}
+          {data.invitationHistory.map((invitation) => <InvitationRow key={invitation.id} protectedPersonId={protectedPersonId} invitation={invitation} canCreateForRole={roleAvailability?.[invitation.role]} />)}
         </div>
         <InvitationHistoryPagination pathname={pathname} values={query} page={data.history.page} totalPages={data.history.totalPages} />
       </section>
@@ -80,7 +91,7 @@ export default async function DossierAccessPage({
               </span>
             </div>
             {owner && <div className="flex flex-wrap gap-2">
-              <CollaboratorRoleButton protectedPersonId={protectedPersonId} accessId={entry.id} collaboratorName={collaboratorName} role={entry.role} />
+              <CollaboratorRoleButton protectedPersonId={protectedPersonId} accessId={entry.id} collaboratorName={collaboratorName} role={entry.role} roleAvailability={roleAvailability!} />
               <CollaboratorRemoveButton protectedPersonId={protectedPersonId} accessId={entry.id} collaboratorName={collaboratorName} />
             </div>}
           </article>;
@@ -100,7 +111,7 @@ type InvitationRowData = {
   canManage: boolean;
 };
 
-function InvitationRow({ protectedPersonId, invitation }: { protectedPersonId: string; invitation: InvitationRowData }) {
+function InvitationRow({ protectedPersonId, invitation, canCreateForRole }: { protectedPersonId: string; invitation: InvitationRowData; canCreateForRole?: boolean }) {
   const statusClass = invitation.status === "pending" ? "bg-blue-50 text-blue-700" : invitation.status === "expired" ? "bg-amber-50 text-amber-800" : invitation.status === "accepted" ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-600";
   return <article className="grid gap-3 border-t border-[#E2E8F0] pt-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
     <div className="min-w-0">
@@ -110,6 +121,6 @@ function InvitationRow({ protectedPersonId, invitation }: { protectedPersonId: s
       </div>
       <p className="mt-1 text-xs text-[#64748B]">{invitation.role === "manager" ? "Gestionnaire" : "Lecture seule"} · Créée le {dateTime(invitation.created_at)} · Expire le {dateTime(invitation.expires_at)}</p>
     </div>
-    <InvitationActions protectedPersonId={protectedPersonId} invitationId={invitation.id} email={invitation.email} status={invitation.status} canManage={invitation.canManage} />
+    <InvitationActions protectedPersonId={protectedPersonId} invitationId={invitation.id} email={invitation.email} status={invitation.status} canManage={invitation.canManage} canCreateForRole={canCreateForRole} />
   </article>;
 }

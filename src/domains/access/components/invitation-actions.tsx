@@ -18,12 +18,14 @@ export function InvitationActions({
   email,
   status,
   canManage,
+  canCreateForRole,
 }: {
   protectedPersonId: string;
   invitationId: string;
   email: string;
   status: DossierInvitationStatus;
   canManage: boolean;
+  canCreateForRole?: boolean;
 }) {
   const router = useRouter();
   const [dialog, setDialog] = useState<"reissue" | "revoke" | null>(null);
@@ -36,6 +38,7 @@ export function InvitationActions({
     initialAccessState,
   );
   const canReissue = canManage && (status === "pending" || status === "expired");
+  const reissueBlockedByQuota = status === "expired" && canCreateForRole === false;
   const canRevoke = canManage && status === "pending";
   const reissueFinished = isCompletedAccessAction(reissueState, true);
   const revokeFinished = isCompletedAccessAction(revokeState);
@@ -46,7 +49,7 @@ export function InvitationActions({
   }
 
   return <div className="flex flex-wrap items-center justify-end gap-2">
-    {canReissue && <button type="button" className="button button-secondary min-h-8 gap-1.5 px-3 text-xs" onClick={() => setDialog("reissue")}><RefreshCw aria-hidden="true" size={14} />Renvoyer</button>}
+    {canReissue && <><button type="button" className="button button-secondary min-h-8 gap-1.5 px-3 text-xs disabled:cursor-not-allowed disabled:opacity-50" disabled={reissueBlockedByQuota} aria-describedby={reissueBlockedByQuota ? `reissue-quota-${invitationId}` : undefined} onClick={() => setDialog("reissue")}><RefreshCw aria-hidden="true" size={14} />Renvoyer</button>{reissueBlockedByQuota && <span id={`reissue-quota-${invitationId}`} className="sr-only">Impossible de créer une nouvelle invitation pour ce rôle : la limite est atteinte.</span>}</>}
     {canRevoke && <button type="button" className="button button-secondary min-h-8 gap-1.5 px-3 text-xs text-red-700" onClick={() => setDialog("revoke")}><Ban aria-hidden="true" size={14} />Annuler</button>}
     <form action={reissueAction}>
       <AppConfirmDialog open={dialog === "reissue"} onClose={closeDialog} title="Renvoyer cette invitation ?" description={reissueFinished ? "L’opération est terminée." : "L’ancien lien sera immédiatement invalidé et un nouveau lien valable 7 jours sera envoyé."} subject={email} cancelLabel={reissueFinished ? "Fermer" : "Annuler"} actions={reissueFinished ? null : <PendingButton label="Renvoyer" pendingLabel="Envoi…" />}>

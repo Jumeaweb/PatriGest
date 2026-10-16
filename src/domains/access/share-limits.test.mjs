@@ -144,3 +144,69 @@ test("les types déclarent les trois nouvelles RPC et les colonnes de refus", as
   assert.match(database, /declined_at: string \| null/);
   assert.match(database, /declined_by: string \| null/);
 });
+
+test("la page ne charge et n’affiche les compteurs que pour le propriétaire", async () => {
+  const page = await source("app/dossiers/[protectedPersonId]/acces/page.tsx");
+  assert.match(page, /const owner = data\.person\.accessRole === "owner"/);
+  assert.match(page, /const shareCapacity = owner \? await getProtectedPersonShareCapacity\(protectedPersonId\) : null/);
+  assert.match(page, /\{shareCapacity && <ShareCapacitySummary capacity=\{shareCapacity\} \/>\}/);
+  assert.doesNotMatch(page, /<CollaboratorInviteForm[^>]+shareCapacity=/);
+  assert.doesNotMatch(page, /<InvitationActions[^>]+shareCapacity=/);
+});
+
+test("la synthèse présente les deux quotas dynamiques, les invitations et les dépassements", async () => {
+  const summary = await source("domains/access/components/share-capacity-summary.tsx");
+  assert.match(summary, /Capacité de partage/);
+  assert.match(summary, /Gestionnaires partagés/);
+  assert.match(summary, /Collaborateurs en lecture seule/);
+  assert.match(summary, /\{counter\.usedCount\} \/ \{counter\.limit\}/);
+  assert.match(summary, /counter\.pendingInvitationCount/);
+  assert.match(summary, /counter\.remainingCount/);
+  assert.match(summary, /counter\.exceededBy/);
+  assert.match(summary, /Limite dépassée de/);
+  assert.match(summary, /sm:grid-cols-2/);
+  assert.doesNotMatch(summary, />\s*5\s*<|\/\s*5\b/);
+});
+
+test("le formulaire bloque seulement les nouveaux rôles saturés connus du propriétaire", async () => {
+  const form = await source("domains/access/components/collaborator-invite-form.tsx");
+  assert.match(form, /const canInvite = !isOwner \|\| Boolean\(availableRoles\?\.length\)/);
+  assert.match(form, /disabled=\{!availableRoles\?\.includes\("read_only"\)\}/);
+  assert.match(form, /disabled=\{!availableRoles\?\.includes\("manager"\)\}/);
+  assert.match(form, /<InviteSubmitButton disabled=\{!canInvite\}/);
+  assert.match(form, /<input type="hidden" name="role" value="read_only"/);
+  assert.match(form, /aria-describedby/);
+  assert.doesNotMatch(form, /(?:manager|read_only)(?:Limit|_limit)?\s*[=:]\s*5\b/);
+});
+
+test("les réductions restent possibles quand un quota est atteint ou dépassé", async () => {
+  const [invitationActions, roleButton, removeButton] = await Promise.all([
+    source("domains/access/components/invitation-actions.tsx"),
+    source("domains/access/components/collaborator-role-button.tsx"),
+    source("domains/access/components/collaborator-remove-button.tsx"),
+  ]);
+  assert.match(invitationActions, /status === "expired" && canCreateForRole === false/);
+  assert.match(invitationActions, /const canRevoke = canManage && status === "pending"/);
+  assert.doesNotMatch(invitationActions, /status === "pending" && canCreateForRole === false/);
+  assert.match(roleButton, /persistedRole !== "manager" && !roleAvailability\.manager/);
+  assert.match(roleButton, /persistedRole !== "read_only" && !roleAvailability\.read_only/);
+  assert.doesNotMatch(roleButton, /shareCapacity|remainingCount/);
+  assert.doesNotMatch(removeButton, /canCreateForRole|shareCapacity|remainingCount/);
+});
+
+test("les compteurs sont rafraîchis après chaque mutation de partage", async () => {
+  const [actions, roleButton, removeButton, invitationActions] = await Promise.all([
+    source("domains/access/actions.ts"),
+    source("domains/access/components/collaborator-role-button.tsx"),
+    source("domains/access/components/collaborator-remove-button.tsx"),
+    source("domains/access/components/invitation-actions.tsx"),
+  ]);
+  const inviteBody = actions.slice(
+    actions.indexOf("export async function inviteCollaboratorAction"),
+    actions.indexOf("export async function reissueDossierInvitationAction"),
+  );
+  assert.match(inviteBody, /revalidatePath\(`\/dossiers\/\$\{actor\.protectedPersonId\}\/acces`\)/);
+  assert.match(roleButton, /if \(succeeded\) router\.refresh\(\)/);
+  assert.match(removeButton, /if \(succeeded\) router\.refresh\(\)/);
+  assert.match(invitationActions, /if \(refresh\) router\.refresh\(\)/);
+});
