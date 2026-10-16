@@ -2,11 +2,17 @@ import "server-only";
 import { createHash } from "node:crypto";
 import type { User } from "@supabase/supabase-js";
 import { notFound } from "next/navigation";
+import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getProtectedPerson } from "@/domains/protected-persons/services/protected-person-service";
 import { getDossierInvitationStatus } from "./invitation-status";
 import { canRecoverDossierInvitations } from "./invitation-recovery-policy";
+import {
+  getSafeShareErrorMessage,
+  parseProtectedPersonShareCapacity,
+  type ProtectedPersonShareCapacity,
+} from "./share-limits";
 import {
   getInvitationHistoryPageMetadata,
   INVITATION_HISTORY_PAGE_SIZE,
@@ -52,10 +58,11 @@ async function getAllPendingInvitations(
   for (let page = 0; ; page += 1) {
     const from = page * DATABASE_PAGE_SIZE;
     const { data, error } = await supabase.from("protected_person_invitations")
-      .select("id,email,role,expires_at,accepted_at,revoked_at,invited_by,created_at")
+      .select("id,email,role,expires_at,accepted_at,revoked_at,declined_at,declined_by,invited_by,created_at")
       .eq("protected_person_id", protectedPersonId)
       .is("accepted_at", null)
       .is("revoked_at", null)
+      .is("declined_at", null)
       .gt("expires_at", now)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
@@ -123,6 +130,7 @@ export async function getRecoverableDossierInvitations(userId: string): Promise<
     .eq("email", identity.email)
     .is("accepted_at", null)
     .is("revoked_at", null)
+    .is("declined_at", null)
     .gt("expires_at", new Date().toISOString())
     .order("created_at", { ascending: true });
   if (error) throw new Error("Impossible de vérifier les invitations en attente.");
@@ -162,7 +170,7 @@ export async function getInvitationPreview(token: string) {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("protected_person_invitations")
-    .select("id,email,role,protected_person_id,invited_by,expires_at,accepted_at,revoked_at")
+    .select("id,email,role,protected_person_id,invited_by,expires_at,accepted_at,revoked_at,declined_at,declined_by")
     .eq("token_hash", createHash("sha256").update(token).digest("hex"))
     .maybeSingle();
   if (error) {
@@ -204,7 +212,7 @@ export async function getDossierAccess(protectedPersonId: string, requestedHisto
     supabase.from("protected_person_invitations")
       .select("id", { count: "exact", head: true })
       .eq("protected_person_id", protectedPersonId)
-      .or(`accepted_at.not.is.null,revoked_at.not.is.null,expires_at.lte.${now}`),
+      .or(`accepted_at.not.is.null,revoked_at.not.is.null,declined_at.not.is.null,expires_at.lte.${now}`),
   ]);
   if (accessResult.error || historyCountResult.error) throw new Error("Impossible de charger les accès du dossier.");
 
@@ -214,9 +222,9 @@ export async function getDossierAccess(protectedPersonId: string, requestedHisto
   const identityIds = [...new Set([person.owner_id, ...access.map((entry) => entry.user_id)])];
   const [historyInvitationResult, authUsersById, profilesById] = await Promise.all([
     supabase.from("protected_person_invitations")
-      .select("id,email,role,expires_at,accepted_at,revoked_at,invited_by,created_at")
+      .select("id,email,role,expires_at,accepted_at,revoked_at,declined_at,declined_by,invited_by,created_at")
       .eq("protected_person_id", protectedPersonId)
-      .or(`accepted_at.not.is.null,revoked_at.not.is.null,expires_at.lte.${now}`)
+      .or(`accepted_at.not.is.null,revoked_at.not.is.null,declined_at.not.is.null,expires_at.lte.${now}`)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .range(from, from + INVITATION_HISTORY_PAGE_SIZE - 1),
@@ -246,4 +254,30 @@ export async function getDossierAccess(protectedPersonId: string, requestedHisto
     invitationHistory: historyInvitationResult.data.map(invitation),
     history,
   };
+}
+
+export async function getProtectedPersonShareCapacity(
+  protectedPersonId: string,
+): Promise<ProtectedPersonShareCapacity> {
+  const parsedPersonId = z.uuid().safeParse(protectedPersonId);
+  if (!parsedPersonId.success) throw new Error("Dossier invalide.");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_protected_person_share_capacity", {
+    p_protected_person_id: parsedPersonId.data,
+  });
+  if (error) {
+    throw new Error(getSafeShareErrorMessage(error, "Impossible de charger les limites de partage du dossier."));
+  }
+
+  const parsedCapacity = z.unknown().transform((value, context) => {
+    try {
+      return parseProtectedPersonShareCapacity(value);
+    } catch {
+      context.addIssue({ code: "custom", message: "Compteurs de partage invalides." });
+      return z.NEVER;
+    }
+  }).safeParse(data);
+  if (!parsedCapacity.success) throw new Error("Impossible de charger les limites de partage du dossier.");
+  return parsedCapacity.data;
 }

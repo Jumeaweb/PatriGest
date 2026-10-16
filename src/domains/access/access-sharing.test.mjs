@@ -48,7 +48,7 @@ test("la page expose exactement les deux onglets et ouvre Inviter par défaut", 
 test("les invitations pending et historiques sont chargées séparément côté serveur", async () => {
   const services = await source("domains/access/services.ts");
   assert.match(services, /\.is\("accepted_at", null\)[\s\S]*\.is\("revoked_at", null\)[\s\S]*\.gt\("expires_at", now\)/);
-  assert.match(services, /accepted_at\.not\.is\.null,revoked_at\.not\.is\.null,expires_at\.lte/);
+  assert.match(services, /accepted_at\.not\.is\.null,revoked_at\.not\.is\.null,declined_at\.not\.is\.null,expires_at\.lte/);
   assert.match(services, /select\("id", \{ count: "exact", head: true \}\)/);
   assert.match(services, /\.order\("created_at", \{ ascending: false \}\)[\s\S]*\.order\("id", \{ ascending: false \}\)/);
   assert.match(services, /\.range\(from, from \+ INVITATION_HISTORY_PAGE_SIZE - 1\)/);

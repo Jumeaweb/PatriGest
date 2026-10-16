@@ -162,9 +162,15 @@ export type Database = {
         Relationships: [];
       };
       protected_person_invitations: {
-        Row: { id: string; protected_person_id: string; email: string; role: SharedAccessRole; token_hash: string; expires_at: string; accepted_at: string | null; revoked_at: string | null; invited_by: string | null; created_at: string };
-        Insert: { id?: string; protected_person_id: string; email: string; role: SharedAccessRole; token_hash: string; expires_at: string; accepted_at?: string | null; revoked_at?: string | null; invited_by: string | null; created_at?: string };
-        Update: { role?: SharedAccessRole; expires_at?: string; accepted_at?: string | null; revoked_at?: string | null };
+        Row: { id: string; protected_person_id: string; email: string; role: SharedAccessRole; token_hash: string; expires_at: string; accepted_at: string | null; revoked_at: string | null; declined_at: string | null; declined_by: string | null; invited_by: string | null; created_at: string };
+        Insert: { id?: string; protected_person_id: string; email: string; role: SharedAccessRole; token_hash: string; expires_at: string; accepted_at?: string | null; revoked_at?: string | null; declined_at?: string | null; declined_by?: string | null; invited_by: string | null; created_at?: string };
+        Update: { role?: SharedAccessRole; expires_at?: string; accepted_at?: string | null; revoked_at?: string | null; declined_at?: string | null; declined_by?: string | null };
+        Relationships: [];
+      };
+      protected_person_share_limit_configuration: {
+        Row: { configuration_key: string; manager_limit: number; read_only_limit: number; updated_at: string };
+        Insert: { configuration_key: string; manager_limit: number; read_only_limit: number; updated_at?: string };
+        Update: { manager_limit?: number; read_only_limit?: number; updated_at?: string };
         Relationships: [];
       };
       categories: {
@@ -334,9 +340,12 @@ export type Database = {
       restore_real_estate_property: { Args: { p_protected_person_id: string; p_property_id: string; p_expected_revision: number; p_reason: string }; Returns: number };
       set_patrimony_absence_confirmation: { Args: { p_protected_person_id: string; p_category: PatrimonyAbsenceCategory; p_confirmed: boolean }; Returns: boolean };
       accept_protected_person_invitation: { Args: { p_token_hash: string }; Returns: string };
+      decline_protected_person_invitation: { Args: { p_token_hash: string }; Returns: string };
       issue_protected_person_invitation: { Args: { p_protected_person_id: string; p_email: string; p_role: SharedAccessRole; p_token_hash: string; p_expires_at: string }; Returns: string };
       reissue_protected_person_invitation: { Args: { p_invitation_id: string; p_token_hash: string; p_expires_at: string }; Returns: string };
       revoke_protected_person_invitation: { Args: { p_invitation_id: string }; Returns: undefined };
+      get_protected_person_share_capacity: { Args: { p_protected_person_id: string }; Returns: Array<{ share_role: SharedAccessRole; role_limit: number; active_access_count: number; pending_invitation_count: number; used_count: number; remaining_count: number; exceeded_by: number }> };
+      change_protected_person_access_role: { Args: { p_protected_person_id: string; p_access_id: string; p_role: SharedAccessRole }; Returns: undefined };
       remove_protected_person_access: { Args: { p_protected_person_id: string; p_access_id: string }; Returns: undefined };
       create_internal_transfer: { Args: { p_protected_person_id: string; p_source_account_id: string; p_destination_account_id: string; p_transfer_date: string; p_amount: number; p_label?: string | null; p_comment?: string | null }; Returns: string };
       delete_internal_transfer: { Args: { p_transfer_id: string }; Returns: undefined };

@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { sendDossierInvitationEmail } from "./invitation-email";
 import { getDossierInvitationDisplayContext, getInvitationPreview, getRecoverableDossierInvitations } from "./services";
+import { getSafeShareErrorMessage } from "./share-limits";
 import type { AccessActionState } from "./state";
 
 function isAutonomousAccountInvitationError(error: { message?: string } | null) {
@@ -19,13 +20,17 @@ function isEmailReservationError(error: { message?: string } | null) {
   return error?.message?.includes("Cette adresse e-mail est déjà utilisée ou réservée dans PatriGest.") ?? false;
 }
 
-function invitationCreationErrorMessage(error: { message?: string } | null) {
+function invitationCreationErrorMessage(
+  error: { code?: string; message?: string } | null,
+  fallback = "Impossible de créer cette invitation.",
+) {
   if (isEmailReservationError(error)) {
     return "Cette adresse e-mail est déjà utilisée ou réservée dans PatriGest.";
   }
-  return isAutonomousAccountInvitationError(error)
-    ? "Cette adresse correspond à un compte autonome et ne peut pas recevoir d’accès collaborateur."
-    : "Impossible de créer cette invitation.";
+  if (isAutonomousAccountInvitationError(error)) {
+    return "Cette adresse correspond à un compte autonome et ne peut pas recevoir d’accès collaborateur.";
+  }
+  return getSafeShareErrorMessage(error, fallback);
 }
 
 function invitationAcceptanceErrorMessage(error: { message?: string } | null) {
@@ -98,7 +103,7 @@ export async function validateSignupInvitation(token: string) {
   const now = new Date().toISOString();
   const [requestResult, dossierResult] = await Promise.all([
     admin.from("account_requests").select("id,email,first_name,last_name").eq("invitation_token_hash", tokenHash).eq("status", "approved").is("invitation_used_at", null).gt("invitation_expires_at", now).maybeSingle(),
-    admin.from("protected_person_invitations").select("id,email,role,protected_person_id,invited_by").eq("token_hash", tokenHash).is("accepted_at", null).is("revoked_at", null).gt("expires_at", now).maybeSingle(),
+    admin.from("protected_person_invitations").select("id,email,role,protected_person_id,invited_by").eq("token_hash", tokenHash).is("accepted_at", null).is("revoked_at", null).is("declined_at", null).gt("expires_at", now).maybeSingle(),
   ]);
   if (requestResult.data) return { kind: "account" as const, ...requestResult.data };
   if (dossierResult.data) {
@@ -145,7 +150,12 @@ export async function inviteCollaboratorAction(protectedPersonId: string, _state
       p_token_hash: invitation.tokenHash,
       p_expires_at: invitation.expiresAt,
     });
-    if (error) return { status: "error", message: invitationCreationErrorMessage(error) };
+    if (error) {
+      return {
+        status: "error",
+        message: invitationCreationErrorMessage(error, "Impossible de renvoyer cette invitation."),
+      };
+    }
     const invitationUrl = `${await getApplicationOrigin()}${getDossierInvitationPath(invitation.token)}`;
     revalidatePath(`/dossiers/${actor.protectedPersonId}/acces`);
     try {
@@ -184,7 +194,7 @@ export async function reissueDossierInvitationAction(protectedPersonId: string, 
       p_token_hash: invitation.tokenHash,
       p_expires_at: invitation.expiresAt,
     });
-    if (error) return { status: "error", message: isAutonomousAccountInvitationError(error) ? invitationCreationErrorMessage(error) : "Impossible de renvoyer cette invitation." };
+    if (error) return { status: "error", message: invitationCreationErrorMessage(error) };
 
     const invitationUrl = `${await getApplicationOrigin()}${getDossierInvitationPath(invitation.token)}`;
     try {
@@ -246,6 +256,19 @@ export async function acceptDossierInvitationAction(token: string): Promise<void
   redirect(`/dossiers/${data}/tableau-de-bord`);
 }
 
+export async function declineDossierInvitationAction(token: string): Promise<void> {
+  const parsedToken = z.string().min(32).max(512).safeParse(token);
+  if (!parsedToken.success) throw new Error("Invitation invalide ou expirée.");
+  const supabase = await createClient();
+  const { data: claims } = await supabase.auth.getClaims();
+  if (!claims?.claims?.sub) throw new Error("Authentification requise.");
+  const { data, error } = await supabase.rpc("decline_protected_person_invitation", {
+    p_token_hash: createHash("sha256").update(parsedToken.data).digest("hex"),
+  });
+  if (error || !data) throw new Error("Invitation invalide ou expirée.");
+  revalidatePath("/dossiers");
+}
+
 export async function acceptRecoveredDossierInvitationAction(invitationId: string): Promise<void> {
   const parsedInvitationId = z.uuid().parse(invitationId);
   const supabase = await createClient();
@@ -265,6 +288,7 @@ export async function acceptRecoveredDossierInvitationAction(invitationId: strin
     .eq("id", parsedInvitationId)
     .is("accepted_at", null)
     .is("revoked_at", null)
+    .is("declined_at", null)
     .gt("expires_at", new Date().toISOString())
     .maybeSingle();
   if (invitationError || !invitation) throw new Error("Invitation invalide ou expirée.");
@@ -295,17 +319,18 @@ export async function updateCollaboratorRoleAction(
 ): Promise<AccessActionState> {
   void _state;
   try {
-    const parsedPersonId = z.uuid().parse(protectedPersonId);
     const parsedAccessId = z.uuid().parse(accessId);
     const role = z.enum(["manager", "read_only"]).parse(formData.get("role"));
-    const supabase = await createClient();
-    const { data, error } = await supabase.from("protected_person_access")
-      .update({ role })
-      .eq("id", parsedAccessId)
-      .eq("protected_person_id", parsedPersonId)
-      .select("id")
-      .maybeSingle();
-    if (error || !data) return { status: "error", message: "Impossible de modifier ce rôle." };
+    const actor = await getDossierActor(protectedPersonId);
+    if (actor.role !== "owner") return { status: "error", message: "Vous ne pouvez pas modifier ce rôle." };
+    const { error } = await actor.supabase.rpc("change_protected_person_access_role", {
+      p_protected_person_id: actor.protectedPersonId,
+      p_access_id: parsedAccessId,
+      p_role: role,
+    });
+    if (error) {
+      return { status: "error", message: getSafeShareErrorMessage(error, "Impossible de modifier ce rôle.") };
+    }
     return { status: "success", message: "Le rôle du collaborateur a été modifié." };
   } catch {
     return { status: "error", message: "Impossible de modifier ce rôle." };
