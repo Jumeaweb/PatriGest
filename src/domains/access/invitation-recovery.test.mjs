@@ -47,9 +47,10 @@ test("aucun hash d'invitation n'est renvoyé par le modèle de reprise", () => {
 });
 
 test("l'acceptation retrouvée exige que l'id appartienne aux invitations de l'identité vérifiée", () => {
+  assert.match(actions, /getRecoverableInvitationTokenHash\(userId, invitationId\)/);
   assert.match(actions, /getRecoverableDossierInvitations\(userId\)/);
   assert.match(actions, /\.some\(\(invitation\) => invitation\.id === parsedInvitationId\)/);
-  assert.match(actions, /rpc\("accept_protected_person_invitation", \{ p_token_hash: invitation\.token_hash \}\)/);
+  assert.match(actions, /rpc\("accept_protected_person_invitation", \{ p_token_hash: tokenHash \}\)/);
 });
 
 test("plusieurs invitations sont toutes présentées sans sélection arbitraire", () => {

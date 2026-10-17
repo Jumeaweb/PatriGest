@@ -256,33 +256,22 @@ export async function acceptDossierInvitationAction(token: string): Promise<void
   redirect(`/dossiers/${data}/tableau-de-bord`);
 }
 
-export async function declineDossierInvitationAction(token: string): Promise<void> {
-  const parsedToken = z.string().min(32).max(512).safeParse(token);
-  if (!parsedToken.success) throw new Error("Invitation invalide ou expirée.");
-  const supabase = await createClient();
-  const { data: claims } = await supabase.auth.getClaims();
-  if (!claims?.claims?.sub) throw new Error("Authentification requise.");
-  const { data, error } = await supabase.rpc("decline_protected_person_invitation", {
-    p_token_hash: createHash("sha256").update(parsedToken.data).digest("hex"),
-  });
-  if (error || !data) throw new Error("Invitation invalide ou expirée.");
-  revalidatePath("/dossiers");
-}
+const declineInvitationReferenceSchema = z.union([
+  z.object({ token: z.string().min(32).max(512) }),
+  z.object({ invitationId: z.uuid() }),
+]);
 
-export async function acceptRecoveredDossierInvitationAction(invitationId: string): Promise<void> {
+type DossierInvitationDeclineReference = z.infer<typeof declineInvitationReferenceSchema>;
+
+async function getRecoverableInvitationTokenHash(userId: string, invitationId: string) {
   const parsedInvitationId = z.uuid().parse(invitationId);
-  const supabase = await createClient();
-  const { data: claims } = await supabase.auth.getClaims();
-  const userId = claims?.claims?.sub;
-  if (!userId) throw new Error("Authentification requise.");
-
   const recoverableInvitations = await getRecoverableDossierInvitations(userId);
   if (!recoverableInvitations.some((invitation) => invitation.id === parsedInvitationId)) {
     throw new Error("Invitation invalide ou expirée.");
   }
 
   const admin = createAdminClient();
-  const { data: invitation, error: invitationError } = await admin
+  const { data: invitation, error } = await admin
     .from("protected_person_invitations")
     .select("token_hash")
     .eq("id", parsedInvitationId)
@@ -291,9 +280,48 @@ export async function acceptRecoveredDossierInvitationAction(invitationId: strin
     .is("declined_at", null)
     .gt("expires_at", new Date().toISOString())
     .maybeSingle();
-  if (invitationError || !invitation) throw new Error("Invitation invalide ou expirée.");
+  if (error || !invitation) throw new Error("Invitation invalide ou expirée.");
+  return invitation.token_hash;
+}
 
-  const { data, error } = await supabase.rpc("accept_protected_person_invitation", { p_token_hash: invitation.token_hash });
+export async function declineDossierInvitationAction(
+  reference: DossierInvitationDeclineReference,
+  _state: AccessActionState,
+  _formData: FormData,
+): Promise<AccessActionState> {
+  void _state;
+  void _formData;
+  try {
+    const parsedReference = declineInvitationReferenceSchema.parse(reference);
+    const supabase = await createClient();
+    const { data: claims } = await supabase.auth.getClaims();
+    const userId = claims?.claims?.sub;
+    if (!userId) return { status: "error", message: "Authentification requise." };
+
+    const tokenHash = "token" in parsedReference
+      ? createHash("sha256").update(parsedReference.token).digest("hex")
+      : await getRecoverableInvitationTokenHash(userId, parsedReference.invitationId);
+    const { data, error } = await supabase.rpc("decline_protected_person_invitation", {
+      p_token_hash: tokenHash,
+    });
+    if (error || !data) return { status: "error", message: "Invitation invalide ou expirée." };
+
+    revalidatePath("/dossiers");
+    revalidatePath("/invitations");
+    revalidatePath(`/dossiers/${data}/acces`);
+    return { status: "success", message: "Invitation refusée. Aucun accès au dossier n’a été créé." };
+  } catch {
+    return { status: "error", message: "Invitation invalide ou expirée." };
+  }
+}
+
+export async function acceptRecoveredDossierInvitationAction(invitationId: string): Promise<void> {
+  const supabase = await createClient();
+  const { data: claims } = await supabase.auth.getClaims();
+  const userId = claims?.claims?.sub;
+  if (!userId) throw new Error("Authentification requise.");
+  const tokenHash = await getRecoverableInvitationTokenHash(userId, invitationId);
+  const { data, error } = await supabase.rpc("accept_protected_person_invitation", { p_token_hash: tokenHash });
   if (error || !data) throw new Error(invitationAcceptanceErrorMessage(error));
   revalidatePath("/dossiers");
   const { redirect } = await import("next/navigation");

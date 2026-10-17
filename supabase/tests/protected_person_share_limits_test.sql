@@ -237,7 +237,8 @@ values
   ('92000000-0000-4000-8000-000000000302','92000000-0000-4000-8000-000000000103','state-expired@example.test','manager',lpad(to_hex(402),64,'0'),now()-interval '1 minute',null,null,null,null,'92000000-0000-4000-8000-000000000001'),
   ('92000000-0000-4000-8000-000000000303','92000000-0000-4000-8000-000000000103','state-revoked@example.test','manager',lpad(to_hex(403),64,'0'),now()+interval '1 day',null,now(),null,null,'92000000-0000-4000-8000-000000000001'),
   ('92000000-0000-4000-8000-000000000304','92000000-0000-4000-8000-000000000103','state-declined@example.test','manager',lpad(to_hex(404),64,'0'),now()+interval '1 day',null,null,now(),'92000000-0000-4000-8000-000000000006','92000000-0000-4000-8000-000000000001'),
-  ('92000000-0000-4000-8000-000000000305','92000000-0000-4000-8000-000000000103','share-user-10@example.test','read_only',lpad(to_hex(405),64,'0'),now()+interval '1 day',null,null,null,null,'92000000-0000-4000-8000-000000000001');
+  ('92000000-0000-4000-8000-000000000305','92000000-0000-4000-8000-000000000103','share-user-10@example.test','read_only',lpad(to_hex(405),64,'0'),now()+interval '1 day',null,null,null,null,'92000000-0000-4000-8000-000000000001'),
+  ('92000000-0000-4000-8000-000000000306','92000000-0000-4000-8000-000000000103','state-accepted@example.test','manager',lpad(to_hex(407),64,'0'),now()+interval '1 day',now(),null,null,null,'92000000-0000-4000-8000-000000000001');
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub','92000000-0000-4000-8000-000000000001',true);
@@ -258,6 +259,35 @@ select extensions.throws_ok(
   '23505', 'Cette personne dispose déjà d''un accès au dossier.',
   'une nouvelle invitation redondante est refusée'
 );
+
+select set_config('request.jwt.claim.sub','92000000-0000-4000-8000-000000000006',true);
+select set_config('request.jwt.claims','{"sub":"92000000-0000-4000-8000-000000000006","role":"authenticated","email":"state-expired@example.test"}',true);
+select extensions.throws_ok(
+  $$select public.decline_protected_person_invitation(lpad(to_hex(402),64,'0'))$$,
+  'P0001', 'Invitation invalide ou expirée.',
+  'une invitation expirée ne peut pas être refusée'
+);
+select set_config('request.jwt.claims','{"sub":"92000000-0000-4000-8000-000000000006","role":"authenticated","email":"state-revoked@example.test"}',true);
+select extensions.throws_ok(
+  $$select public.decline_protected_person_invitation(lpad(to_hex(403),64,'0'))$$,
+  'P0001', 'Invitation invalide ou expirée.',
+  'une invitation annulée ne peut pas être refusée'
+);
+select set_config('request.jwt.claims','{"sub":"92000000-0000-4000-8000-000000000006","role":"authenticated","email":"state-accepted@example.test"}',true);
+select extensions.throws_ok(
+  $$select public.decline_protected_person_invitation(lpad(to_hex(407),64,'0'))$$,
+  'P0001', 'Invitation invalide ou expirée.',
+  'une invitation acceptée ne peut pas être refusée'
+);
+select set_config('request.jwt.claims','{"sub":"92000000-0000-4000-8000-000000000006","role":"authenticated","email":"state-declined@example.test"}',true);
+select extensions.throws_ok(
+  $$select public.accept_protected_person_invitation(lpad(to_hex(404),64,'0'))$$,
+  'P0001', 'Invitation invalide ou expirée.',
+  'une invitation refusée ne peut plus être acceptée'
+);
+
+select set_config('request.jwt.claim.sub','92000000-0000-4000-8000-000000000001',true);
+select set_config('request.jwt.claims','{"sub":"92000000-0000-4000-8000-000000000001","role":"authenticated","email":"share-user-1@example.test"}',true);
 
 select public.issue_protected_person_invitation(
   '92000000-0000-4000-8000-000000000107',

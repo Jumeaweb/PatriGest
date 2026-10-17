@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AuthShell } from "@/components/auth/auth-shell";
-import { acceptRecoveredDossierInvitationAction } from "@/domains/access/actions";
+import { InvitationDecisionActions } from "@/domains/access/components/invitation-decision-actions";
 import { getRecoverableDossierInvitations } from "@/domains/access/services";
 import { getInvitationRoleLabel } from "@/domains/access/invitation-presentation";
 import { selectRecoverableInvitations } from "@/lib/auth/invitation-recovery";
@@ -35,9 +35,7 @@ export default async function PendingInvitationsPage({ searchParams }: { searchP
         <h2 className="font-bold text-[#0F172A]">{invitation.inviterName || "Un utilisateur PatriGest"}</h2>
         <p className="mt-1 text-sm text-[#64748B]">vous invite au dossier de <strong className="text-[#334155]">{invitation.dossierName}</strong></p>
         <p className="mt-1 text-sm text-[#64748B]">Rôle proposé : {getInvitationRoleLabel(invitation.role)}</p>
-        <form action={acceptRecoveredDossierInvitationAction.bind(null, invitation.id)}>
-          <button className="button button-primary mt-3 w-full" type="submit">Accepter cette invitation</button>
-        </form>
+        <InvitationDecisionActions reference={{ invitationId: invitation.id }} acceptLabel="Accepter cette invitation" />
       </article>)}
     </div>
   </AuthShell>;
