@@ -44,9 +44,9 @@ export default async function DossierAccessPage({
     <AppBreadcrumb items={[{ label: "Dossiers", href: "/dossiers" }, { label: name, href: `/dossiers/${protectedPersonId}/comptes` }, { label: "Partage du dossier" }]} />
     <h1>Partage du dossier</h1>
     <AccessTabs pathname={pathname} values={query} current={view} />
-    {shareCapacity && <ShareCapacitySummary capacity={shareCapacity} />}
 
     {view === "invite" ? <>
+      {shareCapacity && <ShareCapacitySummary capacity={shareCapacity} />}
       <section className="mt-5 rounded-xl border border-[#E2E8F0] bg-white p-4">
         <h2 className="font-bold">Propriétaire</h2>
         <p className="mt-1 text-sm font-semibold text-[#214660]">{data.owner.name || "Nom non renseigné"}</p>

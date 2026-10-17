@@ -149,7 +149,8 @@ test("la page ne charge et n’affiche les compteurs que pour le propriétaire",
   const page = await source("app/dossiers/[protectedPersonId]/acces/page.tsx");
   assert.match(page, /const owner = data\.person\.accessRole === "owner"/);
   assert.match(page, /const shareCapacity = owner \? await getProtectedPersonShareCapacity\(protectedPersonId\) : null/);
-  assert.match(page, /\{shareCapacity && <ShareCapacitySummary capacity=\{shareCapacity\} \/>\}/);
+  assert.match(page, /view === "invite" \? <>[\s\S]*\{shareCapacity && <ShareCapacitySummary capacity=\{shareCapacity\} \/>\}/);
+  assert.doesNotMatch(page, /<AccessTabs[^>]*\/>\s*\{shareCapacity && <ShareCapacitySummary/);
   assert.doesNotMatch(page, /<CollaboratorInviteForm[^>]+shareCapacity=/);
   assert.doesNotMatch(page, /<InvitationActions[^>]+shareCapacity=/);
 });
@@ -165,6 +166,9 @@ test("la synthèse présente les deux quotas dynamiques, les invitations et les 
   assert.match(summary, /counter\.exceededBy/);
   assert.match(summary, /Limite dépassée de/);
   assert.match(summary, /sm:grid-cols-2/);
+  assert.match(summary, /flex items-baseline justify-between/);
+  assert.match(summary, /<h3[^>]*>\{label\}<\/h3>[\s\S]*\{counter\.usedCount\} \/ \{counter\.limit\}/);
+  assert.match(summary, /className="mt-4 rounded-xl[^\"]*p-3"/);
   assert.doesNotMatch(summary, />\s*5\s*<|\/\s*5\b/);
 });
 
