@@ -3,6 +3,10 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select extensions.no_plan();
 
+update public.protected_person_archive_runtime_config
+set lifecycle_enabled = true, updated_at = clock_timestamp()
+where singleton;
+
 select extensions.has_function(
   'public', 'assert_protected_person_active_for_write', array['uuid'],
   'la garde centralisée de dossier actif existe'

@@ -87,6 +87,9 @@ $ownerClaims = '{"sub":"9b000000-0000-4000-8000-000000000001","role":"authentica
 $inviteeClaims = '{"sub":"9b000000-0000-4000-8000-000000000004","role":"authenticated","email":"archive-sharing-invitee@example.test"}'
 
 $cleanup = @"
+update public.protected_person_archive_runtime_config
+set lifecycle_enabled = true, updated_at = clock_timestamp()
+where singleton;
 begin;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','$ownerId',true);
@@ -109,6 +112,10 @@ begin
 end;
 `$cleanup`$;
 commit;
+
+update public.protected_person_archive_runtime_config
+set lifecycle_enabled = false, updated_at = clock_timestamp()
+where singleton;
 
 delete from public.protected_person_invitations
 where protected_person_id = '$dossierId';
@@ -157,6 +164,10 @@ try {
   Invoke-LocalPsql -Sql $cleanup | Out-Null
 
   Invoke-LocalPsql -Sql @"
+update public.protected_person_archive_runtime_config
+set lifecycle_enabled = true, updated_at = clock_timestamp()
+where singleton;
+
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at

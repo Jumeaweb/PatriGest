@@ -3,6 +3,10 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select extensions.no_plan();
 
+update public.protected_person_archive_runtime_config
+set lifecycle_enabled = true, updated_at = clock_timestamp()
+where singleton;
+
 select extensions.has_function(
   'public', 'get_owned_dossier_capacity', array[]::text[],
   'la RPC propriétaire de capacité existe'

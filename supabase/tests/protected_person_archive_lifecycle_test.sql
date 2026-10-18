@@ -3,6 +3,10 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select extensions.no_plan();
 
+update public.protected_person_archive_runtime_config
+set lifecycle_enabled = true, updated_at = clock_timestamp()
+where singleton;
+
 select extensions.has_column(
   'public', 'protected_persons', 'archive_revision',
   'les dossiers portent une révision de cycle de vie'
