@@ -8,6 +8,10 @@ import {
   protectedPersonArchiveTransitionSchema,
   ProtectedPersonArchiveTransitionError,
 } from "./archive-lifecycle";
+import {
+  isProtectedPersonArchiveLifecycleEnabled,
+  PROTECTED_PERSON_ARCHIVE_LIFECYCLE_DISABLED_MESSAGE,
+} from "./archive-lifecycle-availability";
 import { managementPeriodSchema } from "./schemas/management-period-schema";
 import { ManagementPeriodWriteError, managementPeriodUserMessage } from "./services/management-period-feedback";
 import { protectedPersonSchema } from "./schemas/protected-person-schema";
@@ -49,6 +53,9 @@ async function protectedPersonArchiveTransitionAction(
   expectedRevision: unknown,
   formData: FormData,
 ): Promise<ProtectedPersonActionState> {
+  if (!isProtectedPersonArchiveLifecycleEnabled()) {
+    return { status: "error", message: PROTECTED_PERSON_ARCHIVE_LIFECYCLE_DISABLED_MESSAGE };
+  }
   const parsed = protectedPersonArchiveTransitionSchema.safeParse({
     protectedPersonId,
     expectedRevision,

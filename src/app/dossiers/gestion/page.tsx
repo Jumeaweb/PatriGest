@@ -9,5 +9,5 @@ export const dynamic = "force-dynamic";
 
 export default async function ManageProtectedPersonsPage() {
   const [persons, { canCreateDossier }] = await Promise.all([getProtectedPersons(), getPrivateAccessContext()]);
-  return <PrivateShell current="dossiers"><ProtectedPersonList persons={persons} canCreate={canCreateDossier} /></PrivateShell>;
+  return <PrivateShell current="dossiers"><ProtectedPersonList persons={persons} canCreate={canCreateDossier} currentView="active" /></PrivateShell>;
 }

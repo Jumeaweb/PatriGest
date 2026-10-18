@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
-import { Building2, CalendarDays, FileText, Landmark, MapPin, Scale, Trash2, UserRound, WalletCards } from "lucide-react";
+import { Archive, Building2, CalendarDays, FileText, History, Landmark, MapPin, Scale, Trash2, UserRound, WalletCards } from "lucide-react";
 import { PrivateShell } from "@/components/layout/private-shell";
 import { AppBreadcrumb } from "@/components/ui/app-breadcrumb";
 import { PatrimonyNavigation } from "@/domains/assets-liabilities/components/patrimony-navigation";
@@ -10,13 +10,20 @@ import { getDebts, getProperties } from "@/domains/assets-liabilities/services";
 import { getFinancialAccounts } from "@/domains/financial-accounts/services/financial-account-service";
 import { formatCurrency, getCurrentAccountValue, getCurrentPatrimonyValue } from "@/domains/financial-accounts/utils/financial-account-utils";
 import { DeleteProtectedPerson } from "@/domains/protected-persons/components/delete-protected-person";
+import { ProtectedPersonArchiveAction } from "@/domains/protected-persons/components/protected-person-archive-action";
 import { DossierInformationNavigation, type DossierInformationView } from "@/domains/protected-persons/components/dossier-information-navigation";
 import { DossierNavigation } from "@/domains/protected-persons/components/dossier-navigation";
+import {
+  canChangeProtectedPersonArchiveState,
+  isProtectedPersonArchiveLifecycleEnabled,
+  PROTECTED_PERSON_ARCHIVE_LIFECYCLE_DISABLED_MESSAGE,
+} from "@/domains/protected-persons/archive-lifecycle-availability";
 import { getDossierAddressStates, getDossierAssetActionLabel, getDossierDebtState, getDossierPropertyState } from "@/domains/protected-persons/dossier-information-states";
 import { EditProtectedPersonButton, EditProtectionMeasureButton } from "@/domains/protected-persons/components/regulatory-edit-dialogs";
 import { getProtectedPersonRegulatoryCompleteness, getProtectionMeasureRegulatoryCompleteness } from "@/domains/protected-persons/regulatory-helpers";
 import { getMeasureLabel } from "@/domains/protected-persons/schemas/protection-measure-schema";
 import { getProtectedPerson } from "@/domains/protected-persons/services/protected-person-service";
+import { getProtectedPersonArchiveChanges } from "@/domains/protected-persons/services/protected-person-archive-history-service";
 import type { ManagementReportStatus } from "@/types/database";
 
 export const metadata: Metadata = { title: "Fiche dossier" };
@@ -43,16 +50,26 @@ export default async function ProtectedPersonDetailPage({
   if (!z.uuid().safeParse(protectedPersonId).success) notFound();
   const person = await getProtectedPerson(protectedPersonId);
   if (!person) notFound();
-  const [accounts, properties, debts] = await Promise.all([
+  const archiveLifecycleEnabled = isProtectedPersonArchiveLifecycleEnabled();
+  const [accounts, properties, debts, archiveChanges] = await Promise.all([
     getFinancialAccounts(protectedPersonId),
     getProperties(protectedPersonId),
     getDebts(protectedPersonId),
+    archiveLifecycleEnabled
+      ? getProtectedPersonArchiveChanges(protectedPersonId)
+      : Promise.resolve([]),
   ]);
 
   const rawView = (await searchParams).vue;
   const requestedView = Array.isArray(rawView) ? rawView[0] : rawView;
-  const canManage = person.accessRole !== "read_only";
-  const canDelete = person.accessRole === "owner";
+  const isArchived = person.status === "archived";
+  const isOwner = person.accessRole === "owner";
+  const canChangeArchiveState = canChangeProtectedPersonArchiveState(
+    archiveLifecycleEnabled,
+    person.accessRole,
+  );
+  const canManage = person.accessRole !== "read_only" && !isArchived;
+  const canDelete = isOwner && !isArchived;
   const currentView: DossierInformationView = requestedView === "patrimoine"
     ? "assets"
     : requestedView === "gestion"
@@ -78,6 +95,10 @@ export default async function ProtectedPersonDetailPage({
 
   return <PrivateShell current="dossiers" dossier={{ id: protectedPersonId, name: `${person.first_name} ${person.last_name}`, current: dossierSection, accessRole: person.accessRole }}>
     <AppBreadcrumb items={[{ label: "Dossiers", href: "/dossiers" }, { label: `${person.first_name} ${person.last_name}`, href: `/dossiers/${protectedPersonId}/tableau-de-bord` }, { label: "Informations du dossier" }]} />
+    {isArchived && <div role="status" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+      <p className="font-bold">Dossier archivé — consultation uniquement</p>
+      <p className="mt-1">Les données et documents restent consultables. Restaurez le dossier avant toute modification.</p>
+    </div>}
     <header>
       <p className="text-sm font-bold uppercase tracking-[0.14em] text-[#2563EB]">Fiche dossier</p>
       <h1 className="mt-1 text-3xl font-bold tracking-tight">{person.first_name} {person.last_name}</h1>
@@ -86,6 +107,32 @@ export default async function ProtectedPersonDetailPage({
     <DossierNavigation protectedPersonId={protectedPersonId} current={dossierSection} />
     <DossierInformationNavigation protectedPersonId={protectedPersonId} current={currentView} canDelete={canDelete} />
     {currentView === "assets" && <PatrimonyNavigation protectedPersonId={protectedPersonId} current="patrimony" />}
+
+    {currentView === "person" && <section className="mt-6 rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-[0_6px_18px_rgba(15,23,42,0.035)]">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700"><Archive aria-hidden="true" size={18} /></span>
+          <div><h2 className="text-base font-bold">Cycle de vie du dossier</h2><p className="mt-1 text-sm text-[#64748B]">État actuel : <span className="font-semibold text-[#334155]">{isArchived ? "Archivé" : "Actif"}</span>{person.archived_at && <> · archivé le {formatDateTime(person.archived_at)}</>}</p></div>
+        </div>
+        {canChangeArchiveState && <ProtectedPersonArchiveAction
+          key={`${person.status}-${person.archive_revision}`}
+          protectedPersonId={protectedPersonId}
+          personName={`${person.first_name} ${person.last_name}`}
+          archiveRevision={person.archive_revision}
+          archived={isArchived}
+        />}
+      </div>
+      {!archiveLifecycleEnabled && <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-[#64748B]">{PROTECTED_PERSON_ARCHIVE_LIFECYCLE_DISABLED_MESSAGE}</p>}
+      {archiveLifecycleEnabled && !isOwner && <p className="mt-3 text-sm text-[#64748B]">Seul le propriétaire du dossier peut modifier cet état.</p>}
+      {archiveChanges.length > 0 && <div className="mt-5 border-t border-[#E2E8F0] pt-4">
+        <div className="flex items-center gap-2"><History aria-hidden="true" className="text-amber-700" size={17} /><h3 className="text-sm font-bold">Historique des archivages</h3></div>
+        <ol className="mt-3 space-y-2">{archiveChanges.map((change) => <li key={change.id} className="rounded-lg border border-amber-100 bg-amber-50/40 px-3 py-2.5 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2"><p className="font-bold">{change.new_status === "archived" ? "Archivage" : "Restauration"}</p><time className="text-xs text-[#64748B]" dateTime={change.changed_at}>{formatDateTime(change.changed_at)}</time></div>
+          <p className="mt-1 text-xs text-[#64748B]">Auteur : {change.changed_by === person.owner_id ? "Propriétaire du dossier" : "Auteur non disponible"}</p>
+          <p className="mt-2 whitespace-pre-wrap text-[#334155]">Motif : {change.reason}</p>
+        </li>)}</ol>
+      </div>}
+    </section>}
 
     {currentView === "person" && <div className="mt-6 grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-3">
       <InfoCard icon={UserRound} title="Identité" action={canManage ? <EditProtectedPersonButton person={person} /> : undefined}>
@@ -209,4 +256,12 @@ function CompletenessBadge({ complete, count }: { complete: boolean; count: numb
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("fr-FR", { dateStyle: "long", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    dateStyle: "long",
+    timeStyle: "short",
+    timeZone: "Europe/Paris",
+  }).format(new Date(value));
 }
