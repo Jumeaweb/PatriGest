@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   DOSSIER_CAPACITY_ERROR_MESSAGES,
   DossierCapacityServiceError,
+  classifyDossierCapacityMutationError,
   loadOwnedDossierCapacity,
   mapDossierCapacityRpcError,
   parseOwnedDossierCapacity,
@@ -205,6 +206,37 @@ test("les codes PostgreSQL connus sont traduits en erreurs applicatives stables"
     assert.equal(mapped.message, DOSSIER_CAPACITY_ERROR_MESSAGES[applicationCode]);
     assert.doesNotMatch(mapped.message, /SQL|secret|P4D|42501|PGRST|XX000/i);
   }
+});
+
+test("les mutations ne préservent que les quatre refus PostgreSQL attendus", () => {
+  const expected = [
+    ["P4D01", "quota_reached"],
+    ["P4D02", "subscription_missing"],
+    ["P4D03", "configuration_unavailable"],
+    ["42501", "access_denied"],
+  ];
+
+  for (const [postgresCode, applicationCode] of expected) {
+    const error = classifyDossierCapacityMutationError({
+      code: postgresCode,
+      message: "détail SQL interne avec jeton secret",
+    });
+    assert.ok(error instanceof DossierCapacityServiceError);
+    assert.equal(error.code, applicationCode);
+    assert.equal(error.message, DOSSIER_CAPACITY_ERROR_MESSAGES[applicationCode]);
+    assert.doesNotMatch(error.message, /SQL|jeton|secret|P4D|42501/i);
+  }
+});
+
+test("une erreur inconnue ou réseau n'est pas classée comme un refus de capacité", () => {
+  assert.equal(classifyDossierCapacityMutationError({
+    code: "XX000",
+    message: "message PostgreSQL confidentiel",
+  }), null);
+  assert.equal(classifyDossierCapacityMutationError({
+    message: "échec réseau avec données internes",
+  }), null);
+  assert.equal(classifyDossierCapacityMutationError(null), null);
 });
 
 test("les trois messages fonctionnels français restent explicites", () => {

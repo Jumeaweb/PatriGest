@@ -2,6 +2,7 @@ import type { DossierAccessRole, ManagementPeriod, ManagementReport, ProtectedPe
 import type { ProtectedPersonInput } from "../schemas/protected-person-schema";
 import type { ManagementPeriodInput } from "../schemas/management-period-schema";
 import type { ProtectionMeasureInput } from "../schemas/protection-measure-schema";
+import { classifyDossierCapacityMutationError } from "@/domains/subscriptions/dossier-capacity";
 import { classifyManagementPeriodWriteFailure, ManagementPeriodWriteError } from "./management-period-feedback";
 import { getAuthenticatedUser } from "./authenticated-user";
 
@@ -85,6 +86,8 @@ export async function createProtectedPerson(input: ProtectedPersonInput) {
     if (error.message.includes("Un compte collaborateur ne peut pas créer ou posséder de dossier.")) {
       throw new AccountModeConflictError("Un compte collaborateur ne peut pas créer son propre dossier.");
     }
+    const capacityError = classifyDossierCapacityMutationError(error);
+    if (capacityError) throw capacityError;
     throw new Error("Impossible de créer le dossier.");
   }
   return data;

@@ -173,6 +173,20 @@ export function mapDossierCapacityRpcError(
   }
 }
 
+export function classifyDossierCapacityMutationError(
+  error: DossierCapacityRpcError | null | undefined,
+): DossierCapacityServiceError | null {
+  switch (error?.code) {
+    case "P4D01":
+    case "P4D02":
+    case "P4D03":
+    case "42501":
+      return new DossierCapacityServiceError(mapDossierCapacityRpcError(error));
+    default:
+      return null;
+  }
+}
+
 export async function loadOwnedDossierCapacity(
   gateway: DossierCapacityRpcGateway,
 ): Promise<OwnedDossierCapacity> {

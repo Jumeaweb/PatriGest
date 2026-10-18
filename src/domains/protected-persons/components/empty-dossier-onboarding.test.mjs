@@ -61,6 +61,38 @@ test("un refus atomique du mode collaborateur produit un message applicatif sûr
   assert.match(actions, /error instanceof AccountModeConflictError/);
 });
 
+test("la création propage seulement les refus de capacité typés et garde les autres erreurs génériques", () => {
+  const createService = service.match(/export async function createProtectedPerson[\s\S]*?(?=\nexport async function updateProtectedPerson)/)?.[0];
+  const createAction = actions.match(/export async function createProtectedPersonAction[\s\S]*?(?=\nexport async function addProtectionMeasureAction)/)?.[0];
+  assert.ok(createService);
+  assert.ok(createAction);
+
+  assert.match(createService, /classifyDossierCapacityMutationError\(error\)/);
+  assert.match(createService, /if \(capacityError\) throw capacityError/);
+  assert.match(createService, /throw new Error\("Impossible de créer le dossier\."\)/);
+  assert.doesNotMatch(createService, /getOwnedDossierCapacity|get_owned_dossier_capacity|createAdminClient|service_role/);
+
+  assert.match(createAction, /error instanceof DossierCapacityServiceError/);
+  assert.match(createAction, /return \{ status: "error", message: error\.message \}/);
+  assert.match(createAction, /Impossible de créer le dossier\. Veuillez réessayer\./);
+  assert.doesNotMatch(createAction, /return \{ status: "error", message: error\.message \}[\s\S]*?catch/);
+});
+
+test("la validation Zod, le succès et les protections administrateur restent inchangés", () => {
+  const createService = service.match(/export async function createProtectedPerson[\s\S]*?(?=\nexport async function updateProtectedPerson)/)?.[0];
+  const createAction = actions.match(/export async function createProtectedPersonAction[\s\S]*?(?=\nexport async function addProtectionMeasureAction)/)?.[0];
+  assert.ok(createService);
+  assert.ok(createAction);
+
+  assert.match(createAction, /protectedPersonSchema\.safeParse\(protectedPersonValues\(formData\)\)/);
+  assert.match(createAction, /if \(!parsed\.success\) return validationError\(parsed\.error\)/);
+  assert.match(createAction, /revalidatePath\("\/dossiers"\)/);
+  assert.match(createAction, /revalidatePath\("\/tableau-de-bord"\)/);
+  assert.match(createAction, /redirect\(`\/dossiers\/\$\{person\.id\}`\)/);
+  assert.match(createService, /platform_administrators/);
+  assert.match(createService, /Un administrateur de plateforme ne peut pas créer de dossier\./);
+});
+
 test("les dossiers existants s'ouvrent sur leur tableau de bord", () => {
   assert.match(list, /persons\.map\(\(person\) => <Link key=\{person\.id\} href=\{`\/dossiers\/\$\{person\.id\}\/tableau-de-bord`\}/);
   assert.match(dashboard, /dossiers\.map\(\(dossier\) => <DossierCard key=\{dossier\.id\} dossier=\{dossier\} \/>/);

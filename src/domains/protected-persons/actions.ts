@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { DossierCapacityServiceError } from "@/domains/subscriptions/dossier-capacity";
 import { managementPeriodSchema } from "./schemas/management-period-schema";
 import { ManagementPeriodWriteError, managementPeriodUserMessage } from "./services/management-period-feedback";
 import { protectedPersonSchema } from "./schemas/protected-person-schema";
@@ -60,7 +61,7 @@ export async function createProtectedPersonAction(
   try {
     person = await createProtectedPerson(parsed.data);
   } catch (error) {
-    if (error instanceof AccountModeConflictError) {
+    if (error instanceof AccountModeConflictError || error instanceof DossierCapacityServiceError) {
       return { status: "error", message: error.message };
     }
     return { status: "error", message: "Impossible de créer le dossier. Veuillez réessayer." };
