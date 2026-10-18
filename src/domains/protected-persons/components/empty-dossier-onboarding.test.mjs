@@ -28,14 +28,16 @@ test("le CTA direct du tableau de bord crée le premier dossier uniquement si au
 });
 
 test("la liste formule l'état vide en termes d'accès et non de création", () => {
-  assert.match(list, /persons\.length === 0 \? <section[\s\S]*?Aucun dossier accessible/);
+  assert.match(list, /visiblePersons\.length === 0 \? <section/);
+  assert.match(list, /Aucun dossier actif accessible/);
+  assert.match(list, /Aucun dossier archivé/);
   assert.doesNotMatch(list, /Aucun dossier n’a encore été créé/);
-  assert.match(list, /\{canCreate \? "Créez votre premier dossier/);
+  assert.match(list, /canCreate[\s\S]*?"Créez votre premier dossier actif/);
 });
 
 test("la liste cache ses deux CTA de création sans droit, mais les conserve avec droit", () => {
   assert.match(list, /\{canCreate && <Link href="\/dossiers\/nouveau"[^>]*>[^<]*<Plus[^>]*\/>Nouveau dossier<\/Link>\}/);
-  assert.match(list, /\{canCreate && <Link href="\/dossiers\/nouveau"[^>]*>[^<]*<Plus[^>]*\/>Créer mon premier dossier<\/Link>\}/);
+  assert.match(list, /\{!archived && canCreate && <Link href="\/dossiers\/nouveau"[^>]*>[^<]*<Plus[^>]*\/>Créer mon premier dossier<\/Link>\}/);
 });
 
 test("les deux pages de liste réutilisent le contexte d'autorisation existant", () => {
@@ -45,7 +47,7 @@ test("les deux pages de liste réutilisent le contexte d'autorisation existant",
   assert.match(context, /canCreateDossier: !isPlatformAdmin && accountMode !== "collaborator"/);
   for (const page of [dossierPage, compatibilityPage]) {
     assert.match(page, /getPrivateAccessContext\(\)/);
-    assert.match(page, /<ProtectedPersonList persons=\{persons\} canCreate=\{canCreateDossier\} \/>/);
+    assert.match(page, /<ProtectedPersonList persons=\{persons\} canCreate=\{canCreateDossier\} (?:currentView=\{currentView\}|currentView="active") \/>/);
   }
   assert.match(service, /if \(administrator\) throw new Error\("Un administrateur de plateforme ne peut pas créer de dossier\."\)/);
 });
@@ -94,7 +96,7 @@ test("la validation Zod, le succès et les protections administrateur restent in
 });
 
 test("les dossiers existants s'ouvrent sur leur tableau de bord", () => {
-  assert.match(list, /persons\.map\(\(person\) => <Link key=\{person\.id\} href=\{`\/dossiers\/\$\{person\.id\}\/tableau-de-bord`\}/);
+  assert.match(list, /visiblePersons\.map\(\(person\) => <Link key=\{person\.id\} href=\{`\/dossiers\/\$\{person\.id\}\/tableau-de-bord`\}/);
   assert.match(dashboard, /dossiers\.map\(\(dossier\) => <DossierCard key=\{dossier\.id\} dossier=\{dossier\} \/>/);
 });
 

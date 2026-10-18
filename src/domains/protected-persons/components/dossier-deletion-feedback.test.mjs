@@ -23,7 +23,8 @@ test("l'échec retourne une erreur sûre sans redirection de succès", () => {
 });
 
 test("le message apparaît seulement pour deleted égal à 1", () => {
-  assert.match(page, /\(await searchParams\)\.deleted === "1"/);
+  assert.match(page, /const query = await searchParams/);
+  assert.match(page, /query\.deleted === "1"/);
   assert.match(page, /\{deletionConfirmed && <p role="status" aria-live="polite"/);
   assert.match(page, /Le dossier a bien été supprimé/);
   assert.doesNotMatch(page, /deleted \?\? "1"|deleted !== "0"/);
@@ -37,7 +38,8 @@ test("le mécanisme ne met aucune donnée personnelle dans le retour", () => {
 test("confirmation préalable, permission owner et service de suppression sont préservés", () => {
   assert.match(dialog, /<AppConfirmDialog open=\{open\} title="Supprimer ce dossier \?"/);
   assert.match(dialog, /<FormMessage state=\{state\}/);
-  assert.match(dossier, /const canDelete = person\.accessRole === "owner"/);
+  assert.match(dossier, /const isOwner = person\.accessRole === "owner"/);
+  assert.match(dossier, /const canDelete = isOwner && !isArchived/);
   assert.match(dossier, /currentView === "deletion" && canDelete && <section/);
   assert.match(source("../services/protected-person-service.ts"), /supabase\.rpc\("delete_empty_protected_person"/);
 });

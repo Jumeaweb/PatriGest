@@ -58,7 +58,8 @@ test("Gestion charge en parallèle le rapport lié et reste une synthèse", () =
 });
 
 test("la suppression est isolée, destructive et strictement réservée au propriétaire", () => {
-  assert.match(page, /const canDelete = person\.accessRole === "owner"/);
+  assert.match(page, /const isOwner = person\.accessRole === "owner"/);
+  assert.match(page, /const canDelete = isOwner && !isArchived/);
   assert.match(navigation, /\.\.\.\(canDelete \? \[/);
   assert.match(page, /requestedView === "suppression" && canDelete/);
   assert.match(page, /currentView === "deletion" && canDelete && <section/);
