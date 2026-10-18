@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { DossierCapacityServiceError } from "@/domains/subscriptions/dossier-capacity";
+import {
+  protectedPersonArchiveTransitionSchema,
+  ProtectedPersonArchiveTransitionError,
+} from "./archive-lifecycle";
 import { managementPeriodSchema } from "./schemas/management-period-schema";
 import { ManagementPeriodWriteError, managementPeriodUserMessage } from "./services/management-period-feedback";
 import { protectedPersonSchema } from "./schemas/protected-person-schema";
@@ -22,9 +26,77 @@ import {
   updateManagementPeriod,
 } from "./services/protected-person-service";
 import type { ProtectedPersonActionState } from "./state";
+import {
+  archiveProtectedPerson,
+  restoreProtectedPerson,
+} from "./services/protected-person-archive-service";
 
 function validationError(error: z.ZodError): ProtectedPersonActionState {
   return { status: "error", message: "Vérifiez les informations saisies.", fieldErrors: error.flatten().fieldErrors };
+}
+
+function revalidateProtectedPersonArchiveTransition(protectedPersonId: string) {
+  revalidatePath("/dossiers");
+  revalidatePath("/tableau-de-bord");
+  revalidatePath(`/dossiers/${protectedPersonId}`);
+  revalidatePath(`/dossiers/${protectedPersonId}/tableau-de-bord`);
+  revalidatePath("/parametres/compte");
+}
+
+async function protectedPersonArchiveTransitionAction(
+  operation: "archive" | "restore",
+  protectedPersonId: unknown,
+  expectedRevision: unknown,
+  formData: FormData,
+): Promise<ProtectedPersonActionState> {
+  const parsed = protectedPersonArchiveTransitionSchema.safeParse({
+    protectedPersonId,
+    expectedRevision,
+    reason: formData.get("reason"),
+  });
+  if (!parsed.success) return validationError(parsed.error);
+
+  try {
+    if (operation === "archive") await archiveProtectedPerson(parsed.data);
+    else await restoreProtectedPerson(parsed.data);
+  } catch (error) {
+    if (error instanceof ProtectedPersonArchiveTransitionError) {
+      return { status: "error", message: error.message };
+    }
+    return { status: "error", message: "Impossible de modifier l’archivage du dossier pour le moment." };
+  }
+
+  revalidateProtectedPersonArchiveTransition(parsed.data.protectedPersonId);
+  return {
+    status: "success",
+    message: operation === "archive"
+      ? "Le dossier a été archivé. Ses données et son historique sont conservés."
+      : "Le dossier a été restauré.",
+  };
+}
+
+export async function archiveProtectedPersonAction(
+  protectedPersonId: unknown,
+  expectedRevision: unknown,
+  _state: ProtectedPersonActionState,
+  formData: FormData,
+): Promise<ProtectedPersonActionState> {
+  void _state;
+  return protectedPersonArchiveTransitionAction(
+    "archive", protectedPersonId, expectedRevision, formData,
+  );
+}
+
+export async function restoreProtectedPersonAction(
+  protectedPersonId: unknown,
+  expectedRevision: unknown,
+  _state: ProtectedPersonActionState,
+  formData: FormData,
+): Promise<ProtectedPersonActionState> {
+  void _state;
+  return protectedPersonArchiveTransitionAction(
+    "restore", protectedPersonId, expectedRevision, formData,
+  );
 }
 
 function protectedPersonValues(formData: FormData) {

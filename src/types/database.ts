@@ -60,7 +60,7 @@ export type Database = {
           residence_address_line1: string | null; residence_address_line2: string | null;
           residence_postal_code: string | null; residence_city: string | null; residence_country: string | null;
           notes: string | null; status: ProtectedPersonStatus; created_at: string;
-          updated_at: string; archived_at: string | null;
+          updated_at: string; archived_at: string | null; archive_revision: number;
         };
         Insert: {
           id?: string; owner_id: string; first_name: string; last_name: string;
@@ -70,7 +70,7 @@ export type Database = {
           residence_address_line1?: string | null; residence_address_line2?: string | null;
           residence_postal_code?: string | null; residence_city?: string | null; residence_country?: string | null;
           notes?: string | null; status?: ProtectedPersonStatus; created_at?: string;
-          updated_at?: string; archived_at?: string | null;
+          updated_at?: string; archived_at?: string | null; archive_revision?: number;
         };
         Update: Partial<Database["public"]["Tables"]["protected_persons"]["Insert"]>;
         Relationships: [];
@@ -172,6 +172,12 @@ export type Database = {
         Insert: { configuration_key: string; manager_limit: number; read_only_limit: number; updated_at?: string };
         Update: { manager_limit?: number; read_only_limit?: number; updated_at?: string };
         Relationships: [];
+      };
+      protected_person_archive_changes: {
+        Row: { id: string; protected_person_id: string; old_status: ProtectedPersonStatus; new_status: ProtectedPersonStatus; changed_by: string; changed_at: string; reason: string };
+        Insert: never;
+        Update: never;
+        Relationships: [{ foreignKeyName: "protected_person_archive_changes_protected_person_id_fkey"; columns: ["protected_person_id"]; isOneToOne: false; referencedRelation: "protected_persons"; referencedColumns: ["id"] }];
       };
       categories: {
         Row: { id: string; owner_id: string | null; name: string; usage: CategoryUsage; is_system: boolean; active: boolean; official_code: string | null; official_section: string | null; official_group: string | null; official_order: number | null; official_category_id: string | null; requires_precision: boolean; created_at: string; updated_at: string };
@@ -338,6 +344,8 @@ export type Database = {
       cancel_property_event: { Args: { p_protected_person_id: string; p_property_id: string; p_event_id: string; p_expected_revision: number; p_reason: string }; Returns: number };
       archive_real_estate_property: { Args: { p_protected_person_id: string; p_property_id: string; p_expected_revision: number; p_reason: string }; Returns: number };
       restore_real_estate_property: { Args: { p_protected_person_id: string; p_property_id: string; p_expected_revision: number; p_reason: string }; Returns: number };
+      archive_protected_person: { Args: { p_protected_person_id: string; p_expected_revision: number; p_reason: string }; Returns: number };
+      restore_protected_person: { Args: { p_protected_person_id: string; p_expected_revision: number; p_reason: string }; Returns: number };
       set_patrimony_absence_confirmation: { Args: { p_protected_person_id: string; p_category: PatrimonyAbsenceCategory; p_confirmed: boolean }; Returns: boolean };
       accept_protected_person_invitation: { Args: { p_token_hash: string }; Returns: string };
       decline_protected_person_invitation: { Args: { p_token_hash: string }; Returns: string };
@@ -378,6 +386,7 @@ export type Transfer = Database["public"]["Tables"]["transfers"]["Row"];
 export type AccountRequest = Database["public"]["Tables"]["account_requests"]["Row"];
 export type ProtectedPersonAccess = Database["public"]["Tables"]["protected_person_access"]["Row"];
 export type ProtectedPersonInvitation = Database["public"]["Tables"]["protected_person_invitations"]["Row"];
+export type ProtectedPersonArchiveChange = Database["public"]["Tables"]["protected_person_archive_changes"]["Row"];
 export type RealEstateProperty = Database["public"]["Tables"]["real_estate_properties"]["Row"];
 export type PropertyEvent = Database["public"]["Tables"]["property_events"]["Row"];
 export type PropertyEventChange = Database["public"]["Tables"]["property_event_changes"]["Row"];
