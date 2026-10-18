@@ -190,9 +190,9 @@ select extensions.throws_ok(
 
 -- L’archivage libère immédiatement une place.
 select extensions.lives_ok(
-  $$update public.protected_persons
-    set status='archived', archived_at=now()
-    where id='96000000-0000-4000-8101-000000000103'$$,
+  $$select public.archive_protected_person(
+    '96000000-0000-4000-8101-000000000103', 1, 'Test de libération du quota'
+  )$$,
   'l’archivage reste autorisé au plafond'
 );
 select extensions.lives_ok(
@@ -209,17 +209,17 @@ select extensions.is(
   'la capacité five vaut cinq'
 );
 select extensions.lives_ok(
-  $$update public.protected_persons
-    set status='active', archived_at=null
-    where id='96000000-0000-4000-8002-000000000105'$$,
+  $$select public.restore_protected_person(
+    '96000000-0000-4000-8002-000000000105', 1, 'Test de consommation du quota'
+  )$$,
   'une restauration utilise la dernière place disponible'
 );
 select extensions.throws_ok(
-  $$update public.protected_persons
-    set status='active', archived_at=null
-    where id='96000000-0000-4000-8002-000000000106'$$,
+  $$select public.restore_protected_person(
+    '96000000-0000-4000-8002-000000000106', 1, 'Test de refus au plafond'
+  )$$,
   'P4D01', 'La capacité de dossiers actifs est atteinte.',
-  'une restauration directe est refusée au plafond'
+  'une restauration est refusée au plafond'
 );
 
 -- Capacités dix et personnalisée.
