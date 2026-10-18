@@ -3,6 +3,11 @@ import { Mail, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import type { Metadata } from "next";
 import { PrivateShell } from "@/components/layout/private-shell";
 import { AppBreadcrumb } from "@/components/ui/app-breadcrumb";
+import { getPrivateAccessContext } from "@/domains/administration/services/private-access-context";
+import {
+  shouldLoadOwnedDossierCapacity,
+  type AccountDossierCapacityResult,
+} from "@/domains/account/account-dossier-capacity";
 import { getAccountView, isAccountProfileView } from "@/domains/account/account-navigation";
 import { AccountDeletionForm } from "@/domains/account/components/account-deletion-form";
 import { AccountNavigation, AccountProfileNavigation } from "@/domains/account/components/account-navigation";
@@ -11,6 +16,7 @@ import { EmailForm } from "@/domains/account/components/email-form";
 import { PasswordForm } from "@/domains/account/components/password-form";
 import { ProfileForm } from "@/domains/account/components/profile-form";
 import { getAccountData } from "@/domains/account/services";
+import { getOwnedDossierCapacity } from "@/domains/subscriptions/services";
 
 export const metadata: Metadata = { title: "Mon compte" };
 export const dynamic = "force-dynamic";
@@ -20,9 +26,22 @@ export default async function AccountPage({
 }: {
   searchParams: Promise<{ vue?: string | string[] }>;
 }) {
-  const [account, query] = await Promise.all([getAccountData(), searchParams]);
+  const query = await searchParams;
   const current = getAccountView(query.vue);
   const currentProfileView = isAccountProfileView(current) ? current : null;
+  const [account, accessContext] = await Promise.all([
+    getAccountData(),
+    current === "subscription" ? getPrivateAccessContext() : Promise.resolve(null),
+  ]);
+  let dossierCapacity: AccountDossierCapacityResult | null = null;
+
+  if (accessContext && shouldLoadOwnedDossierCapacity(accessContext)) {
+    try {
+      dossierCapacity = { status: "ready", capacity: await getOwnedDossierCapacity() };
+    } catch {
+      dossierCapacity = { status: "error" };
+    }
+  }
 
   return (
     <PrivateShell current="account">
@@ -86,7 +105,7 @@ export default async function AccountPage({
             </section>
           )}
 
-          {current === "subscription" && <AccountSubscriptionView />}
+          {current === "subscription" && <AccountSubscriptionView dossierCapacity={dossierCapacity} />}
           {current === "invoices" && <AccountInvoicesView />}
           {current === "cancellation" && <AccountCancellationView />}
           {current === "data" && <AccountDataView />}

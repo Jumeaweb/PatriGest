@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { Archive, Clock3, CreditCard, Database, FileText, ShieldCheck } from "lucide-react";
 import { DOSSIER_CAPACITIES, PRICING_PLANS } from "@/lib/pricing";
+import type { AccountDossierCapacityResult } from "../account-dossier-capacity";
+import { AccountDossierCapacity } from "./account-dossier-capacity";
 
-export function AccountSubscriptionView() {
+export function AccountSubscriptionView({ dossierCapacity }: { dossierCapacity: AccountDossierCapacityResult | null }) {
   return <AccountServicePanel icon={CreditCard} title="Abonnement" description="Les abonnements PatriGest ne sont pas encore disponibles.">
     <AvailabilityNotice>Votre compte ne dispose actuellement d’aucun forfait attribué. Aucune date de renouvellement, capacité souscrite ou information de paiement n’est affichée.</AvailabilityNotice>
+    {dossierCapacity && <AccountDossierCapacity result={dossierCapacity} />}
     <div className="mt-5 grid gap-3 lg:grid-cols-3">
       {PRICING_PLANS.map((plan) => <article key={plan.id} className="rounded-xl border border-[#E2E8F0] bg-slate-50 p-4">
         <h3 className="font-bold">{plan.name}</h3>
