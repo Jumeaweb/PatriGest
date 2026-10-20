@@ -18,6 +18,7 @@ import {
   DocumentOperationEngine,
   DocumentOperationRpcError,
 } from "./engine";
+import { createDurableDocumentBackupStore } from "./durable-backup-store";
 
 const uuid = z.uuid();
 const safePath = z.string().min(1).refine((value) => {
@@ -220,8 +221,7 @@ function reportFinalizationArgs(
   };
 }
 
-function createStorageGateway(): DocumentStorageGateway {
-  const admin = createAdminClient();
+function createStorageGateway(admin: ReturnType<typeof createAdminClient>): DocumentStorageGateway {
   const bucket = (target: DocumentOperationTarget) => admin.storage.from(target.bucketId);
   return {
     async inspect(target) {
@@ -259,9 +259,13 @@ export async function createServerDocumentOperationEngine(options?: {
   const { data, error } = await userClient.auth.getClaims();
   if (error || !data?.claims?.sub) throw new Error("Authentification requise.");
 
+  const admin = createAdminClient();
   return new DocumentOperationEngine({
     rpc: createRpcGateway(userClient as unknown as { rpc: RpcInvoker }),
-    storage: createStorageGateway(),
-    backups: options?.backupStore,
+    storage: createStorageGateway(admin),
+    backups: options?.backupStore ?? createDurableDocumentBackupStore(
+      userClient as unknown as { rpc: RpcInvoker },
+      admin as unknown as Parameters<typeof createDurableDocumentBackupStore>[1],
+    ),
   });
 }

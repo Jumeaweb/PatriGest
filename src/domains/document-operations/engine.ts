@@ -45,6 +45,7 @@ const unavailableDocumentBackupStore: DurableDocumentBackupStore = {
   available: false,
   async save() { throw new Error("Sauvegarde documentaire durable indisponible."); },
   async load() { return null; },
+  async markRestored() { throw new Error("Sauvegarde documentaire durable indisponible."); },
   async remove() { return; },
 };
 
@@ -434,6 +435,10 @@ export class DocumentOperationEngine {
         if (!sameStoredDocument(await this.storage.inspect(target), backup)) {
           throw safeError(progress.operationId, "compensation", "storage_unverified");
         }
+        await this.backups.markRestored({
+          operationId: progress.operationId,
+          targetId: target.id,
+        });
       }
 
       if (target.state === "compensating") {

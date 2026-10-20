@@ -107,6 +107,7 @@ export interface DurableDocumentBackupStore {
   readonly available: boolean;
   save(key: DocumentBackupKey, object: StoredDocumentObject): Promise<void>;
   load(key: DocumentBackupKey): Promise<StoredDocumentObject | null>;
+  markRestored(key: DocumentBackupKey): Promise<void>;
   remove(key: DocumentBackupKey): Promise<void>;
 }
 

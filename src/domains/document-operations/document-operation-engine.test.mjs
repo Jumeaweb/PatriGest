@@ -160,11 +160,14 @@ function createStorage(entries = [], options = {}) {
 
 function createBackups() {
   const values = new Map();
+  const restored = [];
   return {
     available: true,
     values,
+    restored,
     async save(key, value) { values.set(`${key.operationId}:${key.targetId}`, clone(value)); },
     async load(key) { return clone(values.get(`${key.operationId}:${key.targetId}`) ?? null); },
+    async markRestored(key) { restored.push(`${key.operationId}:${key.targetId}`); },
     async remove(key) { values.delete(`${key.operationId}:${key.targetId}`); },
   };
 }
@@ -264,6 +267,22 @@ test("une finalisation refusée compense la création et ne retourne pas un faux
   assert.equal(storage.objects.size, 0);
 });
 
+test("une compensation destructive restaure et trace les octets avant de les nettoyer", async () => {
+  const rpc = createRpc(progress({
+    workflow: "transaction_proof_replace",
+    targets: [target({ forwardAction: "update", compensationAction: "update" })],
+  }), { failFinalize: true });
+  const storage = createStorage([["target-1", stored("old")]]);
+  const backups = createBackups();
+  await assert.rejects(
+    new DocumentOperationEngine({ rpc, storage, backups }).execute(proofInput()),
+    (error) => error instanceof DocumentOperationError && error.code === "rpc_rejected",
+  );
+  assert.equal(storage.objects.get("target-1").sha256, stored("old").sha256);
+  assert.deepEqual(backups.restored, ["operation-1:target-1"]);
+  assert.equal(backups.values.size, 0);
+});
+
 test("un conflit de révision après mutation est compensé et distingué", async () => {
   const rpc = createRpc(progress(), { failRecord: true });
   const storage = createStorage();
@@ -358,6 +377,7 @@ test("l’adaptateur serveur sépare RPC authentifiées et mutations privilégi�
   assert.match(source, /userClient\.auth\.getClaims\(\)/);
   assert.match(source, /createRpcGateway\(userClient/);
   assert.match(source, /const admin = createAdminClient\(\)/);
+  assert.match(source, /createDurableDocumentBackupStore\(/);
   assert.doesNotMatch(source, /createRpcGateway\(admin/);
   assert.doesNotMatch(source, /console\.|SUPABASE_SERVICE_ROLE_KEY/);
 });
