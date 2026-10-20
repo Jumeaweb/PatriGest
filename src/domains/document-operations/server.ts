@@ -222,21 +222,40 @@ function reportFinalizationArgs(
 }
 
 function createStorageGateway(admin: ReturnType<typeof createAdminClient>): DocumentStorageGateway {
+  const reportsMissingObject = (data: boolean, error: unknown) => {
+    if (data) return false;
+    if (!error) return true;
+    if (typeof error !== "object") return false;
+    const status = "statusCode" in error
+      ? error.statusCode
+      : "status" in error
+        ? error.status
+        : undefined;
+    return String(status) === "400";
+  };
   const bucket = (target: DocumentOperationTarget) => admin.storage.from(target.bucketId);
   return {
     async inspect(target) {
       const storage = bucket(target);
       const exists = await storage.exists(target.objectPath);
-      if (!exists.data) return null;
-      if (exists.error) throw new Error("Vérification Storage impossible.");
+      if (reportsMissingObject(exists.data, exists.error)) return null;
+      if (exists.error || !exists.data) throw new Error("Vérification Storage impossible.");
+      const info = await storage.info(target.objectPath);
+      if (info.error || !info.data?.id || !info.data.version) {
+        throw new Error("Version Storage impossible à vérifier.");
+      }
       const downloaded = await storage.download(target.objectPath);
       if (downloaded.error || !downloaded.data) {
         throw new Error("Lecture Storage impossible.");
       }
-      return describeDocumentContent({
-        bytes: new Uint8Array(await downloaded.data.arrayBuffer()),
-        mimeType: downloaded.data.type || "application/octet-stream",
-      });
+      return {
+        ...describeDocumentContent({
+          bytes: new Uint8Array(await downloaded.data.arrayBuffer()),
+          mimeType: downloaded.data.type || "application/octet-stream",
+        }),
+        objectId: info.data.id,
+        objectVersion: info.data.version,
+      };
     },
     async upload(target, content, upsert) {
       const { error } = await bucket(target).upload(target.objectPath, content.bytes, {

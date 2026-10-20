@@ -323,7 +323,15 @@ export class DocumentOperationEngine {
   ) {
     const desired = desiredFor(operationId, target, contents);
     const before = await this.storage.inspect(target);
-    if (sameStoredDocument(before, desired)) return;
+    const updateAlreadyApplied = target.forwardAction === "update"
+      && sameStoredDocument(before, desired)
+      && before?.objectId === target.expectedObjectId
+      && before?.objectVersion !== target.expectedObjectVersion;
+    if (
+      (target.forwardAction === "insert" && sameStoredDocument(before, desired))
+      || (target.forwardAction === "delete" && before === null)
+      || updateAlreadyApplied
+    ) return;
 
     if (target.forwardAction === "insert") {
       if (before) throw safeError(operationId, "mutation", "storage_diverged");

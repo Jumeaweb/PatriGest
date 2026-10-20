@@ -69,6 +69,18 @@ function safeFailure(message: string): Error {
   return new Error(message);
 }
 
+function reportsMissingObject(data: boolean, error: unknown) {
+  if (data) return false;
+  if (!error) return true;
+  if (typeof error !== "object") return false;
+  const status = "statusCode" in error
+    ? error.statusCode
+    : "status" in error
+      ? error.status
+      : undefined;
+  return String(status) === "400";
+}
+
 async function rpc(
   client: RpcClient,
   name: string,
@@ -176,8 +188,9 @@ export function createDurableDocumentBackupStore(
       }
       const storage = await descriptor(reserved.backupId);
       const exists = await backupBucket.exists(storage.objectPath);
-      if (exists.error) throw safeFailure("Le stockage de récupération est indisponible.");
-      if (!exists.data) {
+      if (!reportsMissingObject(exists.data, exists.error)) {
+        if (exists.error) throw safeFailure("Le stockage de récupération est indisponible.");
+      } else if (!exists.data) {
         const uploaded = await backupBucket.upload(storage.objectPath, object.bytes, {
           contentType: object.mimeType,
           upsert: false,
@@ -239,7 +252,7 @@ export function createDurableDocumentBackupStore(
         if (removed.error) throw safeFailure("La sauvegarde documentaire n’a pas pu être supprimée.");
       }
       const remaining = await backupBucket.exists(authorized.objectPath);
-      if (remaining.error || remaining.data) {
+      if (!reportsMissingObject(remaining.data, remaining.error)) {
         throw safeFailure("La suppression de la sauvegarde documentaire n’est pas vérifiée.");
       }
       await rpc(privilegedClient, "complete_document_operation_backup_cleanup", {

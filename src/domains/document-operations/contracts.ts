@@ -53,6 +53,8 @@ export type DocumentContent = {
 export type StoredDocumentObject = DocumentContent & {
   byteSize: number;
   sha256: string;
+  objectId?: string | null;
+  objectVersion?: string | null;
 };
 
 export type DocumentContentBinding = {

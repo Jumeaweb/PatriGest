@@ -122,6 +122,7 @@ function createHarness(options = {}) {
   return {
     user,
     privileged,
+    bucket,
     files,
     calls,
     current: () => record,
@@ -137,6 +138,26 @@ test("crée, retélécharge et confirme une sauvegarde SHA-256", async () => {
   assert.equal(harness.current().state, "verified");
   assert.equal((await harness.store().load(KEY)).sha256, object.sha256);
   assert.ok(harness.calls.includes(`upload:${PATH}:false`));
+});
+
+test("traite la réponse 400/absent réelle de Storage comme une absence vérifiée", async () => {
+  const harness = createHarness();
+  harness.bucket.exists = async (path) => ({
+    data: harness.files.has(path),
+    error: harness.files.has(path) ? null : { status: 400 },
+  });
+  await harness.store().save(KEY, stored("absence-storage"));
+  assert.equal(harness.calls.filter((call) => call.startsWith("upload:")).length, 1);
+  harness.terminal();
+  await harness.store().remove(KEY);
+  assert.equal(harness.current().state, "deleted");
+});
+
+test("ne transforme pas une erreur Storage autre que 400 en absence", async () => {
+  const harness = createHarness();
+  harness.bucket.exists = async () => ({ data: false, error: { statusCode: "503" } });
+  await assert.rejects(harness.store().save(KEY, stored("indisponible")), /indisponible/);
+  assert.equal(harness.calls.some((call) => call.startsWith("upload:")), false);
 });
 
 test("refuse des métadonnées locales incohérentes avant tout appel", async () => {

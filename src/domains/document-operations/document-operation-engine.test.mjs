@@ -22,6 +22,12 @@ const bytes = (value, mimeType = "application/pdf") => ({
 
 const stored = (value, mimeType = "application/pdf") => describeDocumentContent(bytes(value, mimeType));
 
+const catalogued = (value, objectVersion, mimeType = "application/pdf") => ({
+  ...stored(value, mimeType),
+  objectId: "object-1",
+  objectVersion,
+});
+
 function target(overrides = {}) {
   return {
     id: overrides.id ?? "target-1",
@@ -33,12 +39,12 @@ function target(overrides = {}) {
     compensationAction: overrides.compensationAction ?? "delete",
     state: overrides.state ?? "pending",
     revision: overrides.revision ?? 0,
-    expectedObjectId: null,
-    expectedObjectVersion: null,
-    appliedObjectId: null,
-    appliedObjectVersion: null,
-    compensatedObjectId: null,
-    compensatedObjectVersion: null,
+    expectedObjectId: overrides.expectedObjectId ?? null,
+    expectedObjectVersion: overrides.expectedObjectVersion ?? null,
+    appliedObjectId: overrides.appliedObjectId ?? null,
+    appliedObjectVersion: overrides.appliedObjectVersion ?? null,
+    compensatedObjectId: overrides.compensatedObjectId ?? null,
+    compensatedObjectVersion: overrides.compensatedObjectVersion ?? null,
   };
 }
 
@@ -226,6 +232,51 @@ test("remplace un objet après sauvegarde vérifiée", async () => {
   assert.equal(result.state, "completed");
   assert.equal(storage.objects.get("target-1").sha256, stored("new").sha256);
   assert.equal(backups.values.size, 0);
+});
+
+test("un remplacement légitime avec les mêmes octets crée une nouvelle version", async () => {
+  const rpc = createRpc(progress({
+    workflow: "transaction_proof_replace",
+    targets: [target({
+      forwardAction: "update",
+      compensationAction: "update",
+      expectedObjectId: "object-1",
+      expectedObjectVersion: "old-version",
+    })],
+  }));
+  const storage = createStorage([["target-1", catalogued("new", "old-version")]]);
+  const originalUpload = storage.upload;
+  storage.upload = async (item, content, upsert) => {
+    await originalUpload(item, content, upsert);
+    storage.objects.set(item.id, catalogued("new", "new-version"));
+  };
+  const result = await new DocumentOperationEngine({ rpc, storage, backups: createBackups() })
+    .execute(proofInput());
+  assert.equal(result.state, "completed");
+  assert.equal(storage.calls.filter((call) => call.startsWith("upload:")).length, 1);
+});
+
+test("une reprise après remplacement confirmé par sa version ne remute pas Storage", async () => {
+  const rpc = createRpc(progress({
+    workflow: "transaction_proof_replace",
+    state: "executing",
+    revision: 2,
+    targets: [target({
+      forwardAction: "update",
+      compensationAction: "update",
+      expectedObjectId: "object-1",
+      expectedObjectVersion: "old-version",
+    })],
+  }));
+  const storage = createStorage([["target-1", catalogued("new", "new-version")]]);
+  const backups = createBackups();
+  await backups.save(
+    { operationId: "operation-1", targetId: "target-1" },
+    catalogued("old", "old-version"),
+  );
+  const result = await new DocumentOperationEngine({ rpc, storage, backups }).execute(proofInput());
+  assert.equal(result.state, "completed");
+  assert.equal(storage.calls.some((call) => call.startsWith("upload:")), false);
 });
 
 test("supprime un objet après sauvegarde vérifiée", async () => {
