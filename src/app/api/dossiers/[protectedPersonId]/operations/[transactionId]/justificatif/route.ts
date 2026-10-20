@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/domains/protected-persons/services/authenticated-user";
 import { getTransactionDocument } from "@/domains/transactions/services/transaction-service";
 import { prepareProofFile, ProofFileError } from "@/domains/transactions/services/transaction-proof-file";
-import { getExpenseProofContext, ProofServiceError, saveTransactionProof } from "@/domains/transactions/services/transaction-proof-service";
+import { deleteTransactionProof, getExpenseProofContext, ProofServiceError, saveTransactionProof } from "@/domains/transactions/services/transaction-proof-service";
 
 type RouteParams = { params: Promise<{ protectedPersonId: string; transactionId: string }> };
 
@@ -30,5 +30,21 @@ export async function POST(request: Request, { params }: RouteParams) {
     if (error instanceof ProofFileError) return NextResponse.json({ message: error.message }, { status: 400 });
     if (error instanceof ProofServiceError) return NextResponse.json({ message: error.message }, { status: error.status });
     return NextResponse.json({ message: "Impossible d’enregistrer le justificatif." }, { status: 500 });
+  }
+}
+
+export async function DELETE(_request: Request, { params }: RouteParams) {
+  const { protectedPersonId, transactionId } = await params;
+  try {
+    await deleteTransactionProof(protectedPersonId, transactionId);
+    return NextResponse.json({ message: "Le justificatif a été supprimé." });
+  } catch (error) {
+    if (error instanceof ProofServiceError) {
+      return NextResponse.json({ message: error.message }, {
+        status: error.status,
+        headers: error.status === 405 ? { Allow: "GET, POST" } : undefined,
+      });
+    }
+    return NextResponse.json({ message: "Impossible de supprimer le justificatif." }, { status: 500 });
   }
 }

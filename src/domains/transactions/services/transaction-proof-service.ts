@@ -6,6 +6,12 @@ import { getTransaction, getTransactionDocument } from "./transaction-service";
 import { getProofWriteDenial } from "./transaction-proof-access";
 import { buildProofFileName, type PreparedProofFile } from "./transaction-proof-file";
 import { persistProof, ProofPersistenceError } from "./transaction-proof-persistence";
+import {
+  isTransactionProofDurableOperationsEnabled,
+  runTransactionProofWrite,
+} from "./transaction-proof-durable-availability";
+import { executeDurableTransactionProofOperation } from "./transaction-proof-durable";
+import { createTransactionProofRequestId } from "./transaction-proof-durable-reservation";
 
 const BUCKET = "transaction-proofs";
 
@@ -29,6 +35,48 @@ export async function saveTransactionProof(personId: string, transactionId: stri
   if (denial) throw new ProofServiceError("Dépense introuvable.", 404);
   const { supabase, userId } = await getAuthenticatedUser();
   const existing = await getTransactionDocument(transactionId);
+  const fileName = buildProofFileName(context.transaction.proof_reference!, context.transaction.label, file.extension);
+
+  await runTransactionProofWrite(
+    isTransactionProofDurableOperationsEnabled(),
+    async () => saveTransactionProofHistorically({ personId, transactionId, file, fileName, existing, supabase, userId }),
+    async () => {
+      try {
+        await executeDurableTransactionProofOperation({
+          client: supabase as unknown as Parameters<typeof executeDurableTransactionProofOperation>[0]["client"],
+          personId,
+          transactionId,
+          intent: existing ? "replace" : "create",
+          file,
+          fileName,
+          clientRequestId: createTransactionProofRequestId({
+            personId,
+            transactionId,
+            intent: existing ? "replace" : "create",
+            existingDocumentId: existing?.id ?? null,
+            existingUpdatedAt: existing?.updated_at ?? null,
+            bytes: file.bytes,
+          }),
+        });
+      } catch {
+        throw new ProofServiceError("Impossible d’enregistrer le justificatif. La dépense reste disponible.");
+      }
+    },
+  );
+}
+
+type AuthenticatedClient = Awaited<ReturnType<typeof getAuthenticatedUser>>["supabase"];
+
+async function saveTransactionProofHistorically(input: {
+  personId: string;
+  transactionId: string;
+  file: PreparedProofFile;
+  fileName: string;
+  existing: Awaited<ReturnType<typeof getTransactionDocument>>;
+  supabase: AuthenticatedClient;
+  userId: string;
+}) {
+  const { personId, transactionId, file, fileName, existing, supabase, userId } = input;
   const folder = `protected-persons/${personId}/transactions/${transactionId}`;
   const path = `${folder}/proof`;
   if (existing && existing.storage_path !== path) throw new ProofServiceError("Impossible de remplacer ce justificatif.");
@@ -39,8 +87,6 @@ export async function saveTransactionProof(personId: string, transactionId: stri
     return (data ?? []).some((item) => item.name === "proof");
   };
   if (!existing && await listProof()) throw new ProofServiceError("Un justificatif non enregistré existe déjà. Contactez l’administrateur.");
-  const fileName = buildProofFileName(context.transaction.proof_reference!, context.transaction.label, file.extension);
-
   try {
     await persistProof({
       existing: Boolean(existing),
@@ -88,5 +134,53 @@ export async function saveTransactionProof(personId: string, transactionId: stri
       } catch { console.error("Justificatif : état Storage non vérifié après échec d’upload", { transactionId }); }
     }
     throw new ProofServiceError("Impossible d’enregistrer le justificatif. La dépense reste disponible.");
+  }
+}
+
+export async function deleteTransactionProof(personId: string, transactionId: string) {
+  if (!isTransactionProofDurableOperationsEnabled()) {
+    throw new ProofServiceError("La suppression sécurisée des justificatifs n’est pas activée.", 405);
+  }
+  const context = await getExpenseProofContext(personId, transactionId);
+  if (!context) throw new ProofServiceError("Justificatif introuvable.", 404);
+  const denial = getProofWriteDenial({
+    personId,
+    transactionPersonId: context.transaction.account.protected_person_id,
+    transactionType: context.transaction.transaction_type,
+    transferId: context.transaction.transfer_id,
+    proofReference: context.transaction.proof_reference,
+    role: context.person.accessRole,
+    closed: isDateInClosedPeriod(
+      context.transaction.transaction_date,
+      context.person.managementPeriods,
+    ),
+  });
+  if (denial === "read_only") throw new ProofServiceError("Vous ne pouvez pas supprimer ce justificatif.", 403);
+  if (denial === "closed") throw new ProofServiceError("Cette dépense appartient à un exercice clôturé.", 403);
+  if (denial) throw new ProofServiceError("Justificatif introuvable.", 404);
+
+  const { supabase } = await getAuthenticatedUser();
+  const existing = await getTransactionDocument(transactionId);
+  if (!existing) throw new ProofServiceError("Justificatif introuvable.", 404);
+
+  try {
+    await executeDurableTransactionProofOperation({
+      client: supabase as unknown as Parameters<typeof executeDurableTransactionProofOperation>[0]["client"],
+      personId,
+      transactionId,
+      intent: "delete",
+      file: null,
+      fileName: null,
+      clientRequestId: createTransactionProofRequestId({
+        personId,
+        transactionId,
+        intent: "delete",
+        existingDocumentId: existing.id,
+        existingUpdatedAt: existing.updated_at,
+        bytes: null,
+      }),
+    });
+  } catch {
+    throw new ProofServiceError("Impossible de supprimer le justificatif.");
   }
 }

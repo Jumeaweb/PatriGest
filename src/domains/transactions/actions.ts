@@ -7,7 +7,7 @@ import { transferSchema } from "@/domains/transfers/schemas/transfer-schema";
 import { createTransfer, deleteTransfer } from "@/domains/transfers/services/transfer-service";
 import { isClosedPeriodError } from "./errors";
 import { transactionSchema } from "./schemas/transaction-schema";
-import { createTransaction, deleteTransaction, updateTransaction } from "./services/transaction-service";
+import { createTransaction, deleteTransaction, DURABLE_PROOF_TRANSACTION_DELETE_MESSAGE, updateTransaction } from "./services/transaction-service";
 import { prepareProofFile, ProofFileError } from "./services/transaction-proof-file";
 import { createTransactionWithOptionalProof } from "./services/transaction-proof-create";
 import { saveTransactionProof } from "./services/transaction-proof-service";
@@ -66,7 +66,7 @@ export async function deleteTransactionAction(personId: string, id: string, retu
   void _formData;
   if (!idsValid(personId, id)) return { status: "error", message: "Opération invalide." };
   try { await deleteTransaction(id, personId); }
-  catch (error) { return { status: "error", message: isClosedPeriodError(error) ? "Cette opération appartient à un exercice clôturé et ne peut plus être supprimée." : "Impossible de supprimer l’opération." }; }
+  catch (error) { return { status: "error", message: isClosedPeriodError(error) ? "Cette opération appartient à un exercice clôturé et ne peut plus être supprimée." : error instanceof Error && error.message === DURABLE_PROOF_TRANSACTION_DELETE_MESSAGE ? error.message : "Impossible de supprimer l’opération." }; }
   refresh(personId);
   redirect(getSafeTransactionReturnTo(personId, returnHref));
 }

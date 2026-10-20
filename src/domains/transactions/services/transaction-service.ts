@@ -9,6 +9,10 @@ import { getTransactionPageMetadata, TRANSACTION_JOURNAL_PAGE_SIZE } from "../tr
 import { loadCompleteTransactionHistory, loadTransactionRelationsInBatches } from "./transaction-history";
 
 import { resolveEffectiveTransactionClassification, type EffectiveTransactionClassification } from "./transaction-classification-read";
+import { isTransactionProofDurableOperationsEnabled } from "./transaction-proof-durable-availability";
+
+export const DURABLE_PROOF_TRANSACTION_DELETE_MESSAGE =
+  "Supprimez d’abord le justificatif avant de supprimer l’opération.";
 
 export type TransactionJournalItem = Transaction & { account: FinancialAccount; category: Category | null; classification: EffectiveTransactionClassification; transfer: Transfer | null; counterpartAccount: FinancialAccount | null; attachmentCount: number };
 export type TransactionJournalPage = ReturnType<typeof getTransactionPageMetadata> & { items: TransactionJournalItem[] };
@@ -166,6 +170,9 @@ export async function deleteTransaction(id: string, personId: string) {
   let backup: Blob | null = null;
 
   if (document) {
+    if (isTransactionProofDurableOperationsEnabled()) {
+      throw new Error(DURABLE_PROOF_TRANSACTION_DELETE_MESSAGE);
+    }
     const { data, error: downloadError } = await supabase.storage.from("transaction-proofs").download(document.storage_path);
     if (downloadError || !data) throw new Error("Impossible de sécuriser le justificatif avant la suppression.");
     backup = data;

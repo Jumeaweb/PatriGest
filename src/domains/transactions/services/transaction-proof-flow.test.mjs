@@ -39,6 +39,7 @@ test("la route API existante utilise les validations et le service partagés", (
   assert.match(service, /protected-persons\/\$\{personId\}\/transactions\/\$\{transactionId\}/);
   assert.match(service, /storage\.upload\(path, file\.bytes/);
   assert.match(service, /\.from\("transaction_documents"\)/);
+  assert.match(route, /await deleteTransactionProof\(protectedPersonId, transactionId\)/);
 });
 
 test("le champ fichier existe seulement pour une dépense en création", () => {
