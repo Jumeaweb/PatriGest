@@ -119,6 +119,46 @@ export function parseManagementReportSnapshot(value: Json) {
   return { success: true as const, data: parsed.data as ManagementReportPreview };
 }
 
+export type FinalizedManagementReportSnapshotResult =
+  | {
+      success: true;
+      preview: ManagementReportPreview;
+      snapshot: Json;
+    }
+  | {
+      success: false;
+      reason: "missing" | "unsupported_version" | "invalid" | "invalid_status";
+    };
+
+export function finalizeManagementReportProjectSnapshot(
+  value: Json | null,
+  schemaVersion: number | null,
+): FinalizedManagementReportSnapshotResult {
+  if (value === null || schemaVersion === null) {
+    return { success: false, reason: "missing" };
+  }
+  if (schemaVersion !== MANAGEMENT_REPORT_SNAPSHOT_SCHEMA_VERSION) {
+    return { success: false, reason: "unsupported_version" };
+  }
+
+  const project = parseManagementReportSnapshot(value);
+  if (!project.success) return { success: false, reason: "invalid" };
+  if (project.data.report.status !== "generated") {
+    return { success: false, reason: "invalid_status" };
+  }
+
+  const raw = value as Record<string, Json>;
+  const rawReport = raw.report as Record<string, Json>;
+  const snapshot = {
+    ...raw,
+    report: { ...rawReport, status: "finalized" },
+  } satisfies Json;
+  const finalized = parseManagementReportSnapshot(snapshot);
+  if (!finalized.success) return { success: false, reason: "invalid" };
+
+  return { success: true, preview: finalized.data, snapshot };
+}
+
 export function toJsonValue(value: unknown): Json {
   if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
   if (Array.isArray(value)) return value.map(toJsonValue);

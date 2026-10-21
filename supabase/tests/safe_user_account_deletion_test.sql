@@ -144,6 +144,10 @@ set status = 'approved',
 where id = '20000000-0000-4000-8000-000000000701';
 alter table public.management_reports enable trigger management_reports_protect_identity;
 
+-- Cette fixture représente un document historique antérieur à la garde
+-- additive 3G-2A. La migration ne réécrit pas les lignes déjà présentes.
+alter table public.management_report_documents
+disable trigger management_report_documents_10_validate_final_snapshot;
 insert into public.management_report_documents (
   id, management_report_id, document_type, storage_path, file_name,
   mime_type, file_size, generated_by
@@ -154,6 +158,8 @@ values (
   'sec02/management-report.pdf', 'management-report.pdf', 'application/pdf', 1,
   '20000000-0000-4000-8000-000000000003'
 );
+alter table public.management_report_documents
+enable trigger management_report_documents_10_validate_final_snapshot;
 
 insert into public.management_report_transmissions (
   id, management_report_id, transmission_date, transmission_method,

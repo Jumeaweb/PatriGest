@@ -5,7 +5,7 @@ import { getManagementReportDocument, getManagementReportPreviewState, getManage
 import { buildManagementReportPreview } from "@/domains/management-reports/preview-model";
 import { generateManagementReportPdf } from "@/domains/management-reports/pdf";
 import { MANAGEMENT_REPORT_BUCKET, managementReportContentDisposition, managementReportDownloadName, managementReportStoragePath, type ManagementReportPdfMode } from "@/domains/management-reports/document-helpers";
-import { MANAGEMENT_REPORT_SNAPSHOT_SCHEMA_VERSION, parseManagementReportSnapshot, toJsonValue } from "@/domains/management-reports/snapshot";
+import { finalizeManagementReportProjectSnapshot, MANAGEMENT_REPORT_SNAPSHOT_SCHEMA_VERSION, parseManagementReportSnapshot, toJsonValue } from "@/domains/management-reports/snapshot";
 
 export const runtime = "nodejs";
 type Params = { params: Promise<{ protectedPersonId: string; reportId: string }> };
@@ -51,15 +51,17 @@ export async function POST(_request: Request, { params }: Params) {
 export async function PATCH(_request: Request, { params }: Params) {
   const ids = await identifiers(params);
   if (!ids) return NextResponse.json({ message: "Compte de gestion introuvable." }, { status: 404 });
-  const finalized = await livePreview(ids.protectedPersonId, ids.reportId, "finalized");
-  if (!finalized) return NextResponse.json({ message: "Compte de gestion introuvable." }, { status: 404 });
-  const { preview, accessRole, currentStatus, refreshRequiredAt } = finalized;
-  if (accessRole === "read_only") return NextResponse.json({ message: "Vous ne pouvez pas finaliser ce compte de gestion." }, { status: 403 });
-  if (currentStatus !== "generated") return NextResponse.json({ message: "Un projet doit être généré avant la finalisation." }, { status: 409 });
-  if (refreshRequiredAt) return NextResponse.json({ message: "Le compte de gestion doit être actualisé et son projet régénéré avant finalisation." }, { status: 409 });
-  if (!preview.complete || !preview.checks.consistent) return NextResponse.json({ message: "Les contrôles du compte de gestion ne permettent plus sa finalisation." }, { status: 409 });
+  const context = await getManagementReportPreviewState(ids.protectedPersonId, ids.reportId);
+  if (!context) return NextResponse.json({ message: "Compte de gestion introuvable." }, { status: 404 });
+  if (context.person.accessRole === "read_only") return NextResponse.json({ message: "Vous ne pouvez pas finaliser ce compte de gestion." }, { status: 403 });
+  if (context.report.status !== "generated") return NextResponse.json({ message: "Un projet doit être généré avant la finalisation." }, { status: 409 });
+  if (context.report.refresh_required_at) return NextResponse.json({ message: "Le compte de gestion doit être actualisé et son projet régénéré avant finalisation." }, { status: 409 });
   const draft = await getManagementReportDocument(ids.protectedPersonId, ids.reportId, "management_report_draft");
   if (!draft) return NextResponse.json({ message: "Le PDF projet est introuvable." }, { status: 409 });
+  const finalized = finalizeManagementReportProjectSnapshot(draft.preview_snapshot, draft.snapshot_schema_version);
+  if (!finalized.success) return NextResponse.json({ message: "Le snapshot du projet est absent ou incompatible. Reprenez la préparation et générez un nouveau projet." }, { status: 409 });
+  const { preview, snapshot } = finalized;
+  if (!preview.complete || !preview.checks.consistent) return NextResponse.json({ message: "Les contrôles du projet ne permettent pas sa finalisation." }, { status: 409 });
   const { supabase } = await getAuthenticatedUser();
   const storedDraft = await supabase.storage.from(MANAGEMENT_REPORT_BUCKET).download(draft.storage_path);
   if (storedDraft.error || !storedDraft.data) return NextResponse.json({ message: "Impossible de sécuriser le PDF projet avant finalisation." }, { status: 500 });
@@ -74,7 +76,7 @@ export async function PATCH(_request: Request, { params }: Params) {
     const finalCleanup = await supabase.storage.from(MANAGEMENT_REPORT_BUCKET).remove([finalPath]);
     return NextResponse.json({ message: finalCleanup.error ? "La finalisation a été annulée, mais le fichier final temporaire n’a pas pu être nettoyé. Contactez l’administrateur." : "Le PDF projet n’a pas pu être remplacé. La finalisation a été annulée." }, { status: 500 });
   }
-  const transition = await supabase.rpc("finalize_management_report", { p_report_id: ids.reportId, p_storage_path: finalPath, p_file_name: finalName, p_mime_type: "application/pdf", p_file_size: finalPdf.length, p_preview_snapshot: toJsonValue(preview), p_snapshot_schema_version: MANAGEMENT_REPORT_SNAPSHOT_SCHEMA_VERSION });
+  const transition = await supabase.rpc("finalize_management_report", { p_report_id: ids.reportId, p_storage_path: finalPath, p_file_name: finalName, p_mime_type: "application/pdf", p_file_size: finalPdf.length, p_preview_snapshot: snapshot, p_snapshot_schema_version: MANAGEMENT_REPORT_SNAPSHOT_SCHEMA_VERSION });
   if (transition.error) {
     const [finalCleanup, draftRestore] = await Promise.all([supabase.storage.from(MANAGEMENT_REPORT_BUCKET).remove([finalPath]), restoreFile(supabase, draft.storage_path, draftBytes)]);
     return NextResponse.json({ message: finalCleanup.error || draftRestore.error ? "La finalisation a échoué et la restauration des fichiers nécessite une intervention." : "La finalisation a échoué. Le PDF projet a été restauré." }, { status: 500 });

@@ -236,7 +236,7 @@ test("3B-2 synchronise les fiches, écrit l’audit atomique et bloque un projet
   assert.doesNotMatch(migration, /set_config\('patrigest\.property_event/);
   assert.match(reportActions, /Compte de gestion à actualiser/);
   assert.match(reportActions, /!refreshRequiredAt&&<button/);
-  assert.match(documentRoute, /if \(refreshRequiredAt\) return NextResponse\.json/);
+  assert.match(documentRoute, /if \(context\.report\.refresh_required_at\) return NextResponse\.json/);
 });
 
 test("3B-3 annule les événements via une RPC auditée et conserve leur historique", () => {
