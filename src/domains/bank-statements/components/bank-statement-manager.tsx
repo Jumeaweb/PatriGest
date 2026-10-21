@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Download, ExternalLink, FilePenLine, FilePlus2, Trash2 } from "lucide-react";
+import { Download, ExternalLink, FilePenLine, FilePlus2, FileX2, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
 import type { BankStatement } from "@/types/database";
@@ -9,10 +9,10 @@ import type { BankReconciliationListState } from "../reconciliation-service";
 
 const date = (value: string) => new Intl.DateTimeFormat("fr-FR").format(new Date(`${value}T00:00:00Z`));
 const euro = (value: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
-type ManagerProps = { personId: string; accountId: string; items: BankStatement[]; totalCount: number; reconciliations: BankReconciliationListState[]; canManage: boolean };
-type StatementProps = { personId: string; accountId: string; item: BankStatement; reconciliation: BankReconciliationListState | null; canManage: boolean };
+type ManagerProps = { personId: string; accountId: string; items: BankStatement[]; totalCount: number; reconciliations: BankReconciliationListState[]; canManage: boolean; durableOperationsEnabled: boolean };
+type StatementProps = { personId: string; accountId: string; item: BankStatement; reconciliation: BankReconciliationListState | null; canManage: boolean; durableOperationsEnabled: boolean };
 
-export function BankStatementManager({ personId, accountId, items, totalCount, reconciliations, canManage }: ManagerProps) {
+export function BankStatementManager({ personId, accountId, items, totalCount, reconciliations, canManage, durableOperationsEnabled }: ManagerProps) {
   const [adding, setAdding] = useState(false);
   const byStatement = new Map(reconciliations.map((item) => [item.bank_statement_id, item]));
   return <>
@@ -24,10 +24,10 @@ export function BankStatementManager({ personId, accountId, items, totalCount, r
       <div className="mt-3 hidden overflow-hidden rounded-xl border border-[#E2E8F0] bg-white md:block">
         <table className="w-full text-left text-xs">
           <thead className="bg-[#F8FAFC] text-[11px] uppercase tracking-wide text-[#64748B]"><tr><th className="px-3 py-2">Date du relevé</th><th className="px-3 py-2">Période</th><th className="px-3 py-2 text-right">Solde du relevé</th><th className="px-3 py-2">Contrôle</th><th className="px-3 py-2">Document</th></tr></thead>
-          <tbody className="divide-y divide-[#E2E8F0]">{items.map((item) => <StatementRow key={item.id} personId={personId} accountId={accountId} item={item} reconciliation={byStatement.get(item.id) ?? null} canManage={canManage} />)}</tbody>
+          <tbody className="divide-y divide-[#E2E8F0]">{items.map((item) => <StatementRow key={item.id} personId={personId} accountId={accountId} item={item} reconciliation={byStatement.get(item.id) ?? null} canManage={canManage} durableOperationsEnabled={durableOperationsEnabled} />)}</tbody>
         </table>
       </div>
-      <div className="mt-3 space-y-2 md:hidden">{items.map((item) => <StatementCard key={item.id} personId={personId} accountId={accountId} item={item} reconciliation={byStatement.get(item.id) ?? null} canManage={canManage} />)}</div>
+      <div className="mt-3 space-y-2 md:hidden">{items.map((item) => <StatementCard key={item.id} personId={personId} accountId={accountId} item={item} reconciliation={byStatement.get(item.id) ?? null} canManage={canManage} durableOperationsEnabled={durableOperationsEnabled} />)}</div>
     </> : <p className="mt-3 rounded-xl border border-dashed border-[#CBD5E1] bg-white p-6 text-center text-sm text-[#64748B]">Aucun relevé bancaire enregistré.</p>}
     <StatementDialog personId={personId} accountId={accountId} open={adding} close={() => setAdding(false)} />
   </>;
@@ -56,15 +56,20 @@ function ReconciliationStatus({ reconciliation }: { reconciliation: BankReconcil
   return <span className="text-xs font-semibold text-[#64748B]">{label}</span>;
 }
 
-function StatementActions({ personId, accountId, item, canManage, isValidated }: StatementProps & { isValidated: boolean }) {
-  const [editing, setEditing] = useState(false), [deleting, setDeleting] = useState(false); const endpoint = `/api/dossiers/${personId}/comptes/${accountId}/releves/${item.id}`; const hasDocument = item.original_file_name !== null && item.mime_type !== null && item.file_size !== null;
-  return <><div className="flex flex-wrap gap-1.5">{hasDocument ? <><a className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" href={endpoint} target="_blank" rel="noreferrer"><ExternalLink size={13} />Voir</a><a className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" href={`${endpoint}?download=1`}><Download size={13} />Télécharger</a></> : <span className="self-center text-xs text-[#64748B]">Aucun PDF</span>}{canManage && !isValidated && <><button className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" onClick={() => setEditing(true)}><FilePenLine size={13} />Modifier</button><button className="button button-secondary min-h-8 gap-1 px-2.5 text-xs text-red-700" onClick={() => setDeleting(true)}><Trash2 size={13} />Supprimer</button></>}</div><StatementDialog personId={personId} accountId={accountId} item={item} open={editing} close={() => setEditing(false)} /><DeleteDialog endpoint={endpoint} item={item} open={deleting} close={() => setDeleting(false)} /></>;
+function StatementActions({ personId, accountId, item, canManage, durableOperationsEnabled, isValidated }: StatementProps & { isValidated: boolean }) {
+  const [editing, setEditing] = useState(false), [deleting, setDeleting] = useState(false), [deletingDocument, setDeletingDocument] = useState(false); const endpoint = `/api/dossiers/${personId}/comptes/${accountId}/releves/${item.id}`; const hasDocument = item.original_file_name !== null && item.mime_type !== null && item.file_size !== null;
+  return <><div className="flex flex-wrap gap-1.5">{hasDocument ? <><a className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" href={endpoint} target="_blank" rel="noreferrer"><ExternalLink size={13} />Voir</a><a className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" href={`${endpoint}?download=1`}><Download size={13} />Télécharger</a></> : <span className="self-center text-xs text-[#64748B]">Aucun PDF</span>}{canManage && !isValidated && <><button className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" onClick={() => setEditing(true)}><FilePenLine size={13} />Modifier</button>{hasDocument && durableOperationsEnabled && <button className="button button-secondary min-h-8 gap-1 px-2.5 text-xs text-red-700" onClick={() => setDeletingDocument(true)}><FileX2 size={13} />Supprimer le PDF</button>}{(!hasDocument || !durableOperationsEnabled) && <button className="button button-secondary min-h-8 gap-1 px-2.5 text-xs text-red-700" onClick={() => setDeleting(true)}><Trash2 size={13} />Supprimer</button>}</>}</div><StatementDialog personId={personId} accountId={accountId} item={item} open={editing} close={() => setEditing(false)} /><DocumentDeleteDialog endpoint={endpoint} item={item} open={deletingDocument} close={() => setDeletingDocument(false)} /><DeleteDialog endpoint={endpoint} item={item} open={deleting} close={() => setDeleting(false)} /></>;
 }
 
 function StatementDialog({ personId, accountId, item, open, close }: { personId: string; accountId: string; item?: BankStatement; open: boolean; close: () => void }) {
-  const router = useRouter(); const [busy, setBusy] = useState(false), [message, setMessage] = useState(""); const input = useRef<HTMLInputElement>(null); const formId = `statement-${item?.id ?? "new"}`; const endpoint = item ? `/api/dossiers/${personId}/comptes/${accountId}/releves/${item.id}` : `/api/dossiers/${personId}/comptes/${accountId}/releves`;
-  async function submit(form: FormData) { setBusy(true); setMessage(""); try { const response = await fetch(endpoint, { method: "POST", body: form }); const result = await response.json() as { message?: string }; if (!response.ok) throw new Error(result.message || "Impossible d’enregistrer le relevé."); if (input.current) input.current.value = ""; close(); router.refresh(); } catch (error) { setMessage(error instanceof Error ? error.message : "Impossible d’enregistrer le relevé."); } finally { setBusy(false); } }
+  const router = useRouter(); const [busy, setBusy] = useState(false), [message, setMessage] = useState(""); const input = useRef<HTMLInputElement>(null); const clientRequestId = useRef<string | null>(null); const formId = `statement-${item?.id ?? "new"}`; const endpoint = item ? `/api/dossiers/${personId}/comptes/${accountId}/releves/${item.id}` : `/api/dossiers/${personId}/comptes/${accountId}/releves`;
+  async function submit(form: FormData) { setBusy(true); setMessage(""); if (!item) { clientRequestId.current ??= crypto.randomUUID(); form.set("clientRequestId", clientRequestId.current); } try { const response = await fetch(endpoint, { method: "POST", body: form }); const result = await response.json() as { message?: string }; if (!response.ok) throw new Error(result.message || "Impossible d’enregistrer le relevé."); if (input.current) input.current.value = ""; clientRequestId.current = null; close(); router.refresh(); } catch (error) { setMessage(error instanceof Error ? error.message : "Impossible d’enregistrer le relevé."); } finally { setBusy(false); } }
   return <AppConfirmDialog open={open} onClose={close} title={item ? "Modifier le relevé" : "Ajouter un relevé"} description={item ? "Modifiez les informations ou choisissez un PDF pour ajouter ou remplacer le document." : "Renseignez le relevé et ajoutez éventuellement son PDF."} actions={<button className="button button-primary" type="submit" form={formId} disabled={busy}>{busy ? "Enregistrement…" : "Enregistrer"}</button>}><form id={formId} action={submit} className="grid gap-3 sm:grid-cols-2"><Field name="statementStartDate" label="Date de début (facultative)" type="date" value={item?.statement_start_date} /><Field name="statementEndDate" label="Date de fin" type="date" value={item?.statement_end_date} required /><Field name="statementBalance" label="Solde final (facultatif)" type="number" value={item?.statement_balance} /><Field name="note" label="Note (facultative)" value={item?.note} /><label className="sm:col-span-2"><span className="auth-label">Fichier PDF (facultatif)</span><input ref={input} className="block max-w-full text-xs file:mr-2 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:font-semibold" name="file" type="file" accept="application/pdf" /></label>{message && <p role="alert" className="sm:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{message}</p>}</form></AppConfirmDialog>;
+}
+
+function DocumentDeleteDialog({ endpoint, item, open, close }: { endpoint: string; item: BankStatement; open: boolean; close: () => void }) {
+  const router = useRouter(); const [busy, setBusy] = useState(false), [message, setMessage] = useState(""); async function remove() { setBusy(true); setMessage(""); try { const response = await fetch(`${endpoint}?document=1`, { method: "DELETE" }); const result = await response.json() as { message?: string }; if (!response.ok) throw new Error(result.message || "Impossible de supprimer le PDF du relevé."); close(); router.refresh(); } catch (error) { setMessage(error instanceof Error ? error.message : "Impossible de supprimer le PDF du relevé."); } finally { setBusy(false); } }
+  return <AppConfirmDialog open={open} onClose={close} title="Supprimer le PDF de ce relevé ?" description="Le relevé bancaire et ses informations seront conservés. Seul le document PDF sera supprimé de manière sécurisée." subject={date(item.statement_end_date)} actions={<button className="button button-danger" onClick={remove} disabled={busy}>{busy ? "Suppression…" : "Supprimer le PDF"}</button>}>{message && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{message}</p>}</AppConfirmDialog>;
 }
 
 function DeleteDialog({ endpoint, item, open, close }: { endpoint: string; item: BankStatement; open: boolean; close: () => void }) {

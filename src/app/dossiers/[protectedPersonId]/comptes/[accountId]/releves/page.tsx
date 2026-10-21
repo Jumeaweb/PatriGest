@@ -4,6 +4,7 @@ import { z } from "zod";
 import { PrivateShell } from "@/components/layout/private-shell";
 import { AppBreadcrumb } from "@/components/ui/app-breadcrumb";
 import { parseBankStatementPage, type BankStatementQuery } from "@/domains/bank-statements/bank-statement-pagination";
+import { isBankStatementDurableOperationsEnabled } from "@/domains/bank-statements/bank-statement-durable-availability";
 import { BankStatementManager } from "@/domains/bank-statements/components/bank-statement-manager";
 import { BankStatementPagination } from "@/domains/bank-statements/components/bank-statement-pagination";
 import { getBankReconciliationListStates } from "@/domains/bank-statements/reconciliation-service";
@@ -88,6 +89,7 @@ export default async function Page({
         totalCount={statementPage.totalCount}
         reconciliations={reconciliations}
         canManage={person.accessRole !== "read_only"}
+        durableOperationsEnabled={isBankStatementDurableOperationsEnabled()}
       />
       <BankStatementPagination
         pathname={pathname}
