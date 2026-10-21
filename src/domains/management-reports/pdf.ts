@@ -203,8 +203,14 @@ function simpleTable(
 
 export async function generateManagementReportPdf(
   preview: ManagementReportPreview,
-  options: { mode: ManagementReportPdfMode },
+  options: { mode: ManagementReportPdfMode; deterministicCreationDate?: string },
 ): Promise<Buffer> {
+  const deterministicCreationDate = options.deterministicCreationDate
+    ? new Date(options.deterministicCreationDate)
+    : null;
+  if (deterministicCreationDate && Number.isNaN(deterministicCreationDate.getTime())) {
+    throw new Error("La date déterministe du PDF est invalide.");
+  }
   const doc = new PDFDocument({
     size: "A4",
     margins: { top: 52, right: 42, bottom: 42, left: 42 },
@@ -213,6 +219,9 @@ export async function generateManagementReportPdf(
       Title: `Compte de gestion ${preview.report.report_year}`,
       Author: "PatriGest",
       Subject: "Compte de gestion - Annexe 1",
+      ...(deterministicCreationDate
+        ? { CreationDate: deterministicCreationDate, ModDate: deterministicCreationDate }
+        : {}),
     },
   });
   const chunks: Buffer[] = [];

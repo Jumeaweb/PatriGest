@@ -5,6 +5,7 @@ import {
   finalizeManagementReportProjectSnapshot,
   MANAGEMENT_REPORT_SNAPSHOT_SCHEMA_VERSION,
 } from "./snapshot.ts";
+import { generateManagementReportPdf } from "./pdf.ts";
 
 const projectSnapshot = {
   complete: true,
@@ -189,4 +190,25 @@ test("le générateur limite les différences projet/final à la présentation",
   assert.match(patchBody, /context\.report\.refresh_required_at/);
   assert.match(route, /rpc\("resume_management_report_preparation"/);
   assert.match(route, /accessRole === "read_only"/);
+});
+
+test("le PDF durable est reproductible pour une même photographie", async () => {
+  const first = await generateManagementReportPdf(projectSnapshot, {
+    mode: "draft",
+    deterministicCreationDate: projectSnapshot.report.updated_at,
+  });
+  const retry = await generateManagementReportPdf(structuredClone(projectSnapshot), {
+    mode: "draft",
+    deterministicCreationDate: projectSnapshot.report.updated_at,
+  });
+  const finalSnapshot = finalizeManagementReportProjectSnapshot(projectSnapshot, 1);
+  assert.equal(finalSnapshot.success, true);
+  if (!finalSnapshot.success) return;
+  const final = await generateManagementReportPdf(finalSnapshot.preview, {
+    mode: "final",
+    deterministicCreationDate: finalSnapshot.preview.report.updated_at,
+  });
+
+  assert.deepEqual(first, retry);
+  assert.notDeepEqual(first, final);
 });

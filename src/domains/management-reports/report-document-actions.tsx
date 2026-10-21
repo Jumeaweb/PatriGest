@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
 import type { ManagementReportStatus } from "@/types/database";
@@ -24,6 +24,7 @@ const dialogs = {
 
 function DocumentDialog({ kind, endpoint, onClose }: { kind: DialogKind; endpoint: string; onClose: () => void }) {
   const router = useRouter();
+  const clientRequestId = useRef<string | null>(null);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const copy = dialogs[kind];
@@ -31,7 +32,11 @@ function DocumentDialog({ kind, endpoint, onClose }: { kind: DialogKind; endpoin
     setPending(true);
     setMessage("");
     try {
-      const response = await fetch(endpoint, { method: copy.method });
+      clientRequestId.current ??= crypto.randomUUID();
+      const response = await fetch(endpoint, {
+        method: copy.method,
+        headers: { "x-patrigest-request-id": clientRequestId.current },
+      });
       const contentType = response.headers.get("content-type") ?? "";
       const text = await response.text();
       let result: { message?: string } = {};
