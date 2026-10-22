@@ -69,6 +69,17 @@ export function sameStoredDocument(
     && left.mimeType === right.mimeType;
 }
 
+function hasExpectedStorageIdentity(
+  current: StoredDocumentObject | null,
+  target: DocumentOperationTarget,
+) {
+  return current !== null
+    && target.expectedObjectId !== null
+    && target.expectedObjectVersion !== null
+    && current.objectId === target.expectedObjectId
+    && current.objectVersion === target.expectedObjectVersion;
+}
+
 const TERMINAL_STATES = new Set([
   "completed",
   "compensated",
@@ -345,7 +356,7 @@ export class DocumentOperationEngine {
       }
     } else if (target.forwardAction === "update") {
       const backup = await this.loadBackup(operationId, target.id);
-      if (!sameStoredDocument(before, backup)) {
+      if (!sameStoredDocument(before, backup) || !hasExpectedStorageIdentity(before, target)) {
         throw safeError(operationId, "mutation", "storage_diverged");
       }
       try {
@@ -353,14 +364,17 @@ export class DocumentOperationEngine {
       } catch {
         const afterUnknown = await this.storage.inspect(target);
         if (sameStoredDocument(afterUnknown, desired)) return;
-        if (!sameStoredDocument(afterUnknown, backup)) {
+        if (
+          !sameStoredDocument(afterUnknown, backup)
+          || !hasExpectedStorageIdentity(afterUnknown, target)
+        ) {
           throw safeError(operationId, "mutation", "storage_diverged");
         }
         throw safeError(operationId, "mutation", "ambiguous_mutation");
       }
     } else {
       const backup = await this.loadBackup(operationId, target.id);
-      if (!sameStoredDocument(before, backup)) {
+      if (!sameStoredDocument(before, backup) || !hasExpectedStorageIdentity(before, target)) {
         throw safeError(operationId, "mutation", "storage_diverged");
       }
       try {
@@ -368,7 +382,10 @@ export class DocumentOperationEngine {
       } catch {
         const afterUnknown = await this.storage.inspect(target);
         if (afterUnknown === null) return;
-        if (!sameStoredDocument(afterUnknown, backup)) {
+        if (
+          !sameStoredDocument(afterUnknown, backup)
+          || !hasExpectedStorageIdentity(afterUnknown, target)
+        ) {
           throw safeError(operationId, "mutation", "storage_diverged");
         }
         throw safeError(operationId, "mutation", "ambiguous_mutation");

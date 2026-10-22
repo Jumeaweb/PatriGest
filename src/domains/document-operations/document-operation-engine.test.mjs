@@ -224,9 +224,14 @@ test("l’API de démarrage sauvegarde aussi les opérations destructives avant 
 test("remplace un objet après sauvegarde vérifiée", async () => {
   const rpc = createRpc(progress({
     workflow: "transaction_proof_replace",
-    targets: [target({ forwardAction: "update", compensationAction: "update" })],
+    targets: [target({
+      forwardAction: "update",
+      compensationAction: "update",
+      expectedObjectId: "object-1",
+      expectedObjectVersion: "old-version",
+    })],
   }));
-  const storage = createStorage([["target-1", stored("old")]]);
+  const storage = createStorage([["target-1", catalogued("old", "old-version")]]);
   const backups = createBackups();
   const result = await new DocumentOperationEngine({ rpc, storage, backups }).execute(proofInput());
   assert.equal(result.state, "completed");
@@ -282,9 +287,14 @@ test("une reprise après remplacement confirmé par sa version ne remute pas Sto
 test("supprime un objet après sauvegarde vérifiée", async () => {
   const rpc = createRpc(progress({
     workflow: "transaction_proof_delete",
-    targets: [target({ forwardAction: "delete", compensationAction: "insert" })],
+    targets: [target({
+      forwardAction: "delete",
+      compensationAction: "insert",
+      expectedObjectId: "object-1",
+      expectedObjectVersion: "old-version",
+    })],
   }));
-  const storage = createStorage([["target-1", stored("old")]]);
+  const storage = createStorage([["target-1", catalogued("old", "old-version")]]);
   const result = await new DocumentOperationEngine({ rpc, storage, backups: createBackups() })
     .execute(proofInput(null));
   assert.equal(result.state, "completed");
@@ -321,9 +331,14 @@ test("une finalisation refusée compense la création et ne retourne pas un faux
 test("une compensation destructive restaure et trace les octets avant de les nettoyer", async () => {
   const rpc = createRpc(progress({
     workflow: "transaction_proof_replace",
-    targets: [target({ forwardAction: "update", compensationAction: "update" })],
+    targets: [target({
+      forwardAction: "update",
+      compensationAction: "update",
+      expectedObjectId: "object-1",
+      expectedObjectVersion: "old-version",
+    })],
   }), { failFinalize: true });
-  const storage = createStorage([["target-1", stored("old")]]);
+  const storage = createStorage([["target-1", catalogued("old", "old-version")]]);
   const backups = createBackups();
   await assert.rejects(
     new DocumentOperationEngine({ rpc, storage, backups }).execute(proofInput()),
@@ -361,16 +376,52 @@ test("une divergence avant remplacement n’est jamais écrasée par la compensa
     workflow: "transaction_proof_replace",
     state: "executing",
     revision: 1,
-    targets: [target({ forwardAction: "update", compensationAction: "update" })],
+    targets: [target({
+      forwardAction: "update",
+      compensationAction: "update",
+      expectedObjectId: "object-1",
+      expectedObjectVersion: "old-version",
+    })],
   }));
-  const storage = createStorage([["target-1", stored("concurrent")]]);
+  const storage = createStorage([["target-1", catalogued("concurrent", "concurrent-version")]]);
   const backups = createBackups();
-  await backups.save({ operationId: "operation-1", targetId: "target-1" }, stored("old"));
+  await backups.save(
+    { operationId: "operation-1", targetId: "target-1" },
+    catalogued("old", "old-version"),
+  );
   await assert.rejects(
     new DocumentOperationEngine({ rpc, storage, backups }).execute(proofInput()),
     (error) => error instanceof DocumentOperationError && error.code === "storage_diverged",
   );
   assert.equal(storage.objects.get("target-1").sha256, stored("concurrent").sha256);
+  assert.equal(rpc.current().state, "attention_required");
+});
+
+test("une suppression refuse une version Storage différente même avec les mêmes octets", async () => {
+  const rpc = createRpc(progress({
+    workflow: "transaction_proof_delete",
+    state: "executing",
+    revision: 1,
+    targets: [target({
+      forwardAction: "delete",
+      compensationAction: "insert",
+      expectedObjectId: "object-1",
+      expectedObjectVersion: "reserved-version",
+    })],
+  }));
+  const storage = createStorage([["target-1", catalogued("old", "concurrent-version")]]);
+  const backups = createBackups();
+  await backups.save(
+    { operationId: "operation-1", targetId: "target-1" },
+    catalogued("old", "reserved-version"),
+  );
+
+  await assert.rejects(
+    new DocumentOperationEngine({ rpc, storage, backups }).execute(proofInput(null)),
+    (error) => error instanceof DocumentOperationError && error.code === "storage_diverged",
+  );
+  assert.equal(storage.objects.has("target-1"), true);
+  assert.equal(storage.calls.some((call) => call.startsWith("remove:")), false);
   assert.equal(rpc.current().state, "attention_required");
 });
 
@@ -394,10 +445,20 @@ test("une opération terminale est idempotente et ne touche pas Storage", async 
 test("une finalisation de compte de gestion orchestre plusieurs cibles", async () => {
   const targets = [
     target({ id: "destination", bucketId: "management-reports", objectPath: "p/r/final.pdf", role: "destination" }),
-    target({ id: "source", ordinal: 2, bucketId: "management-reports", objectPath: "p/r/draft.pdf", role: "source", forwardAction: "delete", compensationAction: "insert" }),
+    target({
+      id: "source",
+      ordinal: 2,
+      bucketId: "management-reports",
+      objectPath: "p/r/draft.pdf",
+      role: "source",
+      forwardAction: "delete",
+      compensationAction: "insert",
+      expectedObjectId: "object-1",
+      expectedObjectVersion: "draft-version",
+    }),
   ];
   const rpc = createRpc(progress({ workflow: "management_report_finalize", targets }));
-  const storage = createStorage([["source", stored("draft")]]);
+  const storage = createStorage([["source", catalogued("draft", "draft-version")]]);
   const result = await new DocumentOperationEngine({ rpc, storage, backups: createBackups() }).execute(
     managementReportFinalizationOperation("operation-1", bytes("final"), {
       fileName: "final.pdf",
