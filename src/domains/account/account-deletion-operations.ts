@@ -2,6 +2,20 @@ import { createHash, randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AccountDeletionInput } from "./schemas";
 import type { Database, Json } from "@/types/database";
+import {
+  assertAccountDeletionDocumentBarrier,
+  beginAccountStorageNeutralization,
+  cancelAccountDeletionAuthorization,
+  inspectAccountOwnedStorageObject,
+  issueAccountDeletionAuthorization,
+  listAccountStorageNeutralizations,
+  resumeAccountStorageNeutralization,
+  type AccountDeletionDurableAdminClient,
+  type AccountDeletionDurableUserClient,
+// @ts-expect-error Node's strip-types test runner requires the source extension.
+} from "./account-deletion-durable.ts";
+// @ts-expect-error Node's strip-types test runner requires the source extension.
+import { isAccountDeletionDurableNeutralizationEnabled } from "./account-deletion-durable-availability.ts";
 
 type AccountClient = SupabaseClient<Database>;
 type Eligibility = "eligible" | "blocked_owned_dossiers" | "blocked_platform_admin";
@@ -28,6 +42,7 @@ export class AccountDeletionBlockedError extends Error {
 export class AccountDeletionReauthenticationError extends Error {}
 export class AccountDeletionStorageError extends Error {}
 export class AccountDeletionAdminError extends Error {}
+export class AccountDeletionAuthOutcomeUnknownError extends Error {}
 
 export async function getAccountDeletionEligibility(
   supabase: AccountClient,
@@ -219,6 +234,159 @@ export async function neutralizeCurrentUserStorageOwnership(
   return objects.length;
 }
 
+function authUserMissing(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const code = "code" in error ? String(error.code) : "";
+  const status = "status" in error ? String(error.status) : "";
+  return code === "user_not_found" || status === "404";
+}
+
+async function deleteAuthUserAndCloseSession(
+  session: AccountClient,
+  admin: AccountClient,
+  userId: string,
+) {
+  let deletionConfirmed = false;
+  try {
+    const deleted = await admin.auth.admin.deleteUser(userId);
+    deletionConfirmed = !deleted.error && deleted.data.user?.id === userId;
+  } catch {
+    // Une exception réseau peut survenir après traitement côté Auth. La
+    // lecture autoritaire ci-dessous qualifie le résultat réel.
+  }
+  if (!deletionConfirmed) {
+    let verification;
+    try {
+      verification = await admin.auth.admin.getUserById(userId);
+    } catch {
+      try {
+        await session.auth.signOut({ scope: "local" });
+      } catch {
+        // L'incertitude Auth reste l'information prioritaire.
+      }
+      throw new AccountDeletionAuthOutcomeUnknownError(
+        "Le résultat de la suppression Auth ne peut pas être confirmé.",
+      );
+    }
+    if (verification.data.user?.id === userId) {
+      throw new AccountDeletionAdminError("La suppression Auth a été refusée.");
+    }
+    if (!verification.error && !verification.data.user) {
+      deletionConfirmed = true;
+    } else if (authUserMissing(verification.error)) {
+      deletionConfirmed = true;
+    } else {
+      try {
+        await session.auth.signOut({ scope: "local" });
+      } catch {
+        // L'incertitude Auth reste l'information prioritaire.
+      }
+      throw new AccountDeletionAuthOutcomeUnknownError(
+        "Le résultat de la suppression Auth ne peut pas être confirmé.",
+      );
+    }
+  }
+  if (!deletionConfirmed) {
+    throw new AccountDeletionAuthOutcomeUnknownError(
+      "Le résultat de la suppression Auth ne peut pas être confirmé.",
+    );
+  }
+  try {
+    const signOut = await session.auth.signOut({ scope: "local" });
+    return { accountDeleted: true as const, sessionClosed: !signOut.error };
+  } catch {
+    return { accountDeleted: true as const, sessionClosed: false };
+  }
+}
+
+async function deleteAccountWithDurableNeutralization(
+  session: AccountClient,
+  admin: AccountClient,
+  userId: string,
+  attemptId: string,
+) {
+  const userRpc = session as unknown as AccountDeletionDurableUserClient;
+  const privileged = admin as unknown as AccountDeletionDurableAdminClient;
+  const authorization = await issueAccountDeletionAuthorization(
+    privileged,
+    userId,
+    attemptId,
+  );
+  let barrierPassed = authorization.state === "sealed";
+  let documentOperationStarted = false;
+
+  try {
+    const previous = await listAccountStorageNeutralizations(privileged, userId);
+    for (const operation of previous) {
+      if (operation.phase !== "finalized") {
+        documentOperationStarted = true;
+        await resumeAccountStorageNeutralization(privileged, operation.operation_id);
+      }
+    }
+
+    if (authorization.state === "cancelled") {
+      throw new AccountDeletionStorageError("Cette tentative de suppression a été annulée.");
+    }
+
+    // Le gel SQL empêche les nouvelles mutations utilisateur. Plusieurs
+    // passages bornés réconcilient néanmoins un upload déjà en vol au moment
+    // de l'émission de l'autorisation.
+    for (let pass = 0; pass < 8; pass += 1) {
+      const objects = await listOwnedStorageObjects(session);
+      if (objects.length === 0) break;
+      if (authorization.state !== "active") {
+        throw new AccountDeletionStorageError(
+          "Un nouvel objet Storage est apparu après le scellement.",
+        );
+      }
+      for (const object of objects) {
+        documentOperationStarted = true;
+        const observed = await inspectAccountOwnedStorageObject(privileged, object);
+        const operationId = await beginAccountStorageNeutralization(
+          userRpc,
+          authorization.authorizationId,
+          attemptId,
+          object,
+          observed,
+        );
+        await resumeAccountStorageNeutralization(privileged, operationId);
+      }
+    }
+
+    if ((await listOwnedStorageObjects(session)).length !== 0) {
+      throw new AccountDeletionStorageError(
+        "Des objets Storage restent rattachés au compte.",
+      );
+    }
+    const eligibility = await getAccountDeletionEligibility(session, userId);
+    if (eligibility !== "eligible") throw new AccountDeletionBlockedError(eligibility);
+
+    await assertAccountDeletionDocumentBarrier(
+      privileged,
+      authorization.authorizationId,
+    );
+    barrierPassed = true;
+    return await deleteAuthUserAndCloseSession(session, admin, userId);
+  } catch (error) {
+    // Une opération commencée reste reprenable avec la même tentative. Une
+    // autorisation sans opération (ou devenue métier-inéligible) peut être
+    // annulée sans perdre d'état documentaire.
+    if (!barrierPassed && (
+      !documentOperationStarted || error instanceof AccountDeletionBlockedError
+    )) {
+      try {
+        await cancelAccountDeletionAuthorization(
+          privileged,
+          authorization.authorizationId,
+        );
+      } catch {
+        // Ne jamais masquer l'échec documentaire initial.
+      }
+    }
+    throw error;
+  }
+}
+
 export async function deleteAccountWithVerifiedDependencies(
   session: AccountClient,
   admin: AccountClient,
@@ -229,6 +397,14 @@ export async function deleteAccountWithVerifiedDependencies(
   if (eligibility !== "eligible") throw new AccountDeletionBlockedError(eligibility);
 
   await reauthenticateAccountDeletion(session, userId, input.currentPassword);
+  if (isAccountDeletionDurableNeutralizationEnabled()) {
+    return deleteAccountWithDurableNeutralization(
+      session,
+      admin,
+      userId,
+      input.attemptId,
+    );
+  }
   await neutralizeCurrentUserStorageOwnership(session, admin);
 
   const recheckedEligibility = await getAccountDeletionEligibility(session, userId);
@@ -237,11 +413,5 @@ export async function deleteAccountWithVerifiedDependencies(
     throw new AccountDeletionStorageError("Des objets Storage restent rattachés au compte.");
   }
 
-  const deleted = await admin.auth.admin.deleteUser(userId);
-  if (deleted.error || deleted.data.user?.id !== userId) {
-    throw new AccountDeletionAdminError("Suppression Auth non confirmée.");
-  }
-
-  const signOut = await session.auth.signOut({ scope: "local" });
-  if (signOut.error) throw new AccountDeletionAdminError("Nettoyage de session impossible.");
+  return deleteAuthUserAndCloseSession(session, admin, userId);
 }

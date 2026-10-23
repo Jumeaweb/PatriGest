@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAuthCallbackOrigin } from "@/lib/auth/redirects";
 import { EmailAddressCollisionError, EmailReauthenticationError, EmailUnchangedError, PendingEmailChangeError } from "./account-operations";
-import { AccountDeletionBlockedError, AccountDeletionReauthenticationError } from "./account-deletion-operations";
+import {
+  AccountDeletionAuthOutcomeUnknownError,
+  AccountDeletionBlockedError,
+  AccountDeletionReauthenticationError,
+} from "./account-deletion-operations";
 import { accountDeletionSchema, emailChangeSchema, passwordSchema, profileSchema } from "./schemas";
 import { deleteOwnAccount, requestOwnEmailChange, resendOwnEmailChange, updateOwnPassword, updateOwnProfile } from "./services";
 import type { AccountActionState } from "./state";
@@ -120,11 +124,13 @@ export async function deleteOwnAccountAction(_state: AccountActionState, formDat
   const parsed = accountDeletionSchema.safeParse({
     currentPassword: formData.get("currentPassword"),
     confirmation: formData.get("confirmation"),
+    attemptId: formData.get("attemptId"),
   });
   if (!parsed.success) return validationError(parsed.error.flatten().fieldErrors);
 
+  let outcome: Awaited<ReturnType<typeof deleteOwnAccount>>;
   try {
-    await deleteOwnAccount(parsed.data);
+    outcome = await deleteOwnAccount(parsed.data);
   } catch (error) {
     if (error instanceof AccountDeletionReauthenticationError) {
       return {
@@ -141,8 +147,11 @@ export async function deleteOwnAccountAction(_state: AccountActionState, formDat
           : "Un administrateur PatriGest ne peut pas supprimer son propre compte.",
       };
     }
+    if (error instanceof AccountDeletionAuthOutcomeUnknownError) {
+      redirect("/?suppression-compte=verification-requise");
+    }
     return { status: "error", message: "Impossible de supprimer votre compte. Réessayez ultérieurement." };
   }
 
-  redirect("/");
+  redirect(outcome.sessionClosed ? "/" : "/?suppression-compte=terminee-session-locale");
 }

@@ -43,5 +43,5 @@ export async function resendOwnEmailChange(emailRedirectTo: string) {
 
 export async function deleteOwnAccount(input: AccountDeletionInput) {
   const { supabase, userId } = await getAuthenticatedUser();
-  await deleteAccountWithVerifiedDependencies(supabase, createAdminClient(), userId, input);
+  return deleteAccountWithVerifiedDependencies(supabase, createAdminClient(), userId, input);
 }

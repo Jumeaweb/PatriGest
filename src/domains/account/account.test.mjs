@@ -16,6 +16,7 @@ import {
 } from "./account-operations.ts";
 import {
   AccountDeletionAdminError,
+  AccountDeletionAuthOutcomeUnknownError,
   AccountDeletionBlockedError,
   AccountDeletionReauthenticationError,
   AccountDeletionStorageError,
@@ -537,9 +538,17 @@ function deletionHarness({
   isPlatformAdmin = false,
   passwordValid = true,
   adminDeleteError = null,
+  adminDeleteThrows = false,
   unexpectedDeletedUser = false,
   recheckOwnsDossier = false,
   recreateFailure = false,
+  authVerificationMissing = false,
+  authVerificationError = null,
+  authVerificationThrows = false,
+  signOutError = null,
+  signOutThrows = false,
+  ownedStorageObject = true,
+  authorizationState = "active",
 } = {}) {
   const calls = [];
   const bucket = "transaction-proofs";
@@ -547,14 +556,16 @@ function deletionHarness({
   const fixtureBytes = new TextEncoder().encode("SEC02 fixture");
   const customMetadata = { purpose: "sec02", retained: true };
   const objects = new Map();
-  objects.set(`${bucket}/${path}`, {
-    bytes: fixtureBytes,
-    ownerId: userId,
-    contentType: "application/pdf",
-    cacheControl: "86400",
-    metadata: customMetadata,
-    id: randomUUID(),
-  });
+  if (ownedStorageObject) {
+    objects.set(`${bucket}/${path}`, {
+      bytes: fixtureBytes,
+      ownerId: userId,
+      contentType: "application/pdf",
+      cacheControl: "86400",
+      metadata: customMetadata,
+      id: randomUUID(),
+    });
+  }
   let originalRemovalObserved = false;
   let shouldFailRecreation = recreateFailure;
   let eligibilityChecks = 0;
@@ -573,7 +584,8 @@ function deletionHarness({
       },
       async signOut(options) {
         calls.push(["auth.signOut", options]);
-        return { error: null };
+        if (signOutThrows) throw new Error("raw session cleanup failure");
+        return { error: signOutError };
       },
     },
     from(table) {
@@ -607,13 +619,44 @@ function deletionHarness({
   };
 
   const admin = {
+    async rpc(name, args) {
+      calls.push(["admin.rpc", name, args]);
+      if (name === "issue_account_deletion_document_authorization") {
+        return { data: {
+          authorizationId: "99600000-0000-4000-8000-000000000001",
+          accountUserId: userId,
+          attemptId: args.p_attempt_id,
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          state: authorizationState,
+        }, error: null };
+      }
+      if (name === "list_account_storage_neutralization_operations") {
+        return { data: [], error: null };
+      }
+      if (name === "assert_account_deletion_document_barrier") {
+        return { data: { ready: true }, error: null };
+      }
+      if (name === "cancel_account_deletion_document_authorization") {
+        return { data: { state: "cancelled" }, error: null };
+      }
+      return { data: null, error: { code: "UNEXPECTED_RPC" } };
+    },
     auth: {
       admin: {
         async deleteUser(id) {
           calls.push(["admin.deleteUser", id]);
+          if (adminDeleteThrows) throw new Error("raw network interruption");
           return adminDeleteError
             ? { data: { user: null }, error: adminDeleteError }
             : { data: { user: { id: unexpectedDeletedUser ? randomUUID() : id } }, error: null };
+        },
+        async getUserById(id) {
+          calls.push(["admin.getUserById", id]);
+          if (authVerificationThrows) throw new Error("raw verification interruption");
+          return {
+            data: { user: authVerificationMissing ? null : { id } },
+            error: authVerificationError,
+          };
         },
       },
     },
@@ -661,10 +704,19 @@ function deletionHarness({
   return { admin, bucket, calls, customMetadata, fixtureBytes, objects, path, session, userId };
 }
 
+function deletionInput(currentPassword = "secret") {
+  return {
+    currentPassword,
+    confirmation: "on",
+    attemptId: randomUUID(),
+  };
+}
+
 test("valide le formulaire destructif sans accepter aucun identifiant utilisateur", () => {
-  assert.equal(accountDeletionSchema.safeParse({ currentPassword: "", confirmation: "on" }).success, false);
-  assert.equal(accountDeletionSchema.safeParse({ currentPassword: "secret", confirmation: null }).success, false);
-  assert.deepEqual(accountDeletionSchema.parse({ currentPassword: "secret", confirmation: "on", userId: randomUUID() }), { currentPassword: "secret", confirmation: "on" });
+  assert.equal(accountDeletionSchema.safeParse({ currentPassword: "", confirmation: "on", attemptId: randomUUID() }).success, false);
+  assert.equal(accountDeletionSchema.safeParse({ currentPassword: "secret", confirmation: null, attemptId: randomUUID() }).success, false);
+  const attemptId = randomUUID();
+  assert.deepEqual(accountDeletionSchema.parse({ currentPassword: "secret", confirmation: "on", attemptId, userId: randomUUID() }), { currentPassword: "secret", confirmation: "on", attemptId });
 });
 
 test("détermine l’éligibilité depuis le propriétaire et le rôle plateforme réels", async () => {
@@ -718,44 +770,198 @@ test("restaure le chemin original et arrête la suppression après un échec de 
 
 test("supprime uniquement l’utilisateur issu de la session après tous les rechecks", async () => {
   const harness = deletionHarness();
-  await deleteAccountWithVerifiedDependencies(harness.session, harness.admin, harness.userId, { currentPassword: "secret", confirmation: "on" });
+  await deleteAccountWithVerifiedDependencies(harness.session, harness.admin, harness.userId, deletionInput());
   assert.deepEqual(harness.calls.find((call) => call[0] === "admin.deleteUser"), ["admin.deleteUser", harness.userId]);
   assert.deepEqual(harness.calls.at(-1), ["auth.signOut", { scope: "local" }]);
   const adminIndex = harness.calls.findIndex((call) => call[0] === "admin.deleteUser");
   assert.ok(harness.calls.slice(0, adminIndex).filter((call) => call[0] === "rpc").length >= 3);
 });
 
+test("le mode durable scelle la barrière avant Auth sans appeler le parcours temporaire", async () => {
+  process.env.PATRIGEST_ENABLE_ACCOUNT_DELETION_DURABLE_NEUTRALIZATION = "true";
+  try {
+    const harness = deletionHarness({ ownedStorageObject: false });
+    await deleteAccountWithVerifiedDependencies(
+      harness.session,
+      harness.admin,
+      harness.userId,
+      deletionInput(),
+    );
+    const barrierIndex = harness.calls.findIndex(
+      (call) => call[0] === "admin.rpc"
+        && call[1] === "assert_account_deletion_document_barrier",
+    );
+    const authIndex = harness.calls.findIndex((call) => call[0] === "admin.deleteUser");
+    assert.ok(barrierIndex >= 0 && authIndex > barrierIndex);
+    assert.equal(
+      harness.calls.some(
+        (call) => call[0] === "storage.upload"
+          && String(call[2]).includes(".sec02-backup-"),
+      ),
+      false,
+    );
+  } finally {
+    delete process.env.PATRIGEST_ENABLE_ACCOUNT_DELETION_DURABLE_NEUTRALIZATION;
+  }
+});
+
+test("une autorisation déjà scellée reprend directement la barrière", async () => {
+  process.env.PATRIGEST_ENABLE_ACCOUNT_DELETION_DURABLE_NEUTRALIZATION = "true";
+  try {
+    const harness = deletionHarness({
+      ownedStorageObject: false,
+      authorizationState: "sealed",
+    });
+    await deleteAccountWithVerifiedDependencies(
+      harness.session,
+      harness.admin,
+      harness.userId,
+      deletionInput(),
+    );
+    assert.equal(
+      harness.calls.some(
+        (call) => call[0] === "admin.rpc"
+          && call[1] === "cancel_account_deletion_document_authorization",
+      ),
+      false,
+    );
+  } finally {
+    delete process.env.PATRIGEST_ENABLE_ACCOUNT_DELETION_DURABLE_NEUTRALIZATION;
+  }
+});
+
+test("un refus Auth après scellement conserve la reprise documentaire", async () => {
+  process.env.PATRIGEST_ENABLE_ACCOUNT_DELETION_DURABLE_NEUTRALIZATION = "true";
+  try {
+    const harness = deletionHarness({
+      ownedStorageObject: false,
+      authorizationState: "sealed",
+      adminDeleteError: { message: "auth deletion refused" },
+    });
+    await assert.rejects(
+      deleteAccountWithVerifiedDependencies(
+        harness.session,
+        harness.admin,
+        harness.userId,
+        deletionInput(),
+      ),
+      AccountDeletionAdminError,
+    );
+    assert.equal(
+      harness.calls.some(
+        (call) => call[0] === "admin.rpc"
+          && call[1] === "cancel_account_deletion_document_authorization",
+      ),
+      false,
+    );
+    assert.equal(
+      harness.calls.some((call) => call[0] === "admin.getUserById"),
+      true,
+    );
+    assert.equal(
+      harness.calls.some((call) => call[0] === "auth.signOut"),
+      false,
+    );
+  } finally {
+    delete process.env.PATRIGEST_ENABLE_ACCOUNT_DELETION_DURABLE_NEUTRALIZATION;
+  }
+});
+
 test("un propriétaire ou platform admin est bloqué avant Storage et Admin", async () => {
   for (const options of [{ ownsDossier: true }, { isPlatformAdmin: true }]) {
     const harness = deletionHarness(options);
-    await assert.rejects(deleteAccountWithVerifiedDependencies(harness.session, harness.admin, harness.userId, { currentPassword: "secret", confirmation: "on" }), AccountDeletionBlockedError);
+    await assert.rejects(deleteAccountWithVerifiedDependencies(harness.session, harness.admin, harness.userId, deletionInput()), AccountDeletionBlockedError);
     assert.equal(harness.calls.some((call) => call[0] === "rpc" || call[0] === "admin.deleteUser"), false);
   }
 });
 
 test("une réauthentification échouée arrête Storage et Admin sans exposer l’erreur brute", async () => {
   const harness = deletionHarness({ passwordValid: false });
-  await assert.rejects(deleteAccountWithVerifiedDependencies(harness.session, harness.admin, harness.userId, { currentPassword: "incorrect", confirmation: "on" }), AccountDeletionReauthenticationError);
+  await assert.rejects(deleteAccountWithVerifiedDependencies(harness.session, harness.admin, harness.userId, deletionInput("incorrect")), AccountDeletionReauthenticationError);
   assert.equal(harness.calls.some((call) => call[0] === "rpc" || call[0] === "admin.deleteUser"), false);
 });
 
 test("une nouvelle propriété de dossier au recheck arrête la suppression Auth", async () => {
   const harness = deletionHarness({ recheckOwnsDossier: true });
-  await assert.rejects(deleteAccountWithVerifiedDependencies(harness.session, harness.admin, harness.userId, { currentPassword: "secret", confirmation: "on" }), AccountDeletionBlockedError);
+  await assert.rejects(deleteAccountWithVerifiedDependencies(harness.session, harness.admin, harness.userId, deletionInput()), AccountDeletionBlockedError);
   assert.equal(harness.calls.some((call) => call[0] === "admin.deleteUser"), false);
 });
 
 test("un échec Storage arrête toujours la suppression Auth", async () => {
   const harness = deletionHarness({ recreateFailure: true });
-  await assert.rejects(deleteAccountWithVerifiedDependencies(harness.session, harness.admin, harness.userId, { currentPassword: "secret", confirmation: "on" }), AccountDeletionStorageError);
+  await assert.rejects(deleteAccountWithVerifiedDependencies(harness.session, harness.admin, harness.userId, deletionInput()), AccountDeletionStorageError);
   assert.equal(harness.calls.some((call) => call[0] === "admin.deleteUser"), false);
 });
 
 test("une erreur ou une réponse Admin inattendue n’est jamais un succès", async () => {
   for (const options of [{ adminDeleteError: { message: "raw FK error" } }, { unexpectedDeletedUser: true }]) {
     const harness = deletionHarness(options);
-    await assert.rejects(deleteAccountWithVerifiedDependencies(harness.session, harness.admin, harness.userId, { currentPassword: "secret", confirmation: "on" }), AccountDeletionAdminError);
+    await assert.rejects(deleteAccountWithVerifiedDependencies(harness.session, harness.admin, harness.userId, deletionInput()), AccountDeletionAdminError);
     assert.equal(harness.calls.some((call) => call[0] === "auth.signOut"), false);
+  }
+});
+
+test("reconnaît une suppression Auth réussie malgré une réponse perdue", async () => {
+  for (const options of [
+    { adminDeleteError: { message: "network response lost" } },
+    { adminDeleteThrows: true },
+  ]) {
+    const harness = deletionHarness({ ...options, authVerificationMissing: true });
+    const outcome = await deleteAccountWithVerifiedDependencies(
+      harness.session,
+      harness.admin,
+      harness.userId,
+      deletionInput(),
+    );
+    assert.deepEqual(outcome, { accountDeleted: true, sessionClosed: true });
+    assert.equal(harness.calls.some((call) => call[0] === "admin.getUserById"), true);
+  }
+});
+
+test("distingue une issue Auth impossible à confirmer", async () => {
+  const harness = deletionHarness({
+    adminDeleteError: { message: "network response lost" },
+    authVerificationMissing: true,
+    authVerificationError: { message: "verification unavailable" },
+  });
+  await assert.rejects(
+    deleteAccountWithVerifiedDependencies(
+      harness.session,
+      harness.admin,
+      harness.userId,
+      deletionInput(),
+    ),
+    AccountDeletionAuthOutcomeUnknownError,
+  );
+
+  const thrownVerification = deletionHarness({
+    adminDeleteThrows: true,
+    authVerificationThrows: true,
+  });
+  await assert.rejects(
+    deleteAccountWithVerifiedDependencies(
+      thrownVerification.session,
+      thrownVerification.admin,
+      thrownVerification.userId,
+      deletionInput(),
+    ),
+    AccountDeletionAuthOutcomeUnknownError,
+  );
+});
+
+test("une suppression Auth confirmée reste un succès si la session locale résiste", async () => {
+  for (const options of [
+    { signOutError: { message: "session unavailable" } },
+    { signOutThrows: true },
+  ]) {
+    const harness = deletionHarness(options);
+    const outcome = await deleteAccountWithVerifiedDependencies(
+      harness.session,
+      harness.admin,
+      harness.userId,
+      deletionInput(),
+    );
+    assert.deepEqual(outcome, { accountDeleted: true, sessionClosed: false });
   }
 });
 
@@ -780,13 +986,15 @@ test("affiche une zone dangereuse explicite sans identifiant utilisateur", () =>
   assert.match(form, /Mot de passe actuel/);
   assert.match(form, /Supprimer mon compte/);
   assert.match(form, /confirmation/);
+  assert.match(form, /attemptId\.current \?\?= crypto\.randomUUID\(\)/);
+  assert.match(form, /state\.status === "error"[\s\S]*attemptId\.current = null/);
   assert.doesNotMatch(form, /name="(?:userId|profileId|authUserId)"/);
 });
 
 test("redirige publiquement après suppression et masque toutes les erreurs internes", () => {
   const source = readFileSync(new URL("./actions.ts", import.meta.url), "utf8");
   assert.match(source, /await deleteOwnAccount\(parsed\.data\)/);
-  assert.match(source, /redirect\("\/"\)/);
+  assert.match(source, /redirect\(outcome\.sessionClosed \? "\/"/);
   assert.match(source, /Impossible de supprimer votre compte\. Réessayez ultérieurement\./);
   assert.doesNotMatch(source, /message:\s*error\.message/);
 });

@@ -29,6 +29,7 @@ export const emailChangeSchema = z.object({
 export const accountDeletionSchema = z.object({
   currentPassword: z.string().min(1, "Saisissez votre mot de passe actuel.").max(72, "Le mot de passe ne peut pas dépasser 72 caractères."),
   confirmation: z.literal("on", { error: "Confirmez la suppression définitive de votre compte." }),
+  attemptId: z.uuid("La tentative de suppression est invalide."),
 });
 
 export function emailChangeSchemaForCurrentEmail(currentEmail: string) {
