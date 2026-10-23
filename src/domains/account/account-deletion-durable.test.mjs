@@ -233,6 +233,16 @@ test("place une divergence Storage en attention_required sans effacer l’objet"
   assert.equal(harness.objects.has(harness.key("document-operation-backups", backupPath)), false);
 });
 
+test("refuse de supprimer l’original si la sauvegarde vérifiée a disparu", async () => {
+  const harness = durableHarness({ initialPhase: "backup_verified" });
+  await assert.rejects(
+    resumeAccountStorageNeutralization(harness.client, operationId),
+    AccountDeletionDurableStorageError,
+  );
+  assert.equal(harness.state.phase, "attention_required");
+  assert.equal(harness.objects.has(harness.key(bucketId, objectPath)), true);
+});
+
 test("dérive un identifiant d’idempotence stable de la tentative et de l’objet", async () => {
   const requests = [];
   const client = {

@@ -338,6 +338,11 @@ async function ensureOriginalDeleted(
   admin: AccountDeletionDurableAdminClient,
   current: z.infer<typeof progressSchema>,
 ) {
+  if (!current.verifiedBackupPresent) {
+    throw new AccountDeletionDurableStorageError(
+      "La sauvegarde durable vérifiée est introuvable.",
+    );
+  }
   const bucket = admin.storage.from(current.bucketId);
   const original = await inspect(bucket, current.objectPath);
   if (original && (
