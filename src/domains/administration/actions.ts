@@ -5,11 +5,30 @@ import { deletePlatformUser, resendApplicationActivationEmail, reviewApplication
 import { sendGlobalReleaseNotifications, sendTestReleaseNotification } from "./services/release-notification-service";
 import type { DeleteUserState, RegistrationReviewState, ReleaseNotificationActionState } from "./state";
 
-export async function deletePlatformUserAction(userId: string, _state: DeleteUserState, _formData: FormData): Promise<DeleteUserState> {
+const administrativeDeletionSchema = z.object({
+  userId: z.uuid(),
+  attemptId: z.uuid("Tentative de suppression invalide."),
+  reason: z.string().trim().min(1, "Le motif est obligatoire.").max(2000, "Le motif ne peut pas dépasser 2 000 caractères."),
+  confirmation: z.literal("on", { error: "Confirmez la suppression définitive." }),
+});
+
+export async function deletePlatformUserAction(userId: string, _state: DeleteUserState, formData: FormData): Promise<DeleteUserState> {
   void _state;
-  void _formData;
-  if (!z.uuid().safeParse(userId).success) return { status: "error", message: "Utilisateur invalide." };
-  try { await deletePlatformUser(userId); }
+  const parsed = administrativeDeletionSchema.safeParse({
+    userId,
+    attemptId: formData.get("attemptId"),
+    reason: formData.get("reason"),
+    confirmation: formData.get("confirmation"),
+  });
+  if (!parsed.success) {
+    const errors = parsed.error.flatten().fieldErrors;
+    return {
+      status: "error",
+      message: "Vérifiez la confirmation et le motif de suppression.",
+      fieldErrors: { reason: errors.reason, confirmation: errors.confirmation },
+    };
+  }
+  try { await deletePlatformUser(userId, { attemptId: parsed.data.attemptId, reason: parsed.data.reason }); }
   catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Impossible de supprimer cet utilisateur." }; }
   return { status: "success", message: "L’utilisateur a été supprimé." };
 }

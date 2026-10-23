@@ -383,6 +383,13 @@ export type Database = {
       get_account_storage_neutralization_progress: { Args: { p_operation_id: string }; Returns: Json };
       assert_account_deletion_document_barrier: { Args: { p_authorization_id: string }; Returns: Json };
       list_account_storage_neutralization_operations: { Args: { p_account_user_id: string }; Returns: Array<{ operation_id: string; client_request_id: string; state: string; phase: string; created_at: string }> };
+      get_administrative_account_deletion_diagnostic: { Args: { p_target_user_id: string }; Returns: Json };
+      get_administrative_account_deletion_attempt: { Args: { p_target_user_id: string; p_attempt_id: string }; Returns: Json };
+      issue_administrative_account_deletion_authorization: { Args: { p_target_user_id: string; p_attempt_id: string; p_reason: string; p_document_plan: Json }; Returns: Json };
+      cancel_administrative_account_deletion_authorization: { Args: { p_authorization_id: string; p_expected_revision: number }; Returns: Json };
+      begin_administrative_account_storage_neutralization: { Args: { p_authorization_id: string; p_client_request_id: string; p_bucket_id: string; p_object_path: string; p_expected_object_id: string; p_expected_object_version: string; p_expected_sha256: string; p_expected_byte_size: number; p_mime_type: string }; Returns: Json };
+      list_administrative_account_storage_neutralization_operations: { Args: { p_authorization_id: string }; Returns: Array<{ operation_id: string; client_request_id: string; state: string; phase: string; created_at: string }> };
+      assert_administrative_account_deletion_barrier: { Args: { p_authorization_id: string; p_expected_revision: number; p_expected_plan_hash: string }; Returns: Json };
       validate_bank_reconciliation: { Args: { p_reconciliation_id: string }; Returns: Database["public"]["Tables"]["bank_reconciliations"]["Row"] };
     };
     Enums: Record<string, never>;

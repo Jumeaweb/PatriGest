@@ -1,0 +1,6 @@
+export const ADMIN_ACCOUNT_DELETION_DURABLE_NEUTRALIZATION_ENV =
+  "PATRIGEST_ENABLE_ADMIN_ACCOUNT_DELETION_DURABLE_NEUTRALIZATION";
+
+export function isAdminAccountDeletionDurableNeutralizationEnabled() {
+  return process.env[ADMIN_ACCOUNT_DELETION_DURABLE_NEUTRALIZATION_ENV] === "true";
+}

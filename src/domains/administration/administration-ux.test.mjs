@@ -16,6 +16,7 @@ const service = read("./services/administration-service.ts");
 const registrationActions = read("./components/registration-review-actions.tsx");
 const deletion = read("./components/delete-user-button.tsx");
 const releasePanel = read("./components/release-notification-panel.tsx");
+const actions = read("./actions.ts");
 
 test("le menu ADMINISTRATION expose les cinq entrées dans l’ordre validé", () => {
   const labels = ["Tableau de bord", "Inscriptions à valider", "Comptes utilisateurs", "Communication utilisateurs", "Infrastructure"];
@@ -100,6 +101,10 @@ test("expose les motifs backend connus avant de proposer la suppression", () => 
   assert.match(deletion, /button-danger/);
   assert.match(deletion, /cancelLabel=\{succeeded \? "Fermer" : "Annuler"\}/);
   assert.match(deletion, /actions=\{succeeded \? null : <DeleteSubmitButton/);
+  assert.match(deletion, /Motif de la suppression/);
+  assert.match(deletion, /name="confirmation" required/);
+  assert.match(deletion, /attemptId\.current \?\?= crypto\.randomUUID\(\)/);
+  assert.match(actions, /reason: z\.string\(\)\.trim\(\)\.min\(1/);
 });
 
 test("confirme le renvoi d’activation et conserve seulement Fermer après réussite", () => {

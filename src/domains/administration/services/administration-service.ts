@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { AccountMode, ApplicationUserAuthorizationStatus, SharedAccessRole } from "@/types/database";
 import { sendApplicationActivationEmail } from "../registration-email";
+import { isAdminAccountDeletionDurableNeutralizationEnabled } from "../administrative-account-deletion-durable-availability";
+import { deletePlatformUserWithDurableNeutralization } from "../administrative-account-deletion-durable";
 
 export const ADMIN_USERS_PAGE_SIZE = 25;
 
@@ -229,12 +231,26 @@ export async function getPlatformUsers(requestedPage = 1) {
   };
 }
 
-export async function deletePlatformUser(userId: string) {
-  const { userId: currentUserId } = await requirePlatformAdministrator();
+export async function deletePlatformUser(userId: string, input: { attemptId: string; reason: string }) {
+  const { supabase, userId: currentUserId } = await requirePlatformAdministrator();
   if (userId === currentUserId) throw new Error("Vous ne pouvez pas supprimer votre propre compte administrateur.");
   const admin = createAdminClient();
   const { data: targetResult, error: targetError } = await admin.auth.admin.getUserById(userId);
-  if (targetError || !targetResult.user) throw new Error("Utilisateur introuvable.");
+  if (targetError || !targetResult.user) {
+    if (isAdminAccountDeletionDurableNeutralizationEnabled()) {
+      return deletePlatformUserWithDurableNeutralization(
+        supabase,
+        admin,
+        {
+          administratorUserId: currentUserId,
+          targetUserId: userId,
+          attemptId: input.attemptId,
+          reason: input.reason,
+        },
+      );
+    }
+    throw new Error("Utilisateur introuvable.");
+  }
   const email = targetResult.user.email ?? "";
   const now = new Date().toISOString();
   const blockingRelations = await Promise.all([
@@ -258,8 +274,21 @@ export async function deletePlatformUser(userId: string) {
   if (blockingRelations.slice(1).some((result) => result.data?.length)) {
     throw new Error("Cet utilisateur ne peut pas être supprimé tant qu’il possède un dossier ou dispose encore d’un accès ou de données métier associées.");
   }
+  if (isAdminAccountDeletionDurableNeutralizationEnabled()) {
+    return deletePlatformUserWithDurableNeutralization(
+      supabase,
+      admin,
+      {
+        administratorUserId: currentUserId,
+        targetUserId: userId,
+        attemptId: input.attemptId,
+        reason: input.reason,
+      },
+    );
+  }
   const { error } = await admin.auth.admin.deleteUser(userId);
   if (error) throw new Error("Impossible de supprimer cet utilisateur.");
+  return { accountDeleted: true as const, alreadyAbsent: false as const };
 }
 
 export type AdministrationDashboardData = {

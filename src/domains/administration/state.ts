@@ -1,4 +1,8 @@
-export type DeleteUserState = { status: "idle" | "error" | "success"; message: string };
+export type DeleteUserState = {
+  status: "idle" | "error" | "success";
+  message: string;
+  fieldErrors?: { reason?: string[]; confirmation?: string[] };
+};
 export const initialDeleteUserState: DeleteUserState = { status: "idle", message: "" };
 
 export type RegistrationReviewState = {
