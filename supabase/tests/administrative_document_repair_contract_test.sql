@@ -472,7 +472,9 @@ select extensions.throws_ok(
   'une cible ne peut pas passer directement de authorized à verified'
 );
 update public.document_repair_items
-set progress_state = 'executing', row_revision = row_revision + 1
+set progress_state = 'executing',
+    execution_id = '99400000-0000-4000-8650-000000000001',
+    execution_started_at = now(), row_revision = row_revision + 1
 where authorization_id = (
   select authorization_id from repair_test_values where name = 'sealed'
 );
@@ -485,9 +487,24 @@ select extensions.throws_ok(
   'P4R07', 'L’observation documentaire est absente ou incohérente.',
   'la phase de vérification exige déjà une observation cohérente'
 );
+insert into public.document_repair_observations(
+  id, authorization_id, operation_id, item_id, execution_id,
+  observation_kind, object_exists, physical_bytes_verified,
+  backup_present, observation_fingerprint
+)
+select '99400000-0000-4000-8950-000000000001', item.authorization_id,
+  item.operation_id, item.id, item.execution_id, 'catalog_absent', false,
+  false, false, repeat('0',64)
+from public.document_repair_items item
+where item.authorization_id = (
+  select authorization_id from repair_test_values where name = 'sealed'
+);
 update public.document_repair_items
 set progress_state = 'verification_required', observed_object_exists = false,
     observation_source = 'storage_catalog', observation_recorded_at = now(),
+    last_observation_kind = 'catalog_absent',
+    last_observation_id = '99400000-0000-4000-8950-000000000001',
+    last_observation_at = now(),
     row_revision = row_revision + 1
 where authorization_id = (
   select authorization_id from repair_test_values where name = 'sealed'
@@ -833,7 +850,9 @@ select extensions.is(
 );
 reset role;
 update public.document_repair_items
-set progress_state = 'executing', row_revision = row_revision + 1
+set progress_state = 'executing',
+    execution_id = '99400000-0000-4000-8650-000000000004',
+    execution_started_at = now(), row_revision = row_revision + 1
 where operation_id = '99400000-0000-4000-8200-000000000004';
 set local role authenticated;
 select set_config(
