@@ -8,6 +8,7 @@ import {
   AdministrativeDocumentRepairEngine,
   AdministrativeDocumentRepairError,
   backupCleanupDescriptorSchema,
+  getAdministrativeRepairGuardBlockReason,
   isAdminDocumentRepairEnabled,
   repairProgressSchema,
   type AdministrativeDocumentRepairAction,
@@ -68,6 +69,7 @@ const authorizationSchema = z.object({
   expiresAt: z.string(),
   revision: z.number().int().nonnegative(),
 });
+const capabilitiesSchema = z.object({ storageGuardEnabled: z.boolean() });
 
 type RpcClient = { rpc(name: string, args?: Record<string, unknown>): PromiseLike<{ data: unknown; error: unknown | null }> };
 type UntypedTableClient = { from(table: string): {
@@ -81,6 +83,7 @@ function safeRpcError(error: unknown) {
   if (code === "P4R05") return "La tentative ou le plan de réparation a expiré ou divergé.";
   if (code === "P4R06") return "Une autre opération documentaire est en conflit.";
   if (code === "P4R07") return "Les preuves documentaires sont insuffisantes ou divergentes.";
+  if (code === "P4R08") return "Cette action exige la future garde Storage et ne peut pas encore être autorisée.";
   return "L’opération de réparation a été refusée.";
 }
 
@@ -111,7 +114,29 @@ export type AdministrativeRepairTargetView = {
   backupState: string | null;
   lockPresent: boolean;
   actions: AdministrativeDocumentRepairAction[];
+  blockedActions: Array<{ action: AdministrativeDocumentRepairAction; reason: string }>;
 };
+
+async function getRepairCapabilities(client: RpcClient) {
+  return capabilitiesSchema.parse(await rpc(client, "get_administrative_document_repair_capabilities"));
+}
+
+function actionCapabilities(
+  target: z.infer<typeof targetSchema>,
+  storageGuardEnabled: boolean,
+) {
+  const actions: AdministrativeDocumentRepairAction[] = [];
+  const blockedActions: Array<{ action: AdministrativeDocumentRepairAction; reason: string }> = [];
+  for (const action of availableActions(target)) {
+    const reason = getAdministrativeRepairGuardBlockReason(action, {
+      catalogObjectPresent: target.catalogObservation.exists,
+      compensationAction: target.compensationAction,
+    }, storageGuardEnabled);
+    if (reason) blockedActions.push({ action, reason });
+    else actions.push(action);
+  }
+  return { actions, blockedActions };
+}
 
 export async function getAdministrativeDocumentRepairPageData(operationId?: string) {
   const { supabase } = await requirePlatformAdministrator();
@@ -132,6 +157,7 @@ export async function getAdministrativeDocumentRepairPageData(operationId?: stri
   })).parse(result.data);
   if (!operationId) return { enabled: true as const, operations, diagnostic: null };
   const diagnostic = diagnosticSchema.parse(await rpc(supabase as unknown as RpcClient, "get_administrative_document_repair_diagnostic", { p_operation_id: uuid.parse(operationId) }));
+  const capabilities = await getRepairCapabilities(supabase as unknown as RpcClient);
   return {
     enabled: true as const,
     operations,
@@ -146,16 +172,20 @@ export async function getAdministrativeDocumentRepairPageData(operationId?: stri
       blocked: diagnostic.conflictingLocks.length > 0 || diagnostic.conflictingNeutralizations.length > 0,
       activeAttemptId: diagnostic.activeAuthorization?.ownedByCaller ? diagnostic.activeAuthorization.attemptId ?? null : null,
       ownedByAnotherAdministrator: diagnostic.activeAuthorization?.ownedByCaller === false,
-      targets: diagnostic.targets.map((target): AdministrativeRepairTargetView => ({
-        targetId: target.targetId,
-        ordinal: target.ordinal,
-        bucketLabel: target.bucketId === "transaction-proofs" ? "Justificatif d’opération" : target.bucketId === "bank-statements" ? "Relevé bancaire" : "Compte de gestion",
-        applicationState: target.applicationState,
-        catalogObjectPresent: target.catalogObservation.exists,
-        backupState: target.backup?.state ?? null,
-        lockPresent: target.lockPresent,
-        actions: availableActions(target),
-      })),
+      targets: diagnostic.targets.map((target): AdministrativeRepairTargetView => {
+        const actionState = actionCapabilities(target, capabilities.storageGuardEnabled);
+        return {
+          targetId: target.targetId,
+          ordinal: target.ordinal,
+          bucketLabel: target.bucketId === "transaction-proofs" ? "Justificatif d’opération" : target.bucketId === "bank-statements" ? "Relevé bancaire" : "Compte de gestion",
+          applicationState: target.applicationState,
+          catalogObjectPresent: target.catalogObservation.exists,
+          backupState: target.backup?.state ?? null,
+          lockPresent: target.lockPresent,
+          actions: actionState.actions,
+          blockedActions: actionState.blockedActions,
+        };
+      }),
     },
   };
 }
@@ -280,6 +310,7 @@ export async function authorizeAndExecuteAdministrativeDocumentRepair(input: {
   const attemptId = uuid.parse(input.attemptId);
   const reason = z.string().trim().min(1).max(2000).parse(input.reason);
   const diagnostic = diagnosticSchema.parse(await rpc(supabase as unknown as RpcClient, "get_administrative_document_repair_diagnostic", { p_operation_id: operationId }));
+  const capabilities = await getRepairCapabilities(supabase as unknown as RpcClient);
   if (!diagnostic.repairable || diagnostic.conflictingLocks.length || diagnostic.conflictingNeutralizations.length) {
     throw new AdministrativeDocumentRepairError("Cette opération ne peut pas être réparée dans son état actuel.");
   }
@@ -287,7 +318,11 @@ export async function authorizeAndExecuteAdministrativeDocumentRepair(input: {
   if (byTarget.size !== diagnostic.targets.length) throw new AdministrativeDocumentRepairError("Une décision est requise pour chaque cible.");
   const plan = diagnostic.targets.map((target) => {
     const decision = byTarget.get(target.targetId);
-    if (!decision || !availableActions(target).includes(decision.action)) throw new AdministrativeDocumentRepairError("Une action de réparation est invalide.");
+    const actionState = actionCapabilities(target, capabilities.storageGuardEnabled);
+    if (!decision || !actionState.actions.includes(decision.action)) {
+      const blocked = decision && actionState.blockedActions.find(({ action }) => action === decision.action);
+      throw new AdministrativeDocumentRepairError(blocked?.reason ?? "Une action de réparation est invalide.", blocked ? "STORAGE_GUARD_REQUIRED" : "INVALID_ACTION");
+    }
     const residualReason = decision.action === "accept_residual_state"
       ? z.string().trim().min(1).max(2000).parse(decision.residualReason)
       : null;
@@ -313,6 +348,7 @@ export async function authorizeAndExecuteAdministrativeDocumentRepair(input: {
     p_repair_plan: plan,
   }));
   const admin = createAdminClient();
+  const executionCapabilities = await getRepairCapabilities(supabase as unknown as RpcClient);
   const context: RepairContext = {
     authorizationId: authorization.authorizationId,
     administratorSubjectId: userId,
@@ -324,6 +360,7 @@ export async function authorizeAndExecuteAdministrativeDocumentRepair(input: {
       objectId: target.catalogObservation.objectId,
       objectVersion: target.catalogObservation.objectVersion,
     }])),
+    storageGuardEnabled: executionCapabilities.storageGuardEnabled,
   };
   const engine = new AdministrativeDocumentRepairEngine(
     createRpcGateway(admin as unknown as RpcClient),

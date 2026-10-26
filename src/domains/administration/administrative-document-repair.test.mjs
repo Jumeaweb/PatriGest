@@ -58,7 +58,7 @@ function harness(action, options = {}) {
       expiresAt: new Date(Date.now() + 60_000).toISOString(), expired: false,
       items: [item],
     },
-    mutations: [], observations: [], verifies: 0,
+    mutations: [], observations: [], verifies: 0, starts: 0,
   };
   const storage = {
     async inspect(bucket, path) { return objects.get(`${bucket}:${path}`) ?? null; },
@@ -70,7 +70,7 @@ function harness(action, options = {}) {
   };
   const rpc = {
     async progress() { return structuredClone(state.progress); },
-    async start(_context, current, executionId) { current = state.progress.items[0]; current.progressState = "executing"; current.executionId = executionId; current.revision += 1; },
+    async start(_context, current, executionId) { state.starts += 1; current = state.progress.items[0]; current.progressState = "executing"; current.executionId = executionId; current.revision += 1; },
     async observe(_context, _current, _executionId, observation) {
       state.observations.push(observation);
       const current = state.progress.items[0];
@@ -96,6 +96,7 @@ function harness(action, options = {}) {
     attemptId: ids.attempt, planHash: "a".repeat(64),
     compensationActions: new Map([[ids.target, options.compensationAction ?? null]]),
     expectedObjects: new Map([[ids.target, expected]]),
+    storageGuardEnabled: options.storageGuardEnabled ?? false,
   };
   return { engine: new AdministrativeDocumentRepairEngine(rpc, storage), context, state, objects };
 }
@@ -126,7 +127,7 @@ test("restaure et vérifie les octets exacts de la sauvegarde", async () => {
 });
 
 test("refuse une restauration lorsque la sauvegarde physique manque", async () => {
-  const value = harness("restore_original", { missingBackup: true });
+  const value = harness("restore_original", { missingBackup: true, original: null });
   await assert.rejects(() => value.engine.execute(value.context), (error) => error instanceof AdministrativeDocumentRepairError && error.safeCode === "BACKUP_MISSING");
   assert.deepEqual(value.state.mutations, []);
   assert.equal(value.state.observations[0].kind, "backup_missing");
@@ -136,6 +137,7 @@ test("bloque le nettoyage avant la garde Storage conditionnelle", async () => {
   const value = harness("complete_backup_cleanup");
   await assert.rejects(() => value.engine.execute(value.context), (error) => error.safeCode === "STORAGE_GUARD_REQUIRED");
   assert.deepEqual(value.state.mutations, []);
+  assert.equal(value.state.starts, 0);
 });
 
 test("refuse de supprimer la dernière copie récupérable", async () => {
@@ -148,14 +150,30 @@ test("bloque une compensation de suppression avant la garde Storage", async () =
   const value = harness("resume_compensation", { compensationAction: "delete" });
   await assert.rejects(() => value.engine.execute(value.context), (error) => error.safeCode === "STORAGE_GUARD_REQUIRED");
   assert.deepEqual(value.state.mutations, []);
+  assert.equal(value.state.starts, 0);
 });
 
-test("refuse qu’une compensation de suppression dispose implicitement d’une sauvegarde", async () => {
+test("refuse avant démarrage une restauration qui écraserait une cible présente", async () => {
+  const value = harness("restore_original");
+  await assert.rejects(() => value.engine.execute(value.context), (error) => error.safeCode === "STORAGE_GUARD_REQUIRED");
+  assert.equal(value.state.starts, 0);
+  assert.deepEqual(value.state.mutations, []);
+});
+
+test("conserve la garde du moteur même si la garde Storage est annoncée active", async () => {
+  const value = harness("complete_backup_cleanup", { storageGuardEnabled: true });
+  await assert.rejects(() => value.engine.execute(value.context), (error) => error.safeCode === "STORAGE_GUARD_REQUIRED");
+  assert.equal(value.state.starts, 1);
+  assert.deepEqual(value.state.mutations, []);
+});
+
+test("refuse avant démarrage une compensation de suppression même si une sauvegarde existe", async () => {
   const value = harness("resume_compensation", { compensationAction: "delete", withBackup: true });
   await assert.rejects(
     () => value.engine.execute(value.context),
-    (error) => error instanceof AdministrativeDocumentRepairError && error.safeCode === "INVALID_COMPENSATION",
+    (error) => error instanceof AdministrativeDocumentRepairError && error.safeCode === "STORAGE_GUARD_REQUIRED",
   );
+  assert.equal(value.state.starts, 0);
   assert.deepEqual(value.state.mutations, []);
 });
 

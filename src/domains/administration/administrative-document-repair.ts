@@ -16,6 +16,29 @@ export const repairActionSchema = z.enum([
 ]);
 export type AdministrativeDocumentRepairAction = z.infer<typeof repairActionSchema>;
 
+export type AdministrativeRepairGuardTarget = {
+  catalogObjectPresent: boolean;
+  compensationAction: "insert" | "update" | "delete" | null;
+};
+
+export function getAdministrativeRepairGuardBlockReason(
+  action: AdministrativeDocumentRepairAction,
+  target: AdministrativeRepairGuardTarget,
+  storageGuardEnabled: boolean,
+) {
+  if (storageGuardEnabled) return null;
+  if (action === "complete_backup_cleanup") {
+    return "Le nettoyage physique de la sauvegarde exige la future garde Storage.";
+  }
+  if (action === "resume_compensation" && target.compensationAction === "delete") {
+    return "La suppression compensatoire exige la future garde Storage.";
+  }
+  if (["restore_original", "resume_compensation"].includes(action) && target.catalogObjectPresent) {
+    return "La cible est actuellement présente : son éventuel écrasement exige la future garde Storage.";
+  }
+  return null;
+}
+
 const uuid = z.uuid();
 const sha256 = z.string().regex(/^[0-9a-f]{64}$/);
 const bucket = z.enum(["transaction-proofs", "bank-statements", "management-reports"]);
@@ -97,6 +120,7 @@ export type RepairContext = {
   planHash: string;
   compensationActions: ReadonlyMap<string, "insert" | "update" | "delete" | null>;
   expectedObjects: ReadonlyMap<string, { exists: boolean; objectId: string | null; objectVersion: string | null }>;
+  storageGuardEnabled: boolean;
 };
 
 type RepairObservation = {
@@ -270,6 +294,18 @@ export class AdministrativeDocumentRepairEngine {
       if (!item) throw new AdministrativeDocumentRepairError("La cible autorisée est introuvable.", "TARGET_MISSING");
       const stableExecutionId = item.executionId ?? executionId(context.attemptId, item.itemId);
       if (item.progressState === "authorized") {
+        const compensationAction = context.compensationActions.get(item.targetId) ?? null;
+        const needsCatalogCheck = item.action === "restore_original" || item.action === "resume_compensation";
+        const currentObject = needsCatalogCheck
+          ? await this.storage.inspect(item.bucketId, item.objectPath)
+          : null;
+        const guardBlockReason = getAdministrativeRepairGuardBlockReason(item.action, {
+          catalogObjectPresent: currentObject !== null,
+          compensationAction,
+        }, context.storageGuardEnabled);
+        if (guardBlockReason) {
+          throw new AdministrativeDocumentRepairError(guardBlockReason, "STORAGE_GUARD_REQUIRED");
+        }
         await this.rpc.start(context, item, stableExecutionId, progress.revision);
         progress = await this.rpc.progress(context);
         item = progress.items.find(({ itemId }) => itemId === initial.itemId)!;

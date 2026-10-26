@@ -390,6 +390,8 @@ export type Database = {
       begin_administrative_account_storage_neutralization: { Args: { p_authorization_id: string; p_client_request_id: string; p_bucket_id: string; p_object_path: string; p_expected_object_id: string; p_expected_object_version: string; p_expected_sha256: string; p_expected_byte_size: number; p_mime_type: string }; Returns: Json };
       list_administrative_account_storage_neutralization_operations: { Args: { p_authorization_id: string }; Returns: Array<{ operation_id: string; client_request_id: string; state: string; phase: string; created_at: string }> };
       assert_administrative_account_deletion_barrier: { Args: { p_authorization_id: string; p_expected_revision: number; p_expected_plan_hash: string }; Returns: Json };
+      get_administrative_document_inventory: { Args: { p_limit?: number; p_after_key?: string | null; p_document_category?: string | null; p_anomaly_type?: string | null }; Returns: Json };
+      get_administrative_document_repair_capabilities: { Args: Record<string, never>; Returns: Json };
       validate_bank_reconciliation: { Args: { p_reconciliation_id: string }; Returns: Database["public"]["Tables"]["bank_reconciliations"]["Row"] };
     };
     Enums: Record<string, never>;

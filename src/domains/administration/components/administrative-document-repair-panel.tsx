@@ -39,6 +39,7 @@ export function AdministrativeDocumentRepairPanel({
     action: decisions[target.targetId]?.action,
     residualReason: decisions[target.targetId]?.residualReason,
   }))), [decisions, targets]);
+  const hasUnavailableTarget = targets.some((target) => target.actions.length === 0);
 
   function renew(formData: FormData) {
     renewalId.current ??= crypto.randomUUID();
@@ -77,6 +78,10 @@ export function AdministrativeDocumentRepairPanel({
               <option value="" disabled>Choisir une action</option>
               {target.actions.map((value) => <option key={value} value={value}>{presentations[value].label}</option>)}
             </select>
+            {target.blockedActions.length > 0 && <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs leading-5 text-amber-900">
+              <p className="font-semibold">Actions indisponibles avant activation de la garde Storage :</p>
+              <ul className="mt-1 list-disc pl-4">{target.blockedActions.map(({ action, reason }) => <li key={action}>{presentations[action].label} — {reason}</li>)}</ul>
+            </div>}
             {decision?.action && <p className={`mt-2 text-xs leading-5 ${decision.action === "accept_residual_state" || decision.action === "complete_backup_cleanup" ? "font-semibold text-amber-800" : "text-[#64748B]"}`}>{presentations[decision.action].warning}</p>}
             {decision?.action === "accept_residual_state" && <div className="mt-3"><label className="auth-label" htmlFor={`residual-reason-${target.targetId}`}>Justification de l’état résiduel</label><textarea id={`residual-reason-${target.targetId}`} className="auth-input min-h-20 py-2" required maxLength={2000} value={decision.residualReason} onChange={(event) => setDecisions((current) => ({ ...current, [target.targetId]: { ...current[target.targetId], residualReason: event.target.value } }))} /></div>}
           </fieldset>;
@@ -85,7 +90,7 @@ export function AdministrativeDocumentRepairPanel({
       <div><label className="auth-label" htmlFor="repair-reason">Motif global obligatoire</label><textarea id="repair-reason" className="auth-input min-h-24 py-2" name="reason" required maxLength={2000} /></div>
       <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-5 text-amber-900"><input className="mt-1 size-4" type="checkbox" name="confirmation" required /><span>Je confirme cette décision et les mutations documentaires explicitement sélectionnées.</span></label>
       <ActionMessage state={state} />
-      <RepairSubmitButton disabled={blocked || state.status === "success" || state.status === "warning"} />
+      <RepairSubmitButton disabled={blocked || hasUnavailableTarget || state.status === "success" || state.status === "warning"} />
     </form>
     {canRenew && <form action={renew} className="rounded-xl border border-[#E2E8F0] bg-white p-4">
       <input type="hidden" name="operationId" value={operationId} />
