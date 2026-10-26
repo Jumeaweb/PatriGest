@@ -1,9 +1,12 @@
 "use server";
 
 import { z } from "zod";
+import { revalidatePath } from "next/cache";
 import { deletePlatformUser, resendApplicationActivationEmail, reviewApplicationRegistration } from "./services/administration-service";
+import { authorizeAndExecuteAdministrativeDocumentRepair, renewAdministrativeDocumentRepair } from "./services/administrative-document-repair-service";
+import { repairActionSchema } from "./administrative-document-repair";
 import { sendGlobalReleaseNotifications, sendTestReleaseNotification } from "./services/release-notification-service";
-import type { DeleteUserState, RegistrationReviewState, ReleaseNotificationActionState } from "./state";
+import type { AdministrativeDocumentRepairActionState, DeleteUserState, RegistrationReviewState, ReleaseNotificationActionState } from "./state";
 
 const administrativeDeletionSchema = z.object({
   userId: z.uuid(),
@@ -93,5 +96,59 @@ export async function sendGlobalReleaseNotificationsAction(_state: ReleaseNotifi
     };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Impossible d’informer les utilisateurs." };
+  }
+}
+
+const repairRequestSchema = z.object({
+  operationId: z.uuid(),
+  attemptId: z.uuid(),
+  reason: z.string().trim().min(1).max(2000),
+  confirmation: z.literal("on"),
+  decisions: z.array(z.object({
+    targetId: z.uuid(),
+    action: repairActionSchema,
+    residualReason: z.string().trim().max(2000).optional(),
+  })).min(1),
+});
+
+export async function executeAdministrativeDocumentRepairAction(
+  _state: AdministrativeDocumentRepairActionState,
+  formData: FormData,
+): Promise<AdministrativeDocumentRepairActionState> {
+  void _state;
+  let decisions: unknown;
+  try { decisions = JSON.parse(String(formData.get("decisions") ?? "[]")); }
+  catch { return { status: "error", message: "Les décisions de réparation sont invalides." }; }
+  const parsed = repairRequestSchema.safeParse({
+    operationId: formData.get("operationId"), attemptId: formData.get("attemptId"),
+    reason: formData.get("reason"), confirmation: formData.get("confirmation"), decisions,
+  });
+  if (!parsed.success) return { status: "error", message: "Vérifiez le motif, les actions et la confirmation." };
+  try {
+    const result = await authorizeAndExecuteAdministrativeDocumentRepair(parsed.data);
+    revalidatePath("/administration/reparations-documentaires");
+    return result.residualAccepted
+      ? { status: "warning", message: "L’état résiduel a été explicitement accepté et audité. Il ne constitue pas une restauration." }
+      : { status: "success", message: "La réparation a été physiquement vérifiée et scellée." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "La réparation a échoué." };
+  }
+}
+
+const renewalSchema = z.object({ operationId: z.uuid(), attemptId: z.uuid(), renewalId: z.uuid() });
+
+export async function renewAdministrativeDocumentRepairAction(
+  _state: AdministrativeDocumentRepairActionState,
+  formData: FormData,
+): Promise<AdministrativeDocumentRepairActionState> {
+  void _state;
+  const parsed = renewalSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { status: "error", message: "La demande de prolongation est invalide." };
+  try {
+    await renewAdministrativeDocumentRepair(parsed.data);
+    revalidatePath("/administration/reparations-documentaires");
+    return { status: "success", message: "La fenêtre de reprise a été prolongée de dix minutes." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "La prolongation a échoué." };
   }
 }

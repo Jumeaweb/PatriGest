@@ -20,3 +20,13 @@ export type ReleaseNotificationActionState = {
 };
 
 export const initialReleaseNotificationActionState: ReleaseNotificationActionState = { status: "idle", message: "" };
+
+export type AdministrativeDocumentRepairActionState = {
+  status: "idle" | "error" | "success" | "warning";
+  message: string;
+};
+
+export const initialAdministrativeDocumentRepairActionState: AdministrativeDocumentRepairActionState = {
+  status: "idle",
+  message: "",
+};
