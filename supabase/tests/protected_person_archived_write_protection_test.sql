@@ -74,8 +74,8 @@ where user_id = '98000000-0000-4000-8000-000000000001';
 insert into public.account_subscriptions(
   owner_id, plan_key, dossier_capacity_key, status, started_at, ended_at
 ) values (
-  '98000000-0000-4000-8000-000000000001', null, null,
-  'development', now(), null
+  '98000000-0000-4000-8000-000000000001', 'comfort', 'five',
+  'active', now(), null
 );
 
 insert into public.protected_persons(

@@ -98,7 +98,7 @@ test("un plafond dépassé conserve le dépassement sans place négative", () =>
   });
 });
 
-test("la capacité de développement illimitée n’invente ni plafond ni places restantes", () => {
+test("une capacité explicitement illimitée n’invente ni plafond ni places restantes", () => {
   assert.deepEqual(parseOwnedDossierCapacity([unlimitedRow(18)]), {
     state: "unlimited",
     unlimited: true,

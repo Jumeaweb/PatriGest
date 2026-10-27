@@ -37,8 +37,8 @@ export function getAccountDossierCapacityPresentation(
   }
 
   return {
-    activeDossiersLabel: `Dossiers actifs : ${capacity.activeDossierCount} / ${capacity.activeDossierLimit}`,
-    capacityLabel: null,
+    activeDossiersLabel: `Dossiers actifs : ${capacity.activeDossierCount}`,
+    capacityLabel: `Capacité : ${capacity.activeDossierLimit} dossiers`,
     remainingPlacesLabel: `Places restantes : ${capacity.remainingDossierCount}`,
     notice: capacity.state === "reached" ? "Le plafond de dossiers actifs est atteint." : null,
     exceededLabel: capacity.state === "exceeded"

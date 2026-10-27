@@ -238,20 +238,22 @@ select extensions.is(
   'la capacité personnalisée est conservée exactement'
 );
 
--- Développement : aucun plafond numérique, même après plusieurs créations.
+-- Sans forfait commercial : le palier included de deux dossiers s'applique.
 select set_config('request.jwt.claim.sub','96000000-0000-4000-8000-000000000005',true);
-select extensions.ok(
-  (select unlimited and active_dossier_limit is null and remaining_dossier_count is null
-   from public.get_owned_dossier_capacity()),
-  'development est représenté comme illimité'
+select extensions.is(
+  (select active_dossier_limit from public.get_owned_dossier_capacity()), 2,
+  'development utilise la capacité incluse de deux dossiers'
 );
 select extensions.lives_ok(
   $$insert into public.protected_persons(id,owner_id,first_name,last_name)
-    select
-      ('96000000-0000-4000-8105-' || lpad(number::text,12,'0'))::uuid,
-      '96000000-0000-4000-8000-000000000005','Développement','Libre ' || number
-    from generate_series(1,12) number$$,
-  'development ne subit aucune limite commerciale'
+    values('96000000-0000-4000-8105-000000000102','96000000-0000-4000-8000-000000000005','Développement','Deux')$$,
+  'le deuxième dossier sans forfait est autorisé'
+);
+select extensions.throws_ok(
+  $$insert into public.protected_persons(id,owner_id,first_name,last_name)
+    values('96000000-0000-4000-8105-000000000103','96000000-0000-4000-8000-000000000005','Développement','Trois')$$,
+  'P4D01', 'La capacité de dossiers actifs est atteinte.',
+  'le troisième dossier sans forfait est refusé'
 );
 
 -- Abonnement absent et historique terminé : aucun repli silencieux à deux.
@@ -359,6 +361,17 @@ select extensions.is(
    where user_id='96000000-0000-4000-8000-000000000011'),
   'autonomous',
   'le nouveau propriétaire devient autonome'
+);
+select extensions.lives_ok(
+  $$insert into public.protected_persons(id,owner_id,first_name,last_name)
+    values('96000000-0000-4000-8111-000000000102','96000000-0000-4000-8000-000000000011','Nouveau','Deuxième')$$,
+  'un propriétaire sans forfait peut créer un deuxième dossier'
+);
+select extensions.throws_ok(
+  $$insert into public.protected_persons(id,owner_id,first_name,last_name)
+    values('96000000-0000-4000-8111-000000000103','96000000-0000-4000-8000-000000000011','Nouveau','Troisième')$$,
+  'P4D01', 'La capacité de dossiers actifs est atteinte.',
+  'un propriétaire sans forfait ne peut pas créer un troisième dossier'
 );
 
 -- Un historique commercial terminé interdit toute recréation development.

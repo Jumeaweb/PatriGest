@@ -42,7 +42,8 @@ test("présente une capacité limitée et ses places disponibles", () => {
     remainingDossierCount: 2,
     exceededBy: 0,
   });
-  assert.equal(presentation.activeDossiersLabel, "Dossiers actifs : 3 / 5");
+  assert.equal(presentation.activeDossiersLabel, "Dossiers actifs : 3");
+  assert.equal(presentation.capacityLabel, "Capacité : 5 dossiers");
   assert.equal(presentation.remainingPlacesLabel, "Places restantes : 2");
   assert.equal(presentation.notice, null);
   assert.equal(presentation.exceededLabel, null);
@@ -57,7 +58,8 @@ test("signale discrètement un plafond atteint", () => {
     remainingDossierCount: 0,
     exceededBy: 0,
   });
-  assert.equal(presentation.activeDossiersLabel, "Dossiers actifs : 5 / 5");
+  assert.equal(presentation.activeDossiersLabel, "Dossiers actifs : 5");
+  assert.equal(presentation.capacityLabel, "Capacité : 5 dossiers");
   assert.equal(presentation.remainingPlacesLabel, "Places restantes : 0");
   assert.equal(presentation.notice, "Le plafond de dossiers actifs est atteint.");
 });
@@ -71,7 +73,8 @@ test("présente le dépassement comme un état de capacité", () => {
     remainingDossierCount: 0,
     exceededBy: 3,
   });
-  assert.equal(presentation.activeDossiersLabel, "Dossiers actifs : 8 / 5");
+  assert.equal(presentation.activeDossiersLabel, "Dossiers actifs : 8");
+  assert.equal(presentation.capacityLabel, "Capacité : 5 dossiers");
   assert.equal(presentation.remainingPlacesLabel, "Places restantes : 0");
   assert.equal(presentation.exceededLabel, "Dépassement : 3 dossiers");
 });

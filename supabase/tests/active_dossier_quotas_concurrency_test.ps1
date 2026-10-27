@@ -114,6 +114,14 @@ $owner4 = "97000000-0000-4000-8000-000000000004"
 $owner5 = "97000000-0000-4000-8000-000000000005"
 
 $cleanup = @"
+update public.protected_person_archive_runtime_config
+set lifecycle_enabled=false, updated_at=clock_timestamp()
+where singleton;
+delete from public.protected_person_archive_changes
+where protected_person_id in (
+  select id from public.protected_persons
+  where owner_id::text like '97000000-0000-4000-8000-%'
+);
 delete from public.protected_persons where owner_id::text like '97000000-0000-4000-8000-%';
 delete from public.account_subscriptions where owner_id::text like '97000000-0000-4000-8000-%';
 delete from auth.users where id::text like '97000000-0000-4000-8000-%';
@@ -123,6 +131,10 @@ try {
   Invoke-LocalPsql -Sql $cleanup | Out-Null
 
   $setup = @"
+update public.protected_person_archive_runtime_config
+set lifecycle_enabled=true, updated_at=clock_timestamp()
+where singleton;
+
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at
@@ -140,7 +152,7 @@ where user_id::text like '97000000-0000-4000-8000-%';
 
 insert into public.account_subscriptions(owner_id,plan_key,dossier_capacity_key,status)
 values
-  ('$owner1','essential','included','active'),
+  ('$owner1',null,null,'development'),
   ('$owner2','essential','included','active'),
   ('$owner3','essential','included','active'),
   ('$owner4','comfort','five','active'),
@@ -178,18 +190,21 @@ insert into public.protected_persons(id,owner_id,first_name,last_name)
 values('97000000-0000-4000-8202-000000000101','$owner2','Concurrent','Création');
 "@
   $mixedRestore = Authenticated-Sql -OwnerId $owner2 -Statement @"
-update public.protected_persons set status='active',archived_at=null
-where id='97000000-0000-4000-8102-000000000102';
+select public.restore_protected_person(
+  '97000000-0000-4000-8102-000000000102', 1, 'Test de restauration concurrente'
+);
 "@
   Wait-OneQuotaFailure -First (Start-LocalPsql -Sql $mixedCreate) -Second (Start-LocalPsql -Sql $mixedRestore) -Scenario "Création et restauration"
 
   $restoreA = Authenticated-Sql -OwnerId $owner3 -Statement @"
-update public.protected_persons set status='active',archived_at=null
-where id='97000000-0000-4000-8103-000000000102';
+select public.restore_protected_person(
+  '97000000-0000-4000-8103-000000000102', 1, 'Test de restauration concurrente A'
+);
 "@
   $restoreB = Authenticated-Sql -OwnerId $owner3 -Statement @"
-update public.protected_persons set status='active',archived_at=null
-where id='97000000-0000-4000-8103-000000000103';
+select public.restore_protected_person(
+  '97000000-0000-4000-8103-000000000103', 1, 'Test de restauration concurrente B'
+);
 "@
   Wait-OneQuotaFailure -First (Start-LocalPsql -Sql $restoreA) -Second (Start-LocalPsql -Sql $restoreB) -Scenario "Deux restaurations"
 
@@ -211,8 +226,9 @@ values('97000000-0000-4000-8204-000000000101','$owner4','Concurrent','Réduction
   Wait-OneQuotaFailure -First $reductionProcess -Second $creationProcess -Scenario "Réduction et création"
 
   $archive = Authenticated-Sql -OwnerId $owner5 -Statement @"
-update public.protected_persons set status='archived',archived_at=now()
-where id='97000000-0000-4000-8105-000000000101';
+select public.archive_protected_person(
+  '97000000-0000-4000-8105-000000000101', 1, 'Test d’archivage concurrent'
+);
 select pg_sleep(1);
 "@
   $createAfterArchive = Authenticated-Sql -OwnerId $owner5 -Statement @"
