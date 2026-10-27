@@ -16,6 +16,15 @@ import {
   type AdministrativeRepairStorageGateway,
   type RepairContext,
 } from "../administrative-document-repair";
+import {
+  exceptionalRecoveryListSchema,
+  exceptionalRecoverySchema,
+  exceptionalRecoveryStateSchema,
+  exceptionalRepairAuthorizationSchema,
+  getExceptionalRecoveryErrorMessage,
+  isExceptionalRecoveryRequestEligible,
+  type AdministrativeDocumentExceptionalRecovery,
+} from "../administrative-document-exceptional-recovery";
 
 const uuid = z.uuid();
 const sha256 = z.string().regex(/^[0-9a-f]{64}$/);
@@ -78,6 +87,7 @@ type UntypedTableClient = { from(table: string): {
 
 function safeRpcError(error: unknown) {
   const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+  if (code.startsWith("P4X")) return getExceptionalRecoveryErrorMessage(error);
   if (code === "P4R01") return "Cette réparation n’est pas autorisée.";
   if (code === "P4R04") return "L’état documentaire a changé. Actualisez le diagnostic.";
   if (code === "P4R05") return "La tentative ou le plan de réparation a expiré ou divergé.";
@@ -138,11 +148,40 @@ function actionCapabilities(
   return { actions, blockedActions };
 }
 
-export async function getAdministrativeDocumentRepairPageData(operationId?: string) {
+export async function getAdministrativeDocumentRepairPageData(
+  operationId?: string,
+  recoveryId?: string,
+  pendingCursor?: { requestedAt: string; id: string } | null,
+) {
   const { supabase } = await requirePlatformAdministrator();
   if (!isAdminDocumentRepairEnabled()) {
-    return { enabled: false as const, operations: [], diagnostic: null };
+    return {
+      enabled: false as const,
+      operations: [],
+      diagnostic: null,
+      exceptionalRecovery: null,
+      exceptionalAuthorization: null,
+      pendingRecoveries: exceptionalRecoveryListSchema.parse({
+        items: [], hasMore: false, limit: 20, nextRequestedAt: null, nextId: null,
+      }),
+      storageGuardEnabled: false,
+      exceptionalRequestEligible: false,
+      ordinaryRepairAvailable: false,
+    };
   }
+  const validatedCursor = pendingCursor ? {
+    requestedAt: z.iso.datetime({ offset: true }).parse(pendingCursor.requestedAt),
+    id: uuid.parse(pendingCursor.id),
+  } : null;
+  const pendingRecoveries = exceptionalRecoveryListSchema.parse(await rpc(
+    supabase as unknown as RpcClient,
+    "list_pending_administrative_document_exceptional_recoveries",
+    {
+      p_limit: 20,
+      p_after_requested_at: validatedCursor?.requestedAt ?? null,
+      p_after_id: validatedCursor?.id ?? null,
+    },
+  ));
   const admin = createAdminClient();
   const result = await (admin as unknown as UntypedTableClient)
     .from("document_operations")
@@ -155,9 +194,53 @@ export async function getAdministrativeDocumentRepairPageData(operationId?: stri
     id: uuid, workflow: z.string(), business_entity_type: z.string(),
     state: z.string(), safe_error_code: z.string().nullable(), created_at: z.string(),
   })).parse(result.data);
-  if (!operationId) return { enabled: true as const, operations, diagnostic: null };
+  if (!operationId) {
+    return {
+      enabled: true as const,
+      operations,
+      diagnostic: null,
+      exceptionalRecovery: recoveryId
+        ? exceptionalRecoverySchema.parse(await rpc(
+          supabase as unknown as RpcClient,
+          "get_administrative_document_exceptional_recovery",
+          { p_recovery_id: uuid.parse(recoveryId) },
+        ))
+        : null,
+      exceptionalAuthorization: null,
+      pendingRecoveries,
+      storageGuardEnabled: false,
+      exceptionalRequestEligible: false,
+      ordinaryRepairAvailable: false,
+    };
+  }
   const diagnostic = diagnosticSchema.parse(await rpc(supabase as unknown as RpcClient, "get_administrative_document_repair_diagnostic", { p_operation_id: uuid.parse(operationId) }));
   const capabilities = await getRepairCapabilities(supabase as unknown as RpcClient);
+  const activeAttemptId = diagnostic.activeAuthorization?.ownedByCaller
+    ? diagnostic.activeAuthorization.attemptId ?? null
+    : null;
+  const exceptionalAuthorization = activeAttemptId
+    ? exceptionalRepairAuthorizationSchema.nullable().parse(await rpc(
+      supabase as unknown as RpcClient,
+      "get_administrative_document_repair_authorization",
+      { p_operation_id: diagnostic.operationId, p_attempt_id: activeAttemptId },
+    ))
+    : null;
+  const exceptionalRecoveryData = recoveryId
+    ? await rpc(supabase as unknown as RpcClient, "get_administrative_document_exceptional_recovery", {
+      p_recovery_id: uuid.parse(recoveryId),
+    })
+    : await rpc(supabase as unknown as RpcClient, "get_administrative_document_exceptional_recovery_for_operation", {
+      p_operation_id: diagnostic.operationId,
+    });
+  const exceptionalRecovery = exceptionalRecoveryData === null
+    ? null
+    : exceptionalRecoverySchema.parse(exceptionalRecoveryData);
+  if (exceptionalRecovery && exceptionalRecovery.operationId !== diagnostic.operationId) {
+    throw new AdministrativeDocumentRepairError("La récupération ne correspond pas à l’opération sélectionnée.");
+  }
+  const ordinaryRepairAvailable = !exceptionalAuthorization
+    || exceptionalAuthorization.renewalCount < 6
+    || Date.parse(exceptionalAuthorization.expiresAt) > Date.now();
   return {
     enabled: true as const,
     operations,
@@ -170,7 +253,7 @@ export async function getAdministrativeDocumentRepairPageData(operationId?: stri
       safeErrorCode: diagnostic.safeErrorCode,
       repairable: diagnostic.repairable,
       blocked: diagnostic.conflictingLocks.length > 0 || diagnostic.conflictingNeutralizations.length > 0,
-      activeAttemptId: diagnostic.activeAuthorization?.ownedByCaller ? diagnostic.activeAuthorization.attemptId ?? null : null,
+      activeAttemptId,
       ownedByAnotherAdministrator: diagnostic.activeAuthorization?.ownedByCaller === false,
       targets: diagnostic.targets.map((target): AdministrativeRepairTargetView => {
         const actionState = actionCapabilities(target, capabilities.storageGuardEnabled);
@@ -187,6 +270,12 @@ export async function getAdministrativeDocumentRepairPageData(operationId?: stri
         };
       }),
     },
+    exceptionalRecovery,
+    exceptionalAuthorization,
+    exceptionalRequestEligible: isExceptionalRecoveryRequestEligible(exceptionalAuthorization),
+    ordinaryRepairAvailable,
+    pendingRecoveries,
+    storageGuardEnabled: capabilities.storageGuardEnabled,
   };
 }
 
@@ -398,3 +487,208 @@ export async function renewAdministrativeDocumentRepair(input: {
     p_expected_revision: authorization.revision,
   });
 }
+
+function parseExceptionalMutationResult(value: unknown) {
+  return z.object({
+    recoveryId: uuid,
+    state: exceptionalRecoveryStateSchema,
+    revision: z.number().int().nonnegative(),
+    idempotent: z.boolean(),
+  }).passthrough().parse(value);
+}
+
+export async function requestAdministrativeDocumentExceptionalRecovery(input: {
+  operationId: string;
+  authorizationId: string;
+  attemptId: string;
+  expectedPlanHash: string;
+  requestId: string;
+  reason: string;
+  expectedAuthorizationRevision: number;
+}) {
+  if (!isAdminDocumentRepairEnabled()) {
+    throw new AdministrativeDocumentRepairError("La réparation documentaire administrative est désactivée.");
+  }
+  const { supabase } = await requirePlatformAdministrator();
+  const operationId = uuid.parse(input.operationId);
+  const authorization = exceptionalRepairAuthorizationSchema.nullable().parse(await rpc(
+    supabase as unknown as RpcClient,
+    "get_administrative_document_repair_authorization",
+    { p_operation_id: operationId, p_attempt_id: uuid.parse(input.attemptId) },
+  ));
+  if (!authorization
+    || authorization.authorizationId !== uuid.parse(input.authorizationId)
+    || authorization.planHash !== sha256.parse(input.expectedPlanHash)
+    || authorization.revision !== input.expectedAuthorizationRevision) {
+    throw new AdministrativeDocumentRepairError(
+      "La tentative ou sa révision a changé. Actualisez la page.",
+      "CONTEXT_DIVERGED",
+    );
+  }
+  return parseExceptionalMutationResult(await rpc(
+    supabase as unknown as RpcClient,
+    "request_administrative_document_exceptional_recovery",
+    {
+      p_authorization_id: authorization.authorizationId,
+      p_attempt_id: authorization.attemptId,
+      p_expected_plan_hash: authorization.planHash,
+      p_request_id: uuid.parse(input.requestId),
+      p_reason: z.string().trim().min(1).max(2000).parse(input.reason),
+      p_expected_authorization_revision: authorization.revision,
+    },
+  ));
+}
+
+export async function decideAdministrativeDocumentExceptionalRecovery(input: {
+  operationId: string;
+  recoveryId: string;
+  decisionId: string;
+  approve: boolean;
+  reason: string;
+  expectedRevision: number;
+}) {
+  if (!isAdminDocumentRepairEnabled()) {
+    throw new AdministrativeDocumentRepairError("La réparation documentaire administrative est désactivée.");
+  }
+  const { supabase } = await requirePlatformAdministrator();
+  const recovery = exceptionalRecoverySchema.parse(await rpc(
+    supabase as unknown as RpcClient,
+    "get_administrative_document_exceptional_recovery",
+    { p_recovery_id: uuid.parse(input.recoveryId) },
+  ));
+  if (recovery.operationId !== uuid.parse(input.operationId)) {
+    throw new AdministrativeDocumentRepairError(
+      "La demande ne correspond pas à l’opération sélectionnée.",
+      "CONTEXT_DIVERGED",
+    );
+  }
+  return parseExceptionalMutationResult(await rpc(
+    supabase as unknown as RpcClient,
+    "decide_administrative_document_exceptional_recovery",
+    {
+      p_recovery_id: recovery.recoveryId,
+      p_decision_id: uuid.parse(input.decisionId),
+      p_approve: input.approve,
+      p_reason: z.string().trim().min(1).max(2000).parse(input.reason),
+      p_expected_revision: input.expectedRevision,
+    },
+  ));
+}
+
+export async function activateAdministrativeDocumentExceptionalRecovery(input: {
+  operationId: string;
+  recoveryId: string;
+  activationId: string;
+  expectedRevision: number;
+}) {
+  if (!isAdminDocumentRepairEnabled()) {
+    throw new AdministrativeDocumentRepairError("La réparation documentaire administrative est désactivée.");
+  }
+  const { supabase } = await requirePlatformAdministrator();
+  const recovery = exceptionalRecoverySchema.parse(await rpc(
+    supabase as unknown as RpcClient,
+    "get_administrative_document_exceptional_recovery",
+    { p_recovery_id: uuid.parse(input.recoveryId) },
+  ));
+  if (recovery.operationId !== uuid.parse(input.operationId)) {
+    throw new AdministrativeDocumentRepairError(
+      "La récupération ne correspond pas à l’opération sélectionnée.",
+      "CONTEXT_DIVERGED",
+    );
+  }
+  return z.object({
+    recoveryId: uuid,
+    state: z.enum(["active", "expired", "rejected", "consumed"]),
+    expiresAt: z.iso.datetime({ offset: true }).nullable(),
+    activationCount: z.number().int().min(0).max(2),
+    maxActivations: z.literal(2),
+    revision: z.number().int().nonnegative(),
+    idempotent: z.boolean(),
+  }).parse(await rpc(
+    supabase as unknown as RpcClient,
+    "activate_administrative_document_exceptional_recovery",
+    {
+      p_recovery_id: recovery.recoveryId,
+      p_activation_id: uuid.parse(input.activationId),
+      p_expected_revision: input.expectedRevision,
+    },
+  ));
+}
+
+export async function resumeAdministrativeDocumentExceptionalRecovery(input: {
+  operationId: string;
+  attemptId: string;
+}) {
+  if (!isAdminDocumentRepairEnabled()) {
+    throw new AdministrativeDocumentRepairError("La réparation documentaire administrative est désactivée.");
+  }
+  const { supabase, userId } = await requirePlatformAdministrator();
+  const operationId = uuid.parse(input.operationId);
+  const authorization = exceptionalRepairAuthorizationSchema.nullable().parse(await rpc(
+    supabase as unknown as RpcClient,
+    "get_administrative_document_repair_authorization",
+    { p_operation_id: operationId, p_attempt_id: uuid.parse(input.attemptId) },
+  ));
+  if (!authorization) {
+    throw new AdministrativeDocumentRepairError("La tentative de réparation est introuvable.");
+  }
+  const recovery = exceptionalRecoverySchema.nullable().parse(await rpc(
+    supabase as unknown as RpcClient,
+    "get_administrative_document_exceptional_recovery_for_operation",
+    { p_operation_id: operationId },
+  ));
+  if (!recovery || !recovery.requesterIsCaller || recovery.state !== "active") {
+    throw new AdministrativeDocumentRepairError(
+      "Aucune fenêtre exceptionnelle active n’autorise cette reprise.",
+      "AUTHORIZATION_EXPIRED",
+    );
+  }
+  const diagnostic = diagnosticSchema.parse(await rpc(
+    supabase as unknown as RpcClient,
+    "get_administrative_document_repair_diagnostic",
+    { p_operation_id: operationId },
+  ));
+  const capabilities = await getRepairCapabilities(supabase as unknown as RpcClient);
+  const planByTarget = new Map(authorization.repairPlan.map((item) => [item.targetId, item]));
+  const context: RepairContext = {
+    authorizationId: authorization.authorizationId,
+    administratorSubjectId: userId,
+    attemptId: authorization.attemptId,
+    planHash: authorization.planHash,
+    compensationActions: new Map(diagnostic.targets.map((target) => [
+      target.targetId,
+      target.compensationAction,
+    ])),
+    expectedObjects: new Map(diagnostic.targets.map((target) => {
+      const planned = planByTarget.get(target.targetId);
+      if (!planned) {
+        throw new AdministrativeDocumentRepairError(
+          "Une cible du plan initial est introuvable.",
+          "CONTEXT_DIVERGED",
+        );
+      }
+      return [target.targetId, {
+        exists: planned.expectedObjectExists,
+        objectId: planned.expectedObjectId,
+        objectVersion: planned.expectedObjectVersion,
+      }];
+    })),
+    storageGuardEnabled: capabilities.storageGuardEnabled,
+  };
+  const admin = createAdminClient();
+  const engine = new AdministrativeDocumentRepairEngine(
+    createRpcGateway(admin as unknown as RpcClient),
+    createStorageGateway(admin),
+  );
+  const progress = await engine.execute(context);
+  const sealed = authorizationSchema.pick({
+    authorizationId: true, operationId: true, state: true, revision: true,
+  }).parse(await rpc(supabase as unknown as RpcClient, "seal_administrative_document_repair", {
+    p_authorization_id: authorization.authorizationId,
+    p_expected_revision: progress.revision,
+    p_expected_plan_hash: authorization.planHash,
+  }));
+  return { operationId, state: sealed.state };
+}
+
+export type { AdministrativeDocumentExceptionalRecovery };

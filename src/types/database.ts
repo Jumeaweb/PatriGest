@@ -392,6 +392,12 @@ export type Database = {
       assert_administrative_account_deletion_barrier: { Args: { p_authorization_id: string; p_expected_revision: number; p_expected_plan_hash: string }; Returns: Json };
       get_administrative_document_inventory: { Args: { p_limit?: number; p_after_key?: string | null; p_document_category?: string | null; p_anomaly_type?: string | null }; Returns: Json };
       get_administrative_document_repair_capabilities: { Args: Record<string, never>; Returns: Json };
+      request_administrative_document_exceptional_recovery: { Args: { p_authorization_id: string; p_attempt_id: string; p_expected_plan_hash: string; p_request_id: string; p_reason: string; p_expected_authorization_revision: number }; Returns: Json };
+      decide_administrative_document_exceptional_recovery: { Args: { p_recovery_id: string; p_decision_id: string; p_approve: boolean; p_reason: string; p_expected_revision: number }; Returns: Json };
+      activate_administrative_document_exceptional_recovery: { Args: { p_recovery_id: string; p_activation_id: string; p_expected_revision: number }; Returns: Json };
+      get_administrative_document_exceptional_recovery: { Args: { p_recovery_id: string }; Returns: Json };
+      get_administrative_document_exceptional_recovery_for_operation: { Args: { p_operation_id: string }; Returns: Json };
+      list_pending_administrative_document_exceptional_recoveries: { Args: { p_limit?: number; p_after_requested_at?: string | null; p_after_id?: string | null }; Returns: Json };
       validate_bank_reconciliation: { Args: { p_reconciliation_id: string }; Returns: Database["public"]["Tables"]["bank_reconciliations"]["Row"] };
     };
     Enums: Record<string, never>;

@@ -52,8 +52,36 @@ select extensions.ok(
     'service_role',
     'public.activate_administrative_document_exceptional_recovery(uuid,uuid,bigint)',
     'EXECUTE'
+  )
+  and not has_function_privilege(
+    'service_role',
+    'public.list_pending_administrative_document_exceptional_recoveries(integer,timestamp with time zone,uuid)',
+    'EXECUTE'
   ),
   'les trois RPC métier sont réservées à authenticated et jamais à service_role'
+);
+select extensions.ok(
+  has_function_privilege(
+    'authenticated',
+    'public.get_administrative_document_exceptional_recovery_for_operation(uuid)',
+    'EXECUTE'
+  )
+  and has_function_privilege(
+    'authenticated',
+    'public.list_pending_administrative_document_exceptional_recoveries(integer,timestamp with time zone,uuid)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'anon',
+    'public.get_administrative_document_exceptional_recovery_for_operation(uuid)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'service_role',
+    'public.get_administrative_document_exceptional_recovery_for_operation(uuid)',
+    'EXECUTE'
+  ),
+  'les consultations collectives sont exécutables par authenticated seulement, avec contrôle administrateur interne'
 );
 select extensions.ok(
   not exists (
@@ -70,6 +98,8 @@ select extensions.ok(
         'decide_administrative_document_exceptional_recovery',
         'activate_administrative_document_exceptional_recovery',
         'get_administrative_document_exceptional_recovery',
+        'get_administrative_document_exceptional_recovery_for_operation',
+        'list_pending_administrative_document_exceptional_recoveries',
         'consume_document_repair_exceptional_recovery'
       )
       and (
@@ -243,6 +273,18 @@ select extensions.throws_ok(
   'P4X01','Activation de récupération exceptionnelle non autorisée.',
   'un utilisateur ordinaire ne peut pas activer une fenêtre'
 );
+select extensions.throws_ok(
+  $$select public.list_pending_administrative_document_exceptional_recoveries(20,null,null)$$,
+  'P4X01','Liste des récupérations exceptionnelles non autorisée.',
+  'un utilisateur ordinaire ne peut pas consulter la file administrative'
+);
+select extensions.throws_ok(
+  $$select public.get_administrative_document_exceptional_recovery_for_operation(
+    '99600000-0000-4000-8200-000000000001'
+  )$$,
+  'P4X01','Consultation de récupération exceptionnelle non autorisée.',
+  'un utilisateur ordinaire ne peut pas retrouver une récupération par opération'
+);
 
 select set_config('request.jwt.claim.sub','99600000-0000-4000-8000-000000000001',true);
 select set_config('request.jwt.claims','{"sub":"99600000-0000-4000-8000-000000000001","role":"authenticated"}',true);
@@ -373,6 +415,68 @@ select extensions.throws_ok(
 delete from public.document_object_locks where target_id='99600000-0000-4000-8500-000000000002';
 select set_config('request.jwt.claim.sub','99600000-0000-4000-8000-000000000002',true);
 select set_config('request.jwt.claims','{"sub":"99600000-0000-4000-8000-000000000002","role":"authenticated"}',true);
+select extensions.is(
+  jsonb_array_length(public.list_pending_administrative_document_exceptional_recoveries(20,null,null)->'items'),
+  2,
+  'le second administrateur voit les deux demandes en attente sans accès direct aux registres'
+);
+select extensions.ok(
+  (public.list_pending_administrative_document_exceptional_recoveries(1,null,null)->>'hasMore')::boolean
+  and public.list_pending_administrative_document_exceptional_recoveries(1,null,null)->>'nextRequestedAt' is not null
+  and public.list_pending_administrative_document_exceptional_recoveries(1,null,null)->>'nextId' is not null,
+  'la file des validations utilise une pagination keyset bornée'
+);
+select extensions.throws_ok(
+  $$select public.list_pending_administrative_document_exceptional_recoveries(0,null,null)$$,
+  'P4X02','Pagination des récupérations exceptionnelles invalide.',
+  'une taille de page hors bornes est refusée'
+);
+select extensions.throws_ok(
+  $$select public.list_pending_administrative_document_exceptional_recoveries(20,now(),null)$$,
+  'P4X02','Pagination des récupérations exceptionnelles invalide.',
+  'un curseur keyset partiel est refusé'
+);
+select extensions.ok(
+  (
+    select bool_and(
+      previous_requested_at > requested_at
+      or (previous_requested_at = requested_at and previous_id > recovery_id)
+    )
+    from (
+      select
+        (item->>'requestedAt')::timestamptz as requested_at,
+        (item->>'recoveryId')::uuid as recovery_id,
+        lag((item->>'requestedAt')::timestamptz) over (order by position) as previous_requested_at,
+        lag((item->>'recoveryId')::uuid) over (order by position) as previous_id
+      from jsonb_array_elements(
+        public.list_pending_administrative_document_exceptional_recoveries(20,null,null)->'items'
+      ) with ordinality as listed(item, position)
+    ) ordered_items
+    where previous_requested_at is not null
+  ),
+  'l’ordre keyset est stable par date puis UUID décroissants'
+);
+select extensions.ok(
+  not (
+    public.list_pending_administrative_document_exceptional_recoveries(20,null,null)::text
+    ~ '(requesterSubjectId|objectPath|backup|token)'
+  ),
+  'la file ne divulgue ni identité technique, ni chemin Storage, ni sauvegarde, ni jeton'
+);
+select extensions.is(
+  public.get_administrative_document_exceptional_recovery_for_operation(
+    '99600000-0000-4000-8200-000000000001'
+  )->>'state',
+  'requested',
+  'la récupération peut être retrouvée par son opération sans lire la table privée'
+);
+select extensions.is(
+  jsonb_array_length(public.get_administrative_document_exceptional_recovery_for_operation(
+    '99600000-0000-4000-8200-000000000001'
+  )->'history'),
+  1,
+  'le détail sûr expose son historique append-only consultable'
+);
 select extensions.throws_ok(
   format(
     'select public.decide_administrative_document_exceptional_recovery(%L,%L,true,%L,0)',
@@ -404,6 +508,24 @@ select extensions.is(
   'rejected',
   'une récupération refusée conserve son état terminal audité'
 );
+select extensions.ok(
+  (select (public.decide_administrative_document_exceptional_recovery(
+    id,'99600000-0000-4000-8c00-000000000006',false,
+    'Refus motivé après diagnostic',0
+  )->>'idempotent')::boolean
+  from public.document_repair_exceptional_recoveries
+  where authorization_id='99600000-0000-4000-8600-000000000005'),
+  'une réponse de refus perdue peut être rejouée avec la même clé et la même intention'
+);
+select extensions.throws_ok(
+  format(
+    'select public.decide_administrative_document_exceptional_recovery(%L,%L,true,%L,0)',
+    (select id from public.document_repair_exceptional_recoveries where authorization_id='99600000-0000-4000-8600-000000000005'),
+    '99600000-0000-4000-8c00-000000000006','Refus motivé après diagnostic'
+  ),
+  'P4X05','La clé de décision est déjà liée à une autre décision.',
+  'une clé de refus ne peut pas être rejouée comme approbation'
+);
 insert into public.document_object_locks(bucket_id,object_path,target_id,operation_id)
 select bucket_id,object_path,id,operation_id from public.document_operation_targets
 where id='99600000-0000-4000-8500-000000000002';
@@ -422,6 +544,11 @@ select extensions.ok(
   from public.document_repair_exceptional_recoveries
   where authorization_id='99600000-0000-4000-8600-000000000001'),
   'une réponse d’approbation perdue peut être rejouée'
+);
+select extensions.is(
+  jsonb_array_length(public.list_pending_administrative_document_exceptional_recoveries(20,null,null)->'items'),
+  0,
+  'les décisions concurrentes retirent autoritairement les demandes de la file en attente'
 );
 select extensions.throws_ok(
   format(
@@ -452,6 +579,11 @@ select extensions.throws_ok(
     gen_random_uuid(),gen_random_uuid(),0)$$,
   '42501','permission denied for function activate_administrative_document_exceptional_recovery',
   'service_role ne peut jamais activer la récupération métier'
+);
+select extensions.throws_ok(
+  $$select public.list_pending_administrative_document_exceptional_recoveries(20,null,null)$$,
+  '42501','permission denied for function list_pending_administrative_document_exceptional_recoveries',
+  'service_role ne peut pas contourner la consultation administrative authentifiée'
 );
 reset role;
 
@@ -659,6 +791,15 @@ select extensions.is(
    where authorization_id='99600000-0000-4000-8600-000000000001'),
   'consumed',
   'la récupération est terminale après consommation réussie'
+);
+select extensions.ok(
+  (public.get_administrative_document_exceptional_recovery_for_operation(
+    '99600000-0000-4000-8200-000000000001'
+  )->>'decisionReason') = 'Approbation indépendante'
+  and jsonb_array_length(public.get_administrative_document_exceptional_recovery_for_operation(
+    '99600000-0000-4000-8200-000000000001'
+  )->'activations') = 1,
+  'le détail terminal conserve le motif de décision et l’historique des activations'
 );
 select extensions.is(
   (select count(*) from public.document_repair_exceptional_events event

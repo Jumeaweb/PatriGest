@@ -3,8 +3,21 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { deletePlatformUser, resendApplicationActivationEmail, reviewApplicationRegistration } from "./services/administration-service";
-import { authorizeAndExecuteAdministrativeDocumentRepair, renewAdministrativeDocumentRepair } from "./services/administrative-document-repair-service";
-import { repairActionSchema } from "./administrative-document-repair";
+import {
+  activateAdministrativeDocumentExceptionalRecovery,
+  authorizeAndExecuteAdministrativeDocumentRepair,
+  decideAdministrativeDocumentExceptionalRecovery,
+  renewAdministrativeDocumentRepair,
+  requestAdministrativeDocumentExceptionalRecovery,
+  resumeAdministrativeDocumentExceptionalRecovery,
+} from "./services/administrative-document-repair-service";
+import { AdministrativeDocumentRepairError, repairActionSchema } from "./administrative-document-repair";
+import {
+  exceptionalRecoveryActivationRequestSchema,
+  exceptionalRecoveryDecisionSchema,
+  exceptionalRecoveryRequestSchema,
+  exceptionalRecoveryResumeSchema,
+} from "./administrative-document-exceptional-recovery";
 import { sendGlobalReleaseNotifications, sendTestReleaseNotification } from "./services/release-notification-service";
 import type { AdministrativeDocumentRepairActionState, DeleteUserState, RegistrationReviewState, ReleaseNotificationActionState } from "./state";
 
@@ -14,6 +27,13 @@ const administrativeDeletionSchema = z.object({
   reason: z.string().trim().min(1, "Le motif est obligatoire.").max(2000, "Le motif ne peut pas dépasser 2 000 caractères."),
   confirmation: z.literal("on", { error: "Confirmez la suppression définitive." }),
 });
+
+function exceptionalRecoveryActionError(error: unknown, fallback: string): AdministrativeDocumentRepairActionState {
+  return {
+    status: "error",
+    message: error instanceof AdministrativeDocumentRepairError ? error.message : fallback,
+  };
+}
 
 export async function deletePlatformUserAction(userId: string, _state: DeleteUserState, formData: FormData): Promise<DeleteUserState> {
   void _state;
@@ -150,5 +170,85 @@ export async function renewAdministrativeDocumentRepairAction(
     return { status: "success", message: "La fenêtre de reprise a été prolongée de dix minutes." };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "La prolongation a échoué." };
+  }
+}
+
+export async function requestAdministrativeDocumentExceptionalRecoveryAction(
+  _state: AdministrativeDocumentRepairActionState,
+  formData: FormData,
+): Promise<AdministrativeDocumentRepairActionState> {
+  void _state;
+  const parsed = exceptionalRecoveryRequestSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { status: "error", message: "Vérifiez le motif et la confirmation de la demande." };
+  }
+  try {
+    await requestAdministrativeDocumentExceptionalRecovery(parsed.data);
+    revalidatePath("/administration/reparations-documentaires");
+    return { status: "success", message: "La demande attend maintenant la validation d’un autre administrateur." };
+  } catch (error) {
+    return exceptionalRecoveryActionError(error, "La demande exceptionnelle a échoué.");
+  }
+}
+
+export async function decideAdministrativeDocumentExceptionalRecoveryAction(
+  _state: AdministrativeDocumentRepairActionState,
+  formData: FormData,
+): Promise<AdministrativeDocumentRepairActionState> {
+  void _state;
+  const parsed = exceptionalRecoveryDecisionSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { status: "error", message: "Vérifiez la décision, son motif et la confirmation." };
+  }
+  try {
+    await decideAdministrativeDocumentExceptionalRecovery({
+      ...parsed.data,
+      approve: parsed.data.decision === "approve",
+    });
+    revalidatePath("/administration/reparations-documentaires");
+    return {
+      status: "success",
+      message: parsed.data.decision === "approve"
+        ? "La récupération exceptionnelle a été approuvée."
+        : "La récupération exceptionnelle a été refusée.",
+    };
+  } catch (error) {
+    return exceptionalRecoveryActionError(error, "La décision exceptionnelle a échoué.");
+  }
+}
+
+export async function activateAdministrativeDocumentExceptionalRecoveryAction(
+  _state: AdministrativeDocumentRepairActionState,
+  formData: FormData,
+): Promise<AdministrativeDocumentRepairActionState> {
+  void _state;
+  const parsed = exceptionalRecoveryActivationRequestSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { status: "error", message: "La demande d’activation est invalide." };
+  }
+  try {
+    await activateAdministrativeDocumentExceptionalRecovery(parsed.data);
+    revalidatePath("/administration/reparations-documentaires");
+    return { status: "success", message: "La fenêtre exceptionnelle de cinq minutes est active." };
+  } catch (error) {
+    return exceptionalRecoveryActionError(error, "L’activation exceptionnelle a échoué.");
+  }
+}
+
+export async function resumeAdministrativeDocumentExceptionalRecoveryAction(
+  _state: AdministrativeDocumentRepairActionState,
+  formData: FormData,
+): Promise<AdministrativeDocumentRepairActionState> {
+  void _state;
+  const parsed = exceptionalRecoveryResumeSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { status: "error", message: "La reprise exceptionnelle est invalide." };
+  }
+  try {
+    await resumeAdministrativeDocumentExceptionalRecovery(parsed.data);
+    revalidatePath("/administration/reparations-documentaires");
+    return { status: "success", message: "La réparation a été reprise, vérifiée et scellée." };
+  } catch (error) {
+    return exceptionalRecoveryActionError(error, "La reprise exceptionnelle a échoué.");
   }
 }
