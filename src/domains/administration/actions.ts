@@ -18,6 +18,8 @@ import {
   exceptionalRecoveryRequestSchema,
   exceptionalRecoveryResumeSchema,
 } from "./administrative-document-exceptional-recovery";
+import { physicalVerificationRequestSchema } from "./administrative-document-physical-verification";
+import { verifyAdministrativeDocumentPhysicalObject } from "./services/administrative-document-physical-verification-service";
 import { sendGlobalReleaseNotifications, sendTestReleaseNotification } from "./services/release-notification-service";
 import type { AdministrativeDocumentRepairActionState, DeleteUserState, RegistrationReviewState, ReleaseNotificationActionState } from "./state";
 
@@ -250,5 +252,29 @@ export async function resumeAdministrativeDocumentExceptionalRecoveryAction(
     return { status: "success", message: "La réparation a été reprise, vérifiée et scellée." };
   } catch (error) {
     return exceptionalRecoveryActionError(error, "La reprise exceptionnelle a échoué.");
+  }
+}
+
+export async function verifyAdministrativeDocumentPhysicalObjectAction(
+  _state: { status: "idle" | "success" | "error"; message: string },
+  formData: FormData,
+): Promise<{ status: "idle" | "success" | "error"; message: string }> {
+  void _state;
+  const parsed = physicalVerificationRequestSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { status: "error", message: "La demande de vérification physique est invalide." };
+  try {
+    const observation = await verifyAdministrativeDocumentPhysicalObject(parsed.data);
+    revalidatePath("/administration/inventaire-documentaire");
+    const messages = {
+      verified_readable: "Les octets ont été lus et la preuve disponible a été vérifiée.",
+      missing_physical_bytes: "Les octets physiques sont absents ou introuvables.",
+      version_mismatch: "La version Storage a changé pendant la vérification.",
+      hash_mismatch: "L’empreinte physique diverge de la référence durable.",
+      verification_inconclusive: "La vérification n’a pas permis d’établir une preuve concluante.",
+      stale_inventory_finding: "Le constat a changé depuis l’inventaire et doit être relu.",
+    } as const;
+    return { status: "success", message: messages[observation.outcome] };
+  } catch {
+    return { status: "error", message: "La vérification physique a échoué sans exposer de détail technique." };
   }
 }

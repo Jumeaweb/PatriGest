@@ -391,6 +391,10 @@ export type Database = {
       list_administrative_account_storage_neutralization_operations: { Args: { p_authorization_id: string }; Returns: Array<{ operation_id: string; client_request_id: string; state: string; phase: string; created_at: string }> };
       assert_administrative_account_deletion_barrier: { Args: { p_authorization_id: string; p_expected_revision: number; p_expected_plan_hash: string }; Returns: Json };
       get_administrative_document_inventory: { Args: { p_limit?: number; p_after_key?: string | null; p_document_category?: string | null; p_anomaly_type?: string | null }; Returns: Json };
+      begin_administrative_document_physical_verification: { Args: { p_inventory_key: string; p_client_request_id: string }; Returns: Json };
+      get_administrative_document_physical_verification_descriptor: { Args: { p_verification_request_id: string }; Returns: Json };
+      complete_administrative_document_physical_verification: { Args: { p_verification_request_id: string; p_server_capability: string; p_outcome: string; p_proof_level: string; p_catalog_object_id: string | null; p_catalog_object_version: string | null; p_observed_byte_size: number | null; p_observed_sha256: string | null; p_limitation_code: string | null }; Returns: Json };
+      get_administrative_document_physical_observations: { Args: { p_inventory_key: string; p_limit?: number; p_before_observed_at?: string | null }; Returns: Json };
       get_administrative_document_repair_capabilities: { Args: Record<string, never>; Returns: Json };
       request_administrative_document_exceptional_recovery: { Args: { p_authorization_id: string; p_attempt_id: string; p_expected_plan_hash: string; p_request_id: string; p_reason: string; p_expected_authorization_revision: number }; Returns: Json };
       decide_administrative_document_exceptional_recovery: { Args: { p_recovery_id: string; p_decision_id: string; p_approve: boolean; p_reason: string; p_expected_revision: number }; Returns: Json };

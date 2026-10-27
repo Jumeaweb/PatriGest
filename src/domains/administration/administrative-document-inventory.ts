@@ -63,6 +63,7 @@ export type AdministrativeDocumentInventoryQuery = {
   category: DocumentInventoryCategory | null;
   anomaly: DocumentInventoryAnomaly | null;
   limit: number;
+  finding: string | null;
 };
 
 function optionalValue(value: string | string[] | undefined) {
@@ -74,16 +75,19 @@ export function parseAdministrativeDocumentInventoryQuery(searchParams: {
   category?: string | string[];
   anomaly?: string | string[];
   limit?: string | string[];
+  finding?: string | string[];
 }): AdministrativeDocumentInventoryQuery {
   const cursor = optionalValue(searchParams.cursor);
   const category = optionalValue(searchParams.category);
   const anomaly = optionalValue(searchParams.anomaly);
   const limit = optionalValue(searchParams.limit);
+  const finding = optionalValue(searchParams.finding);
   return {
     cursor: cursor ? cursorSchema.parse(cursor) : null,
     category: category ? documentInventoryCategorySchema.parse(category) : null,
     anomaly: anomaly ? documentInventoryAnomalySchema.parse(anomaly) : null,
     limit: pageSizeSchema.parse(limit ?? 25),
+    finding: finding ? cursorSchema.parse(finding) : null,
   };
 }
 
@@ -96,6 +100,7 @@ export function getAdministrativeDocumentInventoryHref(
   if (query.anomaly) params.set("anomaly", query.anomaly);
   if (query.limit !== 25) params.set("limit", String(query.limit));
   if (cursor) params.set("cursor", cursor);
+  if (query.finding) params.set("finding", query.finding);
   const suffix = params.toString();
   return `/administration/inventaire-documentaire${suffix ? `?${suffix}` : ""}`;
 }

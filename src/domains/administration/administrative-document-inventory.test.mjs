@@ -18,7 +18,7 @@ test("valide uniquement les filtres et tailles explicitement autorisés", () => 
     anomaly: "backup_catalog_object_missing",
     limit: "50",
   });
-  assert.deepEqual(query, { cursor: null, category: "backup", anomaly: "backup_catalog_object_missing", limit: 50 });
+  assert.deepEqual(query, { cursor: null, category: "backup", anomaly: "backup_catalog_object_missing", limit: 50, finding: null });
   assert.throws(() => parseAdministrativeDocumentInventoryQuery({ category: "storage.objects" }));
   assert.throws(() => parseAdministrativeDocumentInventoryQuery({ anomaly: "arbitrary_path" }));
   assert.throws(() => parseAdministrativeDocumentInventoryQuery({ limit: "101" }));
