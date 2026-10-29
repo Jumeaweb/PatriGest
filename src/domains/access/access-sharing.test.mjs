@@ -45,6 +45,14 @@ test("la page expose exactement les deux onglets et ouvre Inviter par défaut", 
   assert.match(page, /<AccessTabs[^>]+current=\{view\}/);
 });
 
+test("le bouton Inviter est pleine largeur sur mobile et ajusté au texte ensuite", async () => {
+  const form = await source("domains/access/components/collaborator-invite-form.tsx");
+  assert.match(form, /className="self-end w-full sm:w-auto"/);
+  assert.match(form, /className="auth-submit w-full whitespace-nowrap sm:w-auto"/);
+  assert.match(form, /disabled=\{disabled \|\| pending\}/);
+  assert.match(form, /aria-describedby=\{describedBy\}/);
+});
+
 test("les invitations pending et historiques sont chargées séparément côté serveur", async () => {
   const services = await source("domains/access/services.ts");
   assert.match(services, /\.is\("accepted_at", null\)[\s\S]*\.is\("revoked_at", null\)[\s\S]*\.gt\("expires_at", now\)/);

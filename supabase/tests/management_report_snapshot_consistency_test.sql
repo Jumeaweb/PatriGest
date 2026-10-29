@@ -1,4 +1,5 @@
 begin;
+\ir experimental_document_operations_enabled.inc
 
 select extensions.plan(23);
 

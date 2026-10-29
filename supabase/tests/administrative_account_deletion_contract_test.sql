@@ -1,4 +1,5 @@
 begin;
+\ir experimental_document_operations_enabled.inc
 
 create extension if not exists pgtap with schema extensions;
 select extensions.no_plan();

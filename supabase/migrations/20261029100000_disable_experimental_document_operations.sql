@@ -1,0 +1,73 @@
+-- PAT-PRODUCTION-02
+--
+-- Les parcours documentaires durables et administratifs restent présents dans
+-- le schéma pour permettre leur validation progressive. Ils ne doivent
+-- toutefois pas être activables par un simple indicateur applicatif en
+-- production. La fermeture est donc portée par les privilèges PostgreSQL.
+--
+-- Une future activation devra faire l'objet d'une migration additive accordant
+-- explicitement les seuls points d'entrée nécessaires. Les RPC de consultation
+-- ne sont pas concernées, afin de préserver les lectures historiques.
+
+revoke all on function
+  public.begin_transaction_proof_document_operation(uuid,uuid,text,uuid),
+  public.begin_bank_statement_document_operation(uuid,uuid,uuid,text,uuid),
+  public.begin_management_report_document_operation(uuid,uuid,text,uuid),
+  public.start_document_operation(uuid,bigint),
+  public.record_document_operation_target_applied(uuid,uuid,bigint,bigint),
+  public.finalize_transaction_proof_document_operation(uuid,bigint,text,text,bigint),
+  public.finalize_bank_statement_document_operation(uuid,bigint,date,date,numeric,text,text,text,bigint),
+  public.finalize_management_report_document_operation(uuid,bigint,text,text,bigint,jsonb,integer),
+  public.begin_document_operation_compensation(uuid,bigint,text),
+  public.record_document_operation_target_compensated(uuid,uuid,bigint,bigint),
+  public.complete_document_operation_compensation(uuid,bigint),
+  public.mark_document_operation_attention_required(uuid,bigint,text),
+  public.cancel_reserved_document_operation(uuid,bigint),
+  public.reserve_document_operation_backup(uuid,uuid,bigint,text,text),
+  public.confirm_document_operation_backup(uuid,uuid,bigint),
+  public.mark_document_operation_backup_restored(uuid,uuid,bigint),
+  public.begin_account_storage_neutralization(uuid,uuid,text,text,uuid,text,text,bigint,text),
+  public.issue_administrative_account_deletion_authorization(uuid,uuid,text,jsonb),
+  public.cancel_administrative_account_deletion_authorization(uuid,bigint),
+  public.begin_administrative_account_storage_neutralization(uuid,uuid,text,text,uuid,text,text,bigint,text),
+  public.assert_administrative_account_deletion_barrier(uuid,bigint,text),
+  public.issue_administrative_document_repair_authorization(uuid,bigint,uuid,text,jsonb),
+  public.cancel_administrative_document_repair_authorization(uuid,bigint),
+  public.seal_administrative_document_repair(uuid,bigint,text),
+  public.renew_administrative_document_repair_authorization(uuid,uuid,text,uuid,bigint),
+  public.request_administrative_document_exceptional_recovery(uuid,uuid,text,uuid,text,bigint),
+  public.decide_administrative_document_exceptional_recovery(uuid,uuid,boolean,text,bigint),
+  public.activate_administrative_document_exceptional_recovery(uuid,uuid,bigint),
+  public.begin_administrative_document_physical_verification(text,uuid)
+from public, anon, authenticated, service_role;
+
+revoke all on function
+  public.authorize_document_operation_backup_cleanup(uuid,bigint),
+  public.complete_document_operation_backup_cleanup(uuid,bigint),
+  public.issue_account_deletion_document_authorization(uuid,uuid),
+  public.cancel_account_deletion_document_authorization(uuid),
+  public.reserve_account_storage_neutralization_backup(uuid),
+  public.confirm_account_storage_neutralization_backup(uuid,bigint,bigint,text,bigint),
+  public.record_account_storage_neutralization_original_deleted(uuid,bigint),
+  public.record_account_storage_neutralization_recreated(uuid,bigint,uuid,text),
+  public.verify_account_storage_neutralization_content(uuid,bigint,text,bigint),
+  public.authorize_account_storage_neutralization_recovery(uuid,bigint),
+  public.confirm_account_storage_neutralization_recovery(uuid,bigint,uuid,text,text,bigint),
+  public.authorize_account_storage_neutralization_backup_cleanup(uuid,bigint),
+  public.confirm_account_storage_neutralization_backup_cleanup(uuid,bigint,bigint),
+  public.finalize_account_storage_neutralization(uuid,bigint),
+  public.mark_account_storage_neutralization_attention_required(uuid,bigint,text),
+  public.assert_account_deletion_document_barrier(uuid),
+  public.start_administrative_document_repair_item(uuid,uuid,uuid,uuid,text,text,uuid,bigint,bigint),
+  public.record_administrative_document_repair_observation(uuid,uuid,uuid,uuid,text,text,uuid,bigint,text,boolean,uuid,text,bigint,text,boolean,uuid,bigint,text),
+  public.verify_administrative_document_repair_item(uuid,uuid,uuid,uuid,text,text,uuid,bigint,text,text),
+  public.mark_administrative_document_repair_backup_restored(uuid,uuid,uuid,uuid,text,uuid,bigint,bigint),
+  public.authorize_administrative_document_repair_backup_cleanup(uuid,uuid,uuid,uuid,text,uuid,bigint,bigint),
+  public.complete_administrative_document_repair_backup_cleanup(uuid,uuid,uuid,uuid,text,uuid,bigint,bigint),
+  public.complete_administrative_document_physical_verification(uuid,text,text,text,uuid,text,bigint,text,text),
+  public.issue_document_storage_mutation_permit(uuid,uuid,uuid,bigint,bigint,bigint),
+  public.issue_document_backup_storage_mutation_permit(uuid,text,uuid,bigint,bigint,bigint),
+  public.record_document_storage_mutation_permit_evidence(uuid,bigint,uuid,text,bigint,text,uuid,text,bigint,text),
+  public.cancel_document_storage_mutation_permit(uuid,bigint)
+from public, anon, authenticated, service_role;
+

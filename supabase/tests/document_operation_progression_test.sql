@@ -1,4 +1,5 @@
 begin;
+\ir experimental_document_operations_enabled.inc
 select extensions.plan(46);
 
 select extensions.has_function('public','start_document_operation',array['uuid','bigint'],
