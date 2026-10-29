@@ -1,4 +1,5 @@
 begin;
+\ir experimental_document_operations_enabled.inc
 
 create extension if not exists pgtap with schema extensions;
 select extensions.no_plan();
@@ -296,6 +297,11 @@ select extensions.is(
   (select count(*) from public.document_storage_mutation_permits),
   1::bigint,
   'le rejeu idempotent ne duplique pas le permis'
+);
+select extensions.is(
+  (select expires_at - issued_at from public.document_storage_mutation_permits),
+  interval '2 minutes',
+  'le permis utilise une référence temporelle unique et dure exactement deux minutes'
 );
 select extensions.is(
   (select storage_action from public.document_storage_mutation_permits),

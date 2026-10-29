@@ -49,8 +49,12 @@ $operationRequest = "99500000-0000-4000-8400-000000000001"
 $firstPermitRequest = "99500000-0000-4000-8500-000000000001"
 $secondPermitRequest = "99500000-0000-4000-8500-000000000002"
 $claims = '{"sub":"99500000-0000-4000-8000-000000000001","role":"authenticated"}'
-$asUser = "set local role authenticated; select set_config('request.jwt.claim.sub','$owner',true); select set_config('request.jwt.claims','$claims',true);"
-$asService = "set local role service_role; select set_config('request.jwt.claims','{`"role`":`"service_role`"}',true);"
+# Les RPC expérimentales sont fermées aux rôles Data API en production. Ce
+# harnais teste uniquement la sérialisation interne comme propriétaire SQL,
+# avec les claims attendus par les contrôles métier. Les privilèges Data API
+# sont vérifiés séparément par experimental_document_operations_disabled_test.
+$asUser = "select set_config('request.jwt.claim.sub','$owner',true); select set_config('request.jwt.claims','$claims',true);"
+$asService = "select set_config('request.jwt.claims','{`"role`":`"service_role`"}',true);"
 
 Invoke-Psql @"
 insert into auth.users(
