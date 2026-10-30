@@ -10,6 +10,7 @@ export function PublicFooter() {
           <Link className="focus-ring rounded-md hover:text-brand-accent" href="/#comment-ca-marche">Comment ça marche</Link>
           <Link className="focus-ring rounded-md hover:text-brand-accent" href="/#compte-de-gestion">Compte de gestion</Link>
           <Link className="focus-ring rounded-md hover:text-brand-accent" href="/tarifs">Tarifs</Link>
+          <Link className="focus-ring rounded-md hover:text-brand-accent" href="/mentions-legales">Mentions légales</Link>
           <a className="focus-ring rounded-md hover:text-brand-accent" href={`mailto:${APP_CONTACT_EMAIL}`}>Contact</a>
           <a className="focus-ring rounded-md hover:text-brand-accent" href={`mailto:${APP_SUPPORT_EMAIL}`}>Assistance</a>
           <Link className="focus-ring rounded-md hover:text-brand-accent" href="/connexion">Se connecter</Link>
