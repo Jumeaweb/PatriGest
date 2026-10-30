@@ -81,4 +81,3 @@ select extensions.throws_ok(
 
 select * from extensions.finish();
 rollback;
-

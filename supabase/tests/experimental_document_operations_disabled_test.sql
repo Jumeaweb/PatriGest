@@ -182,4 +182,3 @@ select extensions.is(
 select * from extensions.finish();
 
 rollback;
-

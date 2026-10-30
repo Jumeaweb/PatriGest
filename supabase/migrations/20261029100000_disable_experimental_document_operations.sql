@@ -70,4 +70,3 @@ revoke all on function
   public.record_document_storage_mutation_permit_evidence(uuid,bigint,uuid,text,bigint,text,uuid,text,bigint,text),
   public.cancel_document_storage_mutation_permit(uuid,bigint)
 from public, anon, authenticated, service_role;
-

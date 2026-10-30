@@ -393,4 +393,3 @@ is 'Émet un permis Storage à durée exacte de deux minutes depuis une référe
 comment on function
   public.issue_document_backup_storage_mutation_permit(uuid,text,uuid,bigint,bigint,bigint)
 is 'Émet un permis Storage de sauvegarde à durée exacte de deux minutes depuis une référence temporelle unique ; fermé aux rôles Data API.';
-

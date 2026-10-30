@@ -109,4 +109,3 @@ $$;
 
 comment on function public.validate_document_operation_update() is
   'Protège les opérations documentaires ; une opération terminale autorise seulement la mise à NULL référentielle de initiated_by ou resolution_by lors de la suppression Auth.';
-

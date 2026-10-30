@@ -10,6 +10,21 @@ export type AppRelease = {
 
 export const APP_RELEASES: readonly AppRelease[] = [
   {
+    version: "0.9.2",
+    date: "2026-10-30",
+    title: "Abonnements, partage et fiabilité des dossiers",
+    summary: `${APP_NAME} clarifie les offres et les capacités associées aux dossiers, enrichit le partage entre utilisateurs et renforce la fidélité des comptes de gestion et des documents conservés.`,
+    changes: [
+      "Nouvelle page Tarifs et espace Mon compte réorganisé pour présenter clairement les offres, sans activer de paiement ni attribuer de forfait fictif",
+      "Affichage de la capacité de dossiers et limite de deux dossiers actifs pour les comptes sans abonnement, sans suppression des dossiers existants",
+      "Capacité de partage visible par le propriétaire, avec des plafonds distincts pour les gestionnaires et les collaborateurs en lecture seule",
+      "Possibilité pour un destinataire de refuser une invitation, avec libération immédiate de la place et conservation de l’historique",
+      "PDF définitif d’un compte de gestion fidèle au projet précédemment relu, avec demande de régénération lorsque les données ont évolué",
+      "Sécurité et cohérence renforcées pour les accès, les quotas et la conservation des documents, sans modifier les parcours historiques",
+      "Présentation plus claire et mieux adaptée aux mobiles dans les espaces de partage et de gestion du compte",
+    ],
+  },
+  {
     version: "0.9.1",
     date: "2026-10-15",
     title: "Synthèse patrimoniale et gestion immobilière",
