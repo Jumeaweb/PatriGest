@@ -324,7 +324,7 @@ export async function getManagementReportSnapshot(
       debt,
       balance:
         debt.balances.find(
-          (balance) => balance.balance_date <= report.period_end,
+          (balance) => !balance.cancelled_at && balance.balance_date <= report.period_end,
         ) ?? null,
     }));
   const sections: ReportSectionCompleteness[] = [

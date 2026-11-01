@@ -18,8 +18,8 @@ function SettlementDialog({personId,item,open,close}:{personId:string;item:DebtI
   else if(!item.start_date)validationMessage="Renseignez d’abord la date de début avec « Modifier la dette ».";
   else if(!settledAt)validationMessage="Choisissez la date de clôture correspondant à la situation à 0 €.";
   else if(settledAt<item.start_date||settledAt>today)validationMessage="La date doit être comprise entre le début de la dette et la date du jour.";
-  else if(!item.balances.some(balance=>balance.balance_date===settledAt&&balance.remaining_balance===0))validationMessage="Aucune situation à 0 € ne correspond à cette date.";
-  else if(item.balances.some(balance=>balance.balance_date>settledAt))validationMessage="Une situation plus récente existe. Utilisez la date de la situation courante à 0 €.";
+  else if(!item.balances.some(balance=>!balance.cancelled_at&&balance.balance_date===settledAt&&balance.remaining_balance===0))validationMessage="Aucune situation active à 0 € ne correspond à cette date.";
+  else if(item.balances.some(balance=>!balance.cancelled_at&&balance.balance_date>settledAt))validationMessage="Une situation active plus récente existe. Utilisez la date de la situation courante à 0 €.";
   const id=`settle-debt-${item.id}`;
   return <AppConfirmDialog open={open} onClose={close} title="Solder la dette" description="Cette clôture est une action explicite. Elle conserve toutes les situations déjà enregistrées." subject={item.designation} actions={<button form={id} className="button button-primary" disabled={pending||Boolean(validationMessage)}>{pending?"Clôture…":"Confirmer la clôture"}</button>}>
     <div className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5"><p className="text-xs font-semibold uppercase tracking-wide text-[#64748B]">Capital restant dû courant</p><p className="mt-1 text-lg font-bold">{item.current_balance===null?"Non renseigné":euro(item.current_balance)}</p>{item.current_balance_date&&<p className="mt-1 text-xs text-[#64748B]">Situation au {date(item.current_balance_date)}</p>}</div>

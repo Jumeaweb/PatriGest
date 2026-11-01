@@ -82,10 +82,11 @@ test("la fiche dette présente les données métier et l'historique complet", ()
     "Aucune situation de dette enregistrée.",
   ]) assert.match(page, new RegExp(label));
 
-  assert.match(page, /debt\.balances\.map\(\(balance, index\)/);
+  assert.match(page, /debt\.balances\.map\(\(balance\)/);
+  assert.match(page, /currentBalanceId = debt\.balances\.find/);
   assert.match(page, /formatCurrency\(balance\.remaining_balance\)/);
   assert.match(page, /balance\.remaining_duration_months !== null/);
-  assert.doesNotMatch(page, /corriger|supprimer/i);
+  assert.doesNotMatch(page, /supprimer/i);
 });
 
 test("les écritures réactualisent aussi la fiche dette et les dossiers archivés restent consultables", () => {

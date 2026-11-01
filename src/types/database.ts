@@ -258,9 +258,15 @@ export type Database = {
         Relationships: [];
       };
       debt_balances: {
-        Row: { id: string; debt_id: string; balance_date: string; remaining_balance: number; remaining_duration_months: number | null; created_at: string };
-        Insert: { id?: string; debt_id: string; balance_date: string; remaining_balance: number; remaining_duration_months?: number | null; created_at?: string };
+        Row: { id: string; debt_id: string; balance_date: string; remaining_balance: number; remaining_duration_months: number | null; revision: number; cancelled_at: string | null; cancelled_by: string | null; cancellation_reason: string | null; created_at: string };
+        Insert: { id?: string; debt_id: string; balance_date: string; remaining_balance: number; remaining_duration_months?: number | null; revision?: number; cancelled_at?: string | null; cancelled_by?: string | null; cancellation_reason?: string | null; created_at?: string };
         Update: Partial<Database["public"]["Tables"]["debt_balances"]["Insert"]>;
+        Relationships: [];
+      };
+      debt_balance_changes: {
+        Row: { id: string; debt_balance_id: string; debt_id: string; protected_person_id: string; change_type: "correction" | "cancellation"; old_values: Json; new_values: Json; reason: string; revision_from: number; revision_to: number; changed_by: string; changed_by_name: string; changed_at: string };
+        Insert: never;
+        Update: never;
         Relationships: [];
       };
       debt_status_changes: {
@@ -354,6 +360,8 @@ export type Database = {
       restore_protected_person: { Args: { p_protected_person_id: string; p_expected_revision: number; p_reason: string }; Returns: number };
       set_patrimony_absence_confirmation: { Args: { p_protected_person_id: string; p_category: PatrimonyAbsenceCategory; p_confirmed: boolean }; Returns: boolean };
       settle_debt: { Args: { p_protected_person_id: string; p_debt_id: string; p_expected_revision: number; p_settled_at: string; p_reason: string }; Returns: number };
+      correct_debt_balance: { Args: { p_protected_person_id: string; p_debt_id: string; p_debt_balance_id: string; p_expected_revision: number; p_balance_date: string; p_remaining_balance: number; p_remaining_duration_months: number | null; p_reason: string }; Returns: number };
+      cancel_debt_balance: { Args: { p_protected_person_id: string; p_debt_id: string; p_debt_balance_id: string; p_expected_revision: number; p_reason: string }; Returns: number };
       accept_protected_person_invitation: { Args: { p_token_hash: string }; Returns: string };
       decline_protected_person_invitation: { Args: { p_token_hash: string }; Returns: string };
       issue_protected_person_invitation: { Args: { p_protected_person_id: string; p_email: string; p_role: SharedAccessRole; p_token_hash: string; p_expires_at: string }; Returns: string };
@@ -437,6 +445,7 @@ export type PropertySalePriceCorrection = Database["public"]["Tables"]["property
 export type PatrimonyAbsenceConfirmation = Database["public"]["Tables"]["patrimony_absence_confirmations"]["Row"];
 export type Debt = Database["public"]["Tables"]["debts"]["Row"];
 export type DebtBalance = Database["public"]["Tables"]["debt_balances"]["Row"];
+export type DebtBalanceChange = Database["public"]["Tables"]["debt_balance_changes"]["Row"];
 export type DebtStatusChange = Database["public"]["Tables"]["debt_status_changes"]["Row"];
 export type BankStatement = Database["public"]["Tables"]["bank_statements"]["Row"];
 export type BankReconciliation = Database["public"]["Tables"]["bank_reconciliations"]["Row"];
