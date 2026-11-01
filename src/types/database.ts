@@ -252,8 +252,8 @@ export type Database = {
         Relationships: [];
       };
       debts: {
-        Row: { id: string; protected_person_id: string; creditor: string; debt_type: DebtType; designation: string; start_date: string | null; initial_amount: number | null; initial_duration_months: number | null; monthly_payment: number | null; interest_rate: number | null; current_balance: number | null; current_balance_date: string | null; remaining_duration_months: number | null; status: DebtStatus; settled_at: string | null; notes: string | null; created_at: string; updated_at: string };
-        Insert: { id?: string; protected_person_id: string; creditor: string; debt_type: DebtType; designation: string; start_date?: string | null; initial_amount?: number | null; initial_duration_months?: number | null; monthly_payment?: number | null; interest_rate?: number | null; current_balance?: number | null; current_balance_date?: string | null; remaining_duration_months?: number | null; status?: DebtStatus; settled_at?: string | null; notes?: string | null; created_at?: string; updated_at?: string };
+        Row: { id: string; protected_person_id: string; creditor: string; debt_type: DebtType; designation: string; start_date: string | null; initial_amount: number | null; initial_duration_months: number | null; monthly_payment: number | null; interest_rate: number | null; current_balance: number | null; current_balance_date: string | null; remaining_duration_months: number | null; status: DebtStatus; settled_at: string | null; notes: string | null; revision: number; created_at: string; updated_at: string };
+        Insert: { id?: string; protected_person_id: string; creditor: string; debt_type: DebtType; designation: string; start_date?: string | null; initial_amount?: number | null; initial_duration_months?: number | null; monthly_payment?: number | null; interest_rate?: number | null; current_balance?: number | null; current_balance_date?: string | null; remaining_duration_months?: number | null; status?: DebtStatus; settled_at?: string | null; notes?: string | null; revision?: number; created_at?: string; updated_at?: string };
         Update: Partial<Database["public"]["Tables"]["debts"]["Insert"]>;
         Relationships: [];
       };
@@ -261,6 +261,12 @@ export type Database = {
         Row: { id: string; debt_id: string; balance_date: string; remaining_balance: number; remaining_duration_months: number | null; created_at: string };
         Insert: { id?: string; debt_id: string; balance_date: string; remaining_balance: number; remaining_duration_months?: number | null; created_at?: string };
         Update: Partial<Database["public"]["Tables"]["debt_balances"]["Insert"]>;
+        Relationships: [];
+      };
+      debt_status_changes: {
+        Row: { id: string; debt_id: string; protected_person_id: string; change_type: "settlement"; old_status: DebtStatus; new_status: DebtStatus; old_settled_at: string | null; new_settled_at: string | null; balance_id: string; old_values: Json; new_values: Json; reason: string; revision_from: number; revision_to: number; changed_by: string; changed_by_name: string; changed_at: string };
+        Insert: never;
+        Update: never;
         Relationships: [];
       };
       bank_statements: {
@@ -347,6 +353,7 @@ export type Database = {
       archive_protected_person: { Args: { p_protected_person_id: string; p_expected_revision: number; p_reason: string }; Returns: number };
       restore_protected_person: { Args: { p_protected_person_id: string; p_expected_revision: number; p_reason: string }; Returns: number };
       set_patrimony_absence_confirmation: { Args: { p_protected_person_id: string; p_category: PatrimonyAbsenceCategory; p_confirmed: boolean }; Returns: boolean };
+      settle_debt: { Args: { p_protected_person_id: string; p_debt_id: string; p_expected_revision: number; p_settled_at: string; p_reason: string }; Returns: number };
       accept_protected_person_invitation: { Args: { p_token_hash: string }; Returns: string };
       decline_protected_person_invitation: { Args: { p_token_hash: string }; Returns: string };
       issue_protected_person_invitation: { Args: { p_protected_person_id: string; p_email: string; p_role: SharedAccessRole; p_token_hash: string; p_expires_at: string }; Returns: string };
@@ -430,6 +437,7 @@ export type PropertySalePriceCorrection = Database["public"]["Tables"]["property
 export type PatrimonyAbsenceConfirmation = Database["public"]["Tables"]["patrimony_absence_confirmations"]["Row"];
 export type Debt = Database["public"]["Tables"]["debts"]["Row"];
 export type DebtBalance = Database["public"]["Tables"]["debt_balances"]["Row"];
+export type DebtStatusChange = Database["public"]["Tables"]["debt_status_changes"]["Row"];
 export type BankStatement = Database["public"]["Tables"]["bank_statements"]["Row"];
 export type BankReconciliation = Database["public"]["Tables"]["bank_reconciliations"]["Row"];
 export type BankReconciliationOutstandingTransaction = Database["public"]["Tables"]["bank_reconciliation_outstanding_transactions"]["Row"];

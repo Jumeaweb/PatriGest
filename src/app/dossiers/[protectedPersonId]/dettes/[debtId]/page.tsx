@@ -24,6 +24,10 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("fr-FR", {
   dateStyle: "long",
   timeZone: "UTC",
 }).format(new Date(`${value}T00:00:00Z`));
+const formatDateTime = (value: string) => new Intl.DateTimeFormat("fr-FR", {
+  dateStyle: "long",
+  timeStyle: "short",
+}).format(new Date(value));
 const formatCurrency = (value: number) => new Intl.NumberFormat("fr-FR", {
   style: "currency",
   currency: "EUR",
@@ -60,7 +64,7 @@ export default async function DebtPage({ params }: { params: Promise<{ protected
         <h1 className="mt-1 text-2xl font-bold">{debt.designation}</h1>
         <p className="mt-1 text-sm text-[#64748B]">{debt.creditor} · {debtTypeLabels[debt.debt_type]}</p>
       </div>
-      {canManage && <DebtActions personId={protectedPersonId} item={debt} />}
+      {canManage && <DebtActions personId={protectedPersonId} item={debt} showSettlement />}
     </div>
     <DossierNavigation protectedPersonId={protectedPersonId} current="debts" />
 
@@ -102,6 +106,16 @@ export default async function DebtPage({ params }: { params: Promise<{ protected
         </article>) : <p className="rounded-xl border border-dashed border-[#CBD5E1] bg-white p-6 text-center text-sm text-[#64748B]">Aucune situation de dette enregistrée.</p>}
       </div>
     </section>
+    {debt.statusChanges.length > 0 && <section className="mt-6" aria-labelledby="debt-status-history-title">
+      <div className="flex items-center gap-2"><History className="text-[#2563EB]" size={18} /><h2 id="debt-status-history-title" className="text-lg font-bold">Historique du statut</h2></div>
+      <p className="mt-1 text-xs text-[#64748B]">Transitions explicites et auditées de la dette.</p>
+      <div className="mt-3 space-y-2">
+        {debt.statusChanges.map((change) => <article key={change.id} className="rounded-xl border border-[#E2E8F0] bg-white px-3.5 py-3">
+          <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-bold">Dette soldée{change.new_settled_at ? ` le ${formatDate(change.new_settled_at)}` : ""}</p><p className="mt-1 text-xs text-[#64748B]">Par {change.changed_by_name}</p></div><p className="text-xs text-[#64748B]">{formatDateTime(change.changed_at)}</p></div>
+          <p className="mt-2 whitespace-pre-wrap text-sm text-[#475569]">Motif : {change.reason}</p>
+        </article>)}
+      </div>
+    </section>}
   </PrivateShell>;
 }
 

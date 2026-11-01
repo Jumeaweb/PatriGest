@@ -1,5 +1,5 @@
 import { getAuthenticatedUser } from "@/domains/protected-persons/services/authenticated-user";
-import type { DebtBalanceInput, DebtInput, PatrimonyAbsenceConfirmationInput, PropertyArchiveChangeInput, PropertyEventCancellationInput, PropertyEventCorrectionInput, PropertyEventInput, PropertyInput, PropertySalePriceCorrectionInput } from "./schemas";
+import type { DebtBalanceInput, DebtInput, DebtSettlementInput, PatrimonyAbsenceConfirmationInput, PropertyArchiveChangeInput, PropertyEventCancellationInput, PropertyEventCorrectionInput, PropertyEventInput, PropertyInput, PropertySalePriceCorrectionInput } from "./schemas";
 import { buildPatrimonyAbsenceConfirmationState, type PatrimonyAbsenceConfirmationState } from "./patrimony-absence";
 
 export type PropertyEventCorrectionErrorCode = "forbidden" | "not_found" | "stale_revision" | "invalid" | "closed_period" | "incompatible_transition" | "ambiguous_entry" | "inconsistent" | "sale_price" | "technical";
@@ -21,6 +21,10 @@ export class PropertyArchiveChangeError extends Error {
 export type PatrimonyAbsenceConfirmationErrorCode = "forbidden" | "invalid" | "technical";
 export class PatrimonyAbsenceConfirmationError extends Error {
   constructor(readonly code: PatrimonyAbsenceConfirmationErrorCode) { super(code); this.name = "PatrimonyAbsenceConfirmationError"; }
+}
+export type DebtSettlementErrorCode = "forbidden" | "not_found" | "stale_revision" | "already_settled" | "positive_balance" | "missing_zero_balance" | "later_balance" | "missing_start_date" | "invalid_date" | "closed_period" | "archived_dossier" | "inconsistent" | "invalid" | "technical";
+export class DebtSettlementError extends Error {
+  constructor(readonly code: DebtSettlementErrorCode) { super(code); this.name = "DebtSettlementError"; }
 }
 const PROPERTY_EVENT_CLOSED_PERIOD_MESSAGE = "Cet événement appartient à un exercice clôturé. Il ne peut plus être modifié ni annulé. Si vous constatez une erreur, veuillez contacter l’assistance PatriGest.";
 export async function getProperties(personId:string){const{supabase}=await getAuthenticatedUser();const{data,error}=await supabase.from("real_estate_properties").select("*").eq("protected_person_id",personId).is("archived_at",null).order("status").order("designation");if(error)throw new Error("Impossible de charger le patrimoine immobilier.");const ids=data.map(v=>v.id);const result=ids.length?await supabase.from("property_events").select("*").in("property_id",ids).is("cancelled_at",null).order("event_date",{ascending:false}).order("created_at",{ascending:false}).order("id",{ascending:false}):{data:[],error:null};if(result.error)throw new Error("Impossible de charger l’historique immobilier.");return data.map(property=>({...property,events:result.data.filter(event=>event.property_id===property.id)}));}
@@ -137,6 +141,48 @@ export async function setPatrimonyAbsenceConfirmation(input: PatrimonyAbsenceCon
   throw new PatrimonyAbsenceConfirmationError("technical");
 }
 export async function getDebts(personId:string){const{supabase}=await getAuthenticatedUser();const{data,error}=await supabase.from("debts").select("*").eq("protected_person_id",personId).order("status").order("creditor");if(error)throw new Error("Impossible de charger les dettes.");const ids=data.map(v=>v.id);const result=ids.length?await supabase.from("debt_balances").select("*").in("debt_id",ids).order("balance_date",{ascending:false}):{data:[],error:null};if(result.error)throw new Error("Impossible de charger les situations de dette.");return data.map(debt=>({...debt,balances:result.data.filter(balance=>balance.debt_id===debt.id)}));}
-export async function getDebt(personId:string,debtId:string){const{supabase}=await getAuthenticatedUser();const{data,error}=await supabase.from("debts").select("*").eq("id",debtId).eq("protected_person_id",personId).maybeSingle();if(error)throw new Error("Impossible de charger la dette.");if(!data)return null;const balancesResult=await supabase.from("debt_balances").select("*").eq("debt_id",debtId).order("balance_date",{ascending:false}).order("created_at",{ascending:false}).order("id",{ascending:false});if(balancesResult.error)throw new Error("Impossible de charger l’historique de la dette.");return{...data,balances:balancesResult.data};}
-export async function saveDebt(personId:string,input:DebtInput,id?:string){const{supabase}=await getAuthenticatedUser();const payload={creditor:input.creditor,debt_type:input.debtType,designation:input.designation,start_date:input.startDate,initial_amount:input.initialAmount,initial_duration_months:input.initialDurationMonths,monthly_payment:input.monthlyPayment,interest_rate:input.interestRate,status:input.status,settled_at:input.settledAt,notes:input.notes};const query=id?supabase.from("debts").update(payload).eq("id",id).eq("protected_person_id",personId):supabase.from("debts").insert({...payload,protected_person_id:personId});const{error}=await query.select("id").single();if(error)throw new Error("Impossible d’enregistrer la dette.");}
+export async function getDebt(personId:string,debtId:string){const{supabase}=await getAuthenticatedUser();const{data,error}=await supabase.from("debts").select("*").eq("id",debtId).eq("protected_person_id",personId).maybeSingle();if(error)throw new Error("Impossible de charger la dette.");if(!data)return null;const[balancesResult,statusChangesResult]=await Promise.all([supabase.from("debt_balances").select("*").eq("debt_id",debtId).order("balance_date",{ascending:false}).order("created_at",{ascending:false}).order("id",{ascending:false}),supabase.from("debt_status_changes").select("*").eq("debt_id",debtId).eq("protected_person_id",personId).order("changed_at",{ascending:false}).order("id",{ascending:false})]);if(balancesResult.error)throw new Error("Impossible de charger l’historique de la dette.");if(statusChangesResult.error)throw new Error("Impossible de charger l’historique des statuts de la dette.");return{...data,balances:balancesResult.data,statusChanges:statusChangesResult.data};}
+export async function saveDebt(personId:string,input:DebtInput,id?:string){const{supabase}=await getAuthenticatedUser();const payload={creditor:input.creditor,debt_type:input.debtType,designation:input.designation,start_date:input.startDate,initial_amount:input.initialAmount,initial_duration_months:input.initialDurationMonths,monthly_payment:input.monthlyPayment,interest_rate:input.interestRate,notes:input.notes};const query=id?supabase.from("debts").update(payload).eq("id",id).eq("protected_person_id",personId):supabase.from("debts").insert({...payload,protected_person_id:personId});const{error}=await query.select("id").single();if(error)throw new Error("Impossible d’enregistrer la dette.");}
 export async function addDebtBalance(personId:string,debtId:string,input:DebtBalanceInput){const{supabase}=await getAuthenticatedUser();const{data}=await supabase.from("debts").select("id").eq("id",debtId).eq("protected_person_id",personId).maybeSingle();if(!data)throw new Error("Dette introuvable.");const{error}=await supabase.from("debt_balances").insert({debt_id:debtId,balance_date:input.balanceDate,remaining_balance:input.remainingBalance,remaining_duration_months:input.remainingDurationMonths});if(error)throw new Error("Impossible d’enregistrer la situation de dette.");}
+export async function settleDebt(personId:string,debtId:string,expectedRevision:number,input:DebtSettlementInput){
+  let auth: Awaited<ReturnType<typeof getAuthenticatedUser>>;
+  try { auth = await getAuthenticatedUser(); }
+  catch (error) {
+    if (error instanceof Error && ["UNAUTHENTICATED", "APPLICATION_ACCESS_DENIED"].includes(error.message)) throw new DebtSettlementError("forbidden");
+    throw new DebtSettlementError("technical");
+  }
+
+  const [permissionResult,personResult,debtResult]=await Promise.all([
+    auth.supabase.rpc("can_manage_protected_person",{person_id:personId}),
+    auth.supabase.from("protected_persons").select("status").eq("id",personId).maybeSingle(),
+    auth.supabase.from("debts").select("id,revision,status,settled_at,start_date,current_balance").eq("id",debtId).eq("protected_person_id",personId).maybeSingle(),
+  ]);
+  if(permissionResult.error)throw new DebtSettlementError("technical");
+  if(!permissionResult.data)throw new DebtSettlementError("forbidden");
+  if(personResult.error)throw new DebtSettlementError("technical");
+  if(!personResult.data)throw new DebtSettlementError("not_found");
+  if(personResult.data.status==="archived")throw new DebtSettlementError("archived_dossier");
+  if(debtResult.error)throw new DebtSettlementError("technical");
+  if(!debtResult.data)throw new DebtSettlementError("not_found");
+  if(debtResult.data.revision!==expectedRevision)throw new DebtSettlementError("stale_revision");
+  if(debtResult.data.status!=="active"||debtResult.data.settled_at!==null)throw new DebtSettlementError("already_settled");
+  if(debtResult.data.start_date===null)throw new DebtSettlementError("missing_start_date");
+  if(debtResult.data.current_balance===null)throw new DebtSettlementError("missing_zero_balance");
+  if(debtResult.data.current_balance!==0)throw new DebtSettlementError("positive_balance");
+
+  const{error}=await auth.supabase.rpc("settle_debt",{p_protected_person_id:personId,p_debt_id:debtId,p_expected_revision:expectedRevision,p_settled_at:input.settledAt,p_reason:input.reason});
+  if(!error)return;
+  if(error.code==="42501")throw new DebtSettlementError("forbidden");
+  if(error.code==="P0002")throw new DebtSettlementError("not_found");
+  if(error.code==="40001")throw new DebtSettlementError("stale_revision");
+  if(error.code==="P4R01")throw new DebtSettlementError("archived_dossier");
+  if(error.message.includes("Seule une dette active"))throw new DebtSettlementError("already_settled");
+  if(error.message.includes("date de debut"))throw new DebtSettlementError("missing_start_date");
+  if(error.message.includes("date de cloture doit etre comprise"))throw new DebtSettlementError("invalid_date");
+  if(error.message.includes("exercice cloture"))throw new DebtSettlementError("closed_period");
+  if(error.message.includes("situation a 0 EUR"))throw new DebtSettlementError("missing_zero_balance");
+  if(error.message.includes("situation plus recente"))throw new DebtSettlementError("later_balance");
+  if(error.message.includes("situation courante")||error.message.includes("incoherente"))throw new DebtSettlementError("inconsistent");
+  if(error.code==="23514")throw new DebtSettlementError("invalid");
+  throw new DebtSettlementError("technical");
+}

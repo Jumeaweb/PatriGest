@@ -166,7 +166,7 @@ select extensions.is((select count(*) from public.patrimony_absence_confirmation
 select extensions.ok(public.set_patrimony_absence_confirmation('88000000-0000-4000-8000-000000000101','active_debt',false), 'la confirmation de dette initiale est retirée');
 select extensions.ok(public.set_patrimony_absence_confirmation('88000000-0000-4000-8000-000000000101','active_debt',true), 'l’absence de dette est confirmée avant création');
 select extensions.lives_ok(
-  $$insert into public.debts(protected_person_id,creditor,debt_type,designation,status) values('88000000-0000-4000-8000-000000000101','Banque test','bank_loan','Dette active','active')$$,
+  $$insert into public.debts(protected_person_id,creditor,debt_type,designation,start_date,status) values('88000000-0000-4000-8000-000000000101','Banque test','bank_loan','Dette active','2026-01-01','active')$$,
   'une dette active peut être créée sans régression'
 );
 select extensions.is((select count(*) from public.patrimony_absence_confirmations where protected_person_id='88000000-0000-4000-8000-000000000101' and category='active_debt'),0::bigint,'la création d’une dette active invalide la confirmation');
@@ -174,17 +174,28 @@ select extensions.throws_ok(
   $$select public.set_patrimony_absence_confirmation('88000000-0000-4000-8000-000000000101','active_debt',true)$$,
   '23514','L’absence de dette ne peut pas être confirmée tant qu’une dette active existe.','une dette active interdit la confirmation'
 );
-select extensions.lives_ok(
-  $$update public.debts set status='settled',settled_at='2026-02-01' where protected_person_id='88000000-0000-4000-8000-000000000101' and creditor='Banque test' and designation='Dette active'$$,
-  'une dette peut toujours être soldée'
+insert into public.debt_balances(debt_id,balance_date,remaining_balance)
+select id,'2026-02-01',0
+from public.debts
+where protected_person_id='88000000-0000-4000-8000-000000000101'
+  and creditor='Banque test'
+  and designation='Dette active';
+select extensions.is(
+  public.settle_debt(
+    '88000000-0000-4000-8000-000000000101',
+    (select id from public.debts where protected_person_id='88000000-0000-4000-8000-000000000101' and creditor='Banque test' and designation='Dette active'),
+    2,'2026-02-01','Dette remboursée dans le test des confirmations'
+  ),
+  3::bigint,
+  'une dette peut être soldée par le parcours dédié'
 );
 select extensions.is((select count(*) from public.patrimony_absence_confirmations where protected_person_id='88000000-0000-4000-8000-000000000101' and category='active_debt'),0::bigint,'le règlement de la dernière dette ne crée aucune confirmation');
 select extensions.ok(public.set_patrimony_absence_confirmation('88000000-0000-4000-8000-000000000101','active_debt',true), 'l’absence de dette peut être confirmée après règlement');
-select extensions.lives_ok(
+select extensions.throws_ok(
   $$update public.debts set status='active',settled_at=null where protected_person_id='88000000-0000-4000-8000-000000000101' and creditor='Banque test' and designation='Dette active'$$,
-  'une dette soldée peut être réactivée'
+  '42501','La cloture d''une dette doit utiliser le parcours dedie.','une dette soldée ne peut pas être réactivée directement'
 );
-select extensions.is((select count(*) from public.patrimony_absence_confirmations where protected_person_id='88000000-0000-4000-8000-000000000101' and category='active_debt'),0::bigint,'la réactivation invalide la confirmation de dette');
+select extensions.is((select count(*) from public.patrimony_absence_confirmations where protected_person_id='88000000-0000-4000-8000-000000000101' and category='active_debt'),1::bigint,'la réouverture refusée ne modifie pas la confirmation de dette');
 
 select extensions.ok(public.set_patrimony_absence_confirmation('88000000-0000-4000-8000-000000000103','real_estate',true), 'un dossier vide peut porter une confirmation');
 select extensions.is((select count(*) from public.patrimony_absence_confirmations where protected_person_id='88000000-0000-4000-8000-000000000103'),1::bigint,'la confirmation du dossier vide existe avant suppression');
@@ -196,7 +207,7 @@ select extensions.is((select count(*) from public.protected_persons where id='88
 select extensions.is((select count(*) from public.patrimony_absence_confirmations where protected_person_id='88000000-0000-4000-8000-000000000103'),0::bigint,'la confirmation est supprimée en cascade');
 select extensions.is((select count(*) from public.transactions),0::bigint,'les confirmations ne créent aucune opération bancaire');
 select extensions.is((select count(*) from public.property_events where id='88000000-0000-4000-8000-000000000501' and cancelled_at is not null),1::bigint,'l’historique immobilier demeure cohérent');
-select extensions.is((select status from public.debts where protected_person_id='88000000-0000-4000-8000-000000000101' and creditor='Banque test' and designation='Dette active'),'active','la dette réactivée demeure cohérente');
+select extensions.is((select status from public.debts where protected_person_id='88000000-0000-4000-8000-000000000101' and creditor='Banque test' and designation='Dette active'),'settled','la dette soldée demeure cohérente');
 
 select * from extensions.finish();
 rollback;

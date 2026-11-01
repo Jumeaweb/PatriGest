@@ -6,6 +6,7 @@ import { getDebtCompleteness, getPropertyCompleteness } from "./completeness.ts"
 import {
   debtBalanceSchema,
   debtSchema,
+  debtSettlementSchema,
   editablePropertyEventTypes,
   propertyEventCancellationSchema,
   propertyEventCorrectionSchema,
@@ -383,11 +384,19 @@ test("la complétude immobilière dépend seulement de la désignation, du type 
   });
 });
 
-test("caractérisation : une dette soldée sans date de clôture reste valide", () => {
-  // PAT-PATRIMOINE-01F devra faire évoluer cette attente avec la règle de solde.
+test("l’édition ordinaire d’une dette ne peut plus piloter son statut", () => {
   const parsed = debtSchema.parse(debtInput({ status: "settled", settledAt: "" }));
-  assert.equal(parsed.status, "settled");
-  assert.equal(parsed.settledAt, null);
+  assert.equal("status" in parsed, false);
+  assert.equal("settledAt" in parsed, false);
+});
+
+test("la clôture explicite exige une date et un motif", () => {
+  assert.deepEqual(debtSettlementSchema.parse({ settledAt: "2026-09-01", reason: "Dette remboursée" }), {
+    settledAt: "2026-09-01",
+    reason: "Dette remboursée",
+  });
+  assert.equal(debtSettlementSchema.safeParse({ settledAt: "", reason: "Motif" }).success, false);
+  assert.equal(debtSettlementSchema.safeParse({ settledAt: "2026-09-01", reason: "   " }).success, false);
 });
 
 test("une situation datée accepte un capital restant dû nul", () => {
