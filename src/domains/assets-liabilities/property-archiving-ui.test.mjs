@@ -84,7 +84,8 @@ test("la fiche archivée affiche le bandeau et le journal tout en masquant les m
 
 test("les droits de l’interface permettent la consultation mais réservent les mutations", () => {
   const page = source("../../app/dossiers/[protectedPersonId]/patrimoine-immobilier/[propertyId]/page.tsx");
-  assert.match(page, /person\.accessRole !== "read_only" && <div[\s\S]*?<PropertyArchiveAction/);
+  assert.match(page, /const canManage = person\.accessRole !== "read_only" && person\.status === "active"/);
+  assert.match(page, /\{canManage && <div[\s\S]*?<PropertyArchiveAction/);
   assert.match(page, /property\.archiveChanges\.length > 0/);
   assert.doesNotMatch(source("../../app/dossiers/[protectedPersonId]/patrimoine-immobilier/archives/page.tsx"), /accessRole !== "read_only"/);
 });

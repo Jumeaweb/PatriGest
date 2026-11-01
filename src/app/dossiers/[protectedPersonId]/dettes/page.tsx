@@ -25,7 +25,7 @@ export default async function Page({ params }: { params: Promise<{ protectedPers
   ]);
   const completeness = getDebtCompleteness(items);
   const hasActiveDebt = items.some((item) => item.status === "active");
-  const canManage = person.accessRole !== "read_only";
+  const canManage = person.accessRole !== "read_only" && person.status === "active";
 
   return <PrivateShell current="dossiers" dossier={{ id: protectedPersonId, name: `${person.first_name} ${person.last_name}`, current: "debts", accessRole: person.accessRole }}>
     <AppBreadcrumb items={[{ label: "Dossiers", href: "/dossiers" }, { label: `${person.first_name} ${person.last_name}`, href: `/dossiers/${protectedPersonId}` }, { label: "Dettes et emprunts" }]} />
