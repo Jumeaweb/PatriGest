@@ -28,6 +28,7 @@ export type ReportAccountSituation = {
 };
 const sum = (items: Transaction[], credit: boolean) =>
   items
+    .filter((item) => !item.cancelled_at)
     .filter((item) =>
       credit
         ? ["income", "transfer_in"].includes(item.transaction_type)
@@ -105,7 +106,7 @@ export function calculateAccountSituations(
     .map((selection) => {
       const { account } = selection;
       const movements = transactions.filter(
-        (item) => item.financial_account_id === account.id,
+        (item) => item.financial_account_id === account.id && !item.cancelled_at,
       );
       if (isValuationAccount(account.account_type)) {
         const before = (date: string) =>

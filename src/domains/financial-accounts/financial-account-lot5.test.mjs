@@ -49,7 +49,8 @@ test("la gestion courante et la suppression destructive restent distinctes selon
 test("Rapprochements est devenu l'espace de contrôle sans fonctions documentaires dupliquées", () => {
   assert.match(reconciliation, /export default async function AccountReconciliationsPage/);
   assert.match(reconciliation, /current="reconciliations"/);
-  assert.match(reconciliation, /getBankReconciliationListStates/);
+  assert.match(reconciliation, /getBankReconciliationOverviewRows/);
+  assert.match(reconciliation, /buildBankReconciliationAttentionSummary/);
   assert.match(reconciliation, /<BankReconciliationManager/);
   assert.match(reconciliation, /<BankStatementPagination/);
   assert.doesNotMatch(reconciliation, /Ajouter un relevé|Voir le PDF|Télécharger|BankStatementManager/);

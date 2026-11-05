@@ -52,6 +52,21 @@ export type OutstandingTransactionPage = {
   summary: Pick<BankReconciliationControl, "calculatedBalance" | "outstandingDebits" | "outstandingCredits" | "explainedBankBalance" | "residualDifference" | "outstandingCount">;
 };
 
+export type TransactionBankingImpact = {
+  impactId: string;
+  transactionId: string | null;
+  transactionLabel: string;
+  transactionDate: string;
+  impactKind: "reverse_previous" | "apply_current";
+  signedAmount: number;
+  effectiveDate: string;
+  historicalReconciliationId: string;
+  historicalStatementEndDate: string;
+  acknowledgementState: "pending" | "acknowledged";
+  justification: string | null;
+  acknowledgedAt: string | null;
+};
+
 export class BankReconciliationServiceError extends Error {
   constructor(message: string, readonly status: number) {
     super(message);
@@ -72,6 +87,21 @@ export async function getBankReconciliationListStates(statementIds: string[]) {
     states.push(...data);
   }
   return states;
+}
+
+export async function getBankReconciliationOverviewRows(accountId: string) {
+  const { supabase } = await getAuthenticatedUser();
+  const { data, error } = await supabase
+    .from("bank_statements")
+    .select("id, statement_balance, statement_end_date")
+    .eq("financial_account_id", accountId)
+    .order("statement_end_date", { ascending: false })
+    .order("id", { ascending: false });
+  if (error) throw new Error("Impossible de charger la synthèse des rapprochements.");
+  return {
+    statements: data,
+    reconciliations: await getBankReconciliationListStates(data.map((statement) => statement.id)),
+  };
 }
 
 export async function getBankReconciliation(statementId: string) {
@@ -226,8 +256,61 @@ export async function validateBankReconciliation(reconciliationId: string) {
   const { data, error } = await supabase.rpc("validate_bank_reconciliation", {
     p_reconciliation_id: reconciliationId,
   });
-  if (error || !data) throw new BankReconciliationServiceError("Impossible de valider le contrôle bancaire.", 409);
+  if (error) {
+    if (error.code === "55000" && error.message?.includes("écart simple")) throw new BankReconciliationServiceError("L’écart entre le relevé bancaire et PatriGest doit être nul avant la validation.", 409);
+    if (error.code === "55000" && error.message?.includes("écart résiduel")) throw new BankReconciliationServiceError("L’écart résiduel doit être nul avant la validation.", 409);
+    if (error.code === "55000" && error.message?.includes("impact bancaire")) throw new BankReconciliationServiceError("Reconnaissez et justifiez chaque impact bancaire avant la validation.", 409);
+    if (error.code === "55000" && error.message?.includes("brouillon")) throw new BankReconciliationServiceError("Le brouillon contient une opération annulée. Révisez-le avant la validation.", 409);
+    throw new BankReconciliationServiceError("Impossible de valider le contrôle bancaire.", 409);
+  }
+  if (!data) throw new BankReconciliationServiceError("Impossible de valider le contrôle bancaire.", 409);
   return data;
+}
+
+export async function getTransactionBankingImpacts(reconciliationId: string): Promise<TransactionBankingImpact[]> {
+  const { supabase } = await getAuthenticatedUser();
+  const { data, error } = await supabase.rpc("list_transaction_banking_impacts_for_reconciliation", { p_reconciliation_id: reconciliationId });
+  if (error) throw new BankReconciliationServiceError("Impossible de charger les impacts bancaires.", 500);
+  const rows = data ?? [];
+  const transactionIds = [...new Set(rows.map((item) => item.transaction_id).filter((id): id is string => Boolean(id)))];
+  const transactions = transactionIds.length
+    ? await supabase.from("transactions").select("id,label,transaction_date").in("id", transactionIds)
+    : { data: [], error: null };
+  if (transactions.error) throw new BankReconciliationServiceError("Impossible de charger les impacts bancaires.", 500);
+  const byId = new Map((transactions.data ?? []).map((item) => [item.id, item]));
+  return rows.map((item) => {
+    const transaction = item.transaction_id ? byId.get(item.transaction_id) : null;
+    return {
+      impactId: item.impact_id,
+      transactionId: item.transaction_id,
+      transactionLabel: transaction?.label ?? "Mouvement bancaire historique",
+      transactionDate: transaction?.transaction_date ?? item.effective_date,
+      impactKind: item.impact_kind,
+      signedAmount: item.signed_amount,
+      effectiveDate: item.effective_date,
+      historicalReconciliationId: item.historical_reconciliation_id,
+      historicalStatementEndDate: item.historical_statement_end_date,
+      acknowledgementState: item.acknowledgement_state,
+      justification: item.justification,
+      acknowledgedAt: item.acknowledged_at,
+    };
+  });
+}
+
+export async function acknowledgeTransactionBankingImpact(reconciliationId: string, impactId: string, justification: string) {
+  const parsed = justification.trim();
+  if (parsed.length < 3) throw new BankReconciliationServiceError("Saisissez une justification d’au moins 3 caractères.", 400);
+  const { supabase } = await getAuthenticatedUser();
+  const { error } = await supabase.rpc("acknowledge_transaction_banking_impact", {
+    p_reconciliation_id: reconciliationId,
+    p_impact_id: impactId,
+    p_justification: parsed,
+  });
+  if (error) {
+    if (error.code === "42501") throw new BankReconciliationServiceError("Vous ne pouvez pas reconnaître cet impact bancaire.", 403);
+    if (error.code === "23505") throw new BankReconciliationServiceError("Cet impact a déjà reçu une autre reconnaissance.", 409);
+    throw new BankReconciliationServiceError(error.message?.includes("justification") ? "Une justification est obligatoire." : "Impossible d’enregistrer la reconnaissance.", 409);
+  }
 }
 
 async function getDetailedSummary(reconciliationId: string) {

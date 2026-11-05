@@ -263,6 +263,7 @@ export async function getManagementReportSnapshot(
           .from("transactions")
           .select("*")
           .in("financial_account_id", accountIds)
+          .is("cancelled_at", null)
           .gte("transaction_date", report.period_start)
           .lte("transaction_date", report.period_end)
           .order("transaction_date", { ascending: false })

@@ -43,7 +43,7 @@ test("l'action réutilise le validateur après création, sans modifier le chemi
   const action = actions.match(/export async function createTransferAction[\s\S]*?(?=\nexport async function deleteTransactionAction)/)?.[0];
   assert.ok(action);
   assert.match(action, /transferSchema\.safeParse\(transferValues\(formData\)\)/);
-  assert.match(action, /await createTransfer\(personId, parsed\.data\)/);
+  assert.match(action, /await createTransfer\(personId, parsed\.data, \{ requestId: requestId\.data \}\)/);
   assert.match(action, /refresh\(personId\);\s*redirect\(getSafeTransactionReturnTo\(personId, returnHref\)\)/);
   assert.doesNotMatch(action, /redirect\(`\/dossiers\/\$\{personId\}\/operations`\)/);
 });

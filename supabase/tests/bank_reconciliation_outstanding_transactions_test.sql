@@ -106,16 +106,26 @@ reset role;
 set local "request.jwt.claim.sub" = '32000000-0000-4000-8000-000000000001';
 set local "request.jwt.claims" = '{"sub":"32000000-0000-4000-8000-000000000001","role":"authenticated"}';
 set local role authenticated;
-update public.transactions set amount = 8, label = 'Dépense corrigée' where id = '32000000-0000-4000-8000-000000000401';
+select public.correct_financial_transaction(
+  '32000000-0000-4000-8000-000000000101',
+  '32000000-0000-4000-8000-000000000401', 1,
+  '32000000-0000-4000-8000-000000000301', '2026-01-05', 'expense',
+  'Dépense corrigée', 8, null, null, null, null,
+  'Correction historique auditée', '32000000-0000-4000-8000-000000000901'
+);
 select extensions.results_eq($$ select amount_snapshot, label_snapshot from public.bank_reconciliation_outstanding_transactions where bank_reconciliation_id = '32000000-0000-4000-8000-000000000601' and transaction_id_snapshot = '32000000-0000-4000-8000-000000000401' $$, $$ values (3::numeric, 'Ancienne dépense'::text) $$, 'source update never rewrites validated snapshot');
-delete from public.transactions where id = '32000000-0000-4000-8000-000000000402';
-select extensions.results_eq($$ select transaction_id is null, amount_snapshot, label_snapshot from public.bank_reconciliation_outstanding_transactions where bank_reconciliation_id = '32000000-0000-4000-8000-000000000601' and transaction_id_snapshot = '32000000-0000-4000-8000-000000000402' $$, $$ values (true, 10::numeric, 'Recette'::text) $$, 'source deletion preserves historical id and snapshots');
-select extensions.results_eq($$ select transaction_id, transaction_date, transaction_type, label, amount from public.list_bank_reconciliation_candidate_transactions('32000000-0000-4000-8000-000000000601') where transaction_id = '32000000-0000-4000-8000-000000000402' $$, $$ values ('32000000-0000-4000-8000-000000000402'::uuid, '2026-01-06'::date, 'income'::text, 'Recette'::text, 10::numeric) $$, 'deleted source remains consultable through its validated snapshots');
+select public.cancel_financial_transaction(
+  '32000000-0000-4000-8000-000000000101',
+  '32000000-0000-4000-8000-000000000402', 1,
+  'Annulation historique auditée', '32000000-0000-4000-8000-000000000902'
+);
+select extensions.results_eq($$ select transaction_id is not null, amount_snapshot, label_snapshot from public.bank_reconciliation_outstanding_transactions where bank_reconciliation_id = '32000000-0000-4000-8000-000000000601' and transaction_id_snapshot = '32000000-0000-4000-8000-000000000402' $$, $$ values (true, 10::numeric, 'Recette'::text) $$, 'logical cancellation preserves the source link and historical snapshots');
+select extensions.results_eq($$ select transaction_id, transaction_date, transaction_type, label, amount from public.list_bank_reconciliation_candidate_transactions('32000000-0000-4000-8000-000000000601') where transaction_id = '32000000-0000-4000-8000-000000000402' $$, $$ values ('32000000-0000-4000-8000-000000000402'::uuid, '2026-01-06'::date, 'income'::text, 'Recette'::text, 10::numeric) $$, 'cancelled source remains consultable through its validated snapshots');
 select extensions.lives_ok($$ select public.remove_bank_reconciliation_outstanding_transaction('32000000-0000-4000-8000-000000000602', '32000000-0000-4000-8000-000000000401') $$, 'manager-created draft line remains removable by owner');
 select extensions.is((select count(*) from public.bank_reconciliation_outstanding_transactions where bank_reconciliation_id = '32000000-0000-4000-8000-000000000602'), 0::bigint, 'draft removal is effective');
-select extensions.lives_ok($$ select public.validate_bank_reconciliation('32000000-0000-4000-8000-000000000603') $$, 'simple RAPP-05 validation remains available');
-select extensions.results_eq($$ select reconciliation_mode, calculated_balance, difference, outstanding_debits, outstanding_credits, explained_bank_balance, residual_difference from public.bank_reconciliations where id = '32000000-0000-4000-8000-000000000603' $$, $$ values ('simple'::text, 101::numeric, 15::numeric, null::numeric, null::numeric, null::numeric, null::numeric) $$, 'simple mode keeps RAPP-05 semantics and detailed snapshots null');
-select extensions.throws_ok($$ select public.activate_complete_bank_reconciliation('32000000-0000-4000-8000-000000000603') $$, 'P0001', 'Seul un rapprochement en brouillon peut devenir détaillé.', 'validated simple reconciliation cannot convert to complete');
+select extensions.throws_ok($$ select public.validate_bank_reconciliation('32000000-0000-4000-8000-000000000603') $$, '55000', 'L''écart simple doit être nul avant la validation.', 'simple reconciliation with a non-zero difference is refused');
+select extensions.results_eq($$ select status::text, reconciliation_mode, calculated_balance, difference, outstanding_debits, outstanding_credits, explained_bank_balance, residual_difference from public.bank_reconciliations where id = '32000000-0000-4000-8000-000000000603' $$, $$ values ('draft'::text, 'simple'::text, null::numeric, null::numeric, null::numeric, null::numeric, null::numeric, null::numeric) $$, 'refused simple validation preserves the draft without snapshots');
+select extensions.lives_ok($$ select public.activate_complete_bank_reconciliation('32000000-0000-4000-8000-000000000603') $$, 'a refused simple reconciliation remains available for detailed pointing');
 select extensions.ok(position('lock table public.bank_reconciliation_outstanding_transactions in share mode' in lower(pg_get_functiondef('public.validate_bank_reconciliation(uuid)'::regprocedure))) > 0, 'validation locks pointing writers');
 select extensions.is((select count(*) from public.bank_reconciliation_outstanding_transactions where bank_reconciliation_id = '32000000-0000-4000-8000-000000000601'), 4::bigint, 'validated history remains complete after source changes');
 

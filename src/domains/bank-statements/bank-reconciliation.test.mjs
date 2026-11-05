@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  buildBankReconciliationAttentionSummary,
   calculateReconciliationDifference,
   getReconciliationUnavailableReason,
   toMoneyCents,
@@ -61,19 +62,67 @@ test("la liste charge seulement les états par lots sans calcul de solde", () =>
   assert.doesNotMatch(listFunction, /getAccountBalanceAtDate/);
 });
 
-test("l'API expose GET POST PATCH et réserve les écritures aux gestionnaires", () => {
+test("la synthèse distingue les brouillons, les écarts et les contrôles validés", () => {
+  const nonZeroStatement = { id: "draft-non-zero", statement_balance: 102, statement_end_date: "2026-01-31" };
+  const zeroStatement = { id: "draft-zero", statement_balance: 120, statement_end_date: "2026-01-31" };
+  const unavailableStatement = { id: "draft-unavailable", statement_balance: null, statement_end_date: "2026-01-31" };
+
+  const nonZero = buildBankReconciliationAttentionSummary(
+    [nonZeroStatement],
+    [{ bank_statement_id: nonZeroStatement.id, status: "draft" }],
+    () => -18,
+  );
+  assert.equal(nonZero.pendingCount, 1);
+  assert.equal(nonZero.differenceByStatementId[nonZeroStatement.id], -18);
+  assert.deepEqual(nonZero.singlePending, { statementEndDate: "2026-01-31", difference: -18 });
+
+  const zero = buildBankReconciliationAttentionSummary(
+    [zeroStatement],
+    [{ bank_statement_id: zeroStatement.id, status: "draft" }],
+    () => 0,
+  );
+  assert.equal(zero.pendingCount, 1);
+  assert.equal(zero.singlePending.difference, 0);
+
+  const validated = buildBankReconciliationAttentionSummary(
+    [nonZeroStatement],
+    [{ bank_statement_id: nonZeroStatement.id, status: "validated" }],
+    () => { throw new Error("un contrôle validé ne doit pas être recalculé"); },
+  );
+  assert.deepEqual(validated, { pendingCount: 0, differenceByStatementId: {}, singlePending: null });
+
+  const multiple = buildBankReconciliationAttentionSummary(
+    [nonZeroStatement, zeroStatement],
+    [{ bank_statement_id: nonZeroStatement.id, status: "draft" }],
+    (statement) => statement.id === nonZeroStatement.id ? -18 : 0,
+  );
+  assert.equal(multiple.pendingCount, 2);
+  assert.equal(multiple.singlePending, null);
+
+  const unavailable = buildBankReconciliationAttentionSummary(
+    [unavailableStatement],
+    [{ bank_statement_id: unavailableStatement.id, status: "draft" }],
+    () => null,
+  );
+  assert.equal(unavailable.pendingCount, 1);
+  assert.equal(unavailable.singlePending.difference, null);
+});
+
+test("l'API expose GET POST PUT PATCH et réserve les écritures aux gestionnaires", () => {
   const route = source("../../app/api/dossiers/[protectedPersonId]/comptes/[accountId]/releves/[statementId]/rapprochement/route.ts");
   assert.match(route, /export async function GET/);
   assert.match(route, /export async function POST/);
+  assert.match(route, /export async function PUT/);
   assert.match(route, /export async function PATCH/);
-  assert.equal((route.match(/accessRole === "read_only"/g) ?? []).length, 2);
+  assert.equal((route.match(/accessRole === "read_only"/g) ?? []).length, 3);
   assert.match(route, /validateBankReconciliation\(reconciliation\.id\)/);
 });
 
 test("le client ne transmet aucune valeur métier à la validation", () => {
   const component = source("./components/bank-reconciliation-manager.tsx");
-  assert.match(component, /fetch\(endpoint, \{ method \}\)/);
-  assert.doesNotMatch(component, /fetch\(endpoint, \{ method, body:/);
+  const genericRequest = component.slice(component.indexOf("async function request"), component.indexOf("async function acknowledgeImpact"));
+  assert.match(genericRequest, /fetch\(endpoint, \{ method \}\)/);
+  assert.doesNotMatch(genericRequest, /body:/);
 });
 
 test("l'interface couvre desktop mobile brouillon validé et lecture seule", () => {
@@ -85,6 +134,12 @@ test("l'interface couvre desktop mobile brouillon validé et lecture seule", () 
   assert.match(component, /Valider le contrôle/);
   assert.match(component, /montants figés/);
   assert.match(component, /control\.status === "draft" && canManage/);
+  assert.match(component, /Aucun rapprochement en attente/);
+  assert.match(component, /À contrôler/);
+  assert.match(component, />Validé</);
+  assert.match(component, /Écart indisponible/);
+  assert.match(component, /role="status"/);
+  assert.match(component, /bg-amber-50/);
   assert.match(source("./components/bank-statement-manager.tsx"), /canManage && !isValidated/);
 });
 

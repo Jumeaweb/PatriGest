@@ -13,6 +13,8 @@ import { isSuccessiveAccountEligible } from "./successive-entry";
 
 export async function createSuccessiveTransactionAction(personId: string, _state: SuccessiveActionState, formData: FormData): Promise<SuccessiveActionState> {
   if (!z.uuid().safeParse(personId).success) return { status: "error", message: "Dossier invalide." };
+  const requestId = z.uuid().safeParse(formData.get("clientRequestId"));
+  if (!requestId.success) return { status: "error", message: "Demande d’enregistrement invalide." };
   try {
     const person = await getProtectedPerson(personId);
     if (!person || person.accessRole === "read_only") return { status: "error", message: "Impossible d’enregistrer cette opération." };
@@ -28,7 +30,7 @@ export async function createSuccessiveTransactionAction(personId: string, _state
     const { supabase } = await getAuthenticatedUser();
     const { data: account, error: accountError } = await supabase.from("financial_accounts").select("id,status,account_type,protected_person_id").eq("id", parsed.data.financialAccountId).maybeSingle();
     if (accountError || !account || account.protected_person_id !== personId || !isSuccessiveAccountEligible(account)) return { status: "error", message: "Choisissez un compte transactionnel actif de ce dossier.", fieldErrors: { financialAccountId: ["Ce compte ne permet pas cette saisie."] } };
-    const transaction = await createTransaction(personId, parsed.data);
+    const transaction = await createTransaction(personId, parsed.data, { requestId: requestId.data });
     revalidatePath(`/dossiers/${personId}/operations`);
     revalidatePath(`/dossiers/${personId}/comptes`);
     revalidatePath(`/dossiers/${personId}`);

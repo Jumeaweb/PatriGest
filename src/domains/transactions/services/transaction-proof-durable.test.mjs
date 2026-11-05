@@ -55,10 +55,11 @@ test("le mode activé ne retombe jamais sur l’ancien parcours", async () => {
 test("la réservation utilise la signature SQL exacte et un identifiant d’idempotence", async () => {
   const calls = [];
   const operationId = "11111111-1111-4111-8111-111111111111";
+  const reservation = { operationId, operationRevision: 1, state: "reserved", intent: "replace", documentId: "55555555-5555-4555-8555-555555555555", versionId: "66666666-6666-4666-8666-666666666666", versionNumber: 2, storagePath: "protected-persons/person/transactions/transaction/proofs/document/versions/version", transactionRevision: 1, proofReference: "2026-0001", idempotent: false };
   const result = await reserveTransactionProofOperation({
     async rpc(name, args) {
       calls.push({ name, args });
-      return { data: operationId, error: null };
+      return { data: reservation, error: null };
     },
   }, {
     personId: "22222222-2222-4222-8222-222222222222",
@@ -66,9 +67,9 @@ test("la réservation utilise la signature SQL exacte et un identifiant d’idem
     intent: "replace",
     clientRequestId: "44444444-4444-4444-8444-444444444444",
   });
-  assert.equal(result, operationId);
+  assert.deepEqual(result, reservation);
   assert.deepEqual(calls, [{
-    name: "begin_transaction_proof_document_operation",
+    name: "reserve_transaction_proof_version",
     args: {
       p_protected_person_id: "22222222-2222-4222-8222-222222222222",
       p_transaction_id: "33333333-3333-4333-8333-333333333333",
@@ -108,26 +109,29 @@ test("une réservation refusée ou invalide ne lance pas une opération ambiguë
   }, {
     personId: "22222222-2222-4222-8222-222222222222",
     transactionId: "33333333-3333-4333-8333-333333333333",
-    intent: "delete",
+    intent: "create",
     clientRequestId: "44444444-4444-4444-8444-444444444444",
   }), /invalide/);
 });
 
-test("création, remplacement et suppression passent par la réservation et le moteur commun", () => {
+test("création et remplacement utilisent exclusivement le contrat DOC2 authentifié", () => {
   assert.match(service, /intent: existing \? "replace" : "create"/);
-  assert.match(service, /intent: "delete"/);
   assert.match(durable, /reserveTransactionProofOperation\(input\.client, input\)/);
-  assert.match(durable, /createServerDocumentOperationEngine\(\)/);
-  assert.match(durable, /transactionProofOperation\(/);
+  assert.match(durable, /\.storage\.from\("transaction-proofs"\)\.upload\(/);
+  assert.match(durable, /upsert: false/);
+  assert.match(durable, /metadata: \{ sha256 \}/);
+  assert.match(durable, /finalize_transaction_proof_version/);
+  assert.match(durable, /storageObjectId = reservation\.storageObjectId \?\? null/);
+  assert.match(durable, /if \(response\.error\) response = await client\.rpc\("finalize_transaction_proof_version", args\)/);
+  assert.doesNotMatch(durable, /storage\.info|service_role|createServerDocumentOperationEngine/);
   assert.match(service, /createTransactionProofRequestId\(/);
-  assert.doesNotMatch(durable, /storage\.from|transaction_documents|objectPath|bucketId/);
 });
 
 test("la suppression dédiée reste inaccessible par défaut et conserve les lectures", () => {
   assert.match(route, /export async function GET/);
   assert.match(route, /createSignedUrl/);
   assert.match(route, /export async function DELETE/);
-  assert.match(service, /La suppression sécurisée des justificatifs n’est pas activée\./);
+  assert.match(service, /Le retrait sécurisé des anciennes versions n’est pas encore disponible\./);
   assert.match(route, /headers: error\.status === 405 \? \{ Allow: "GET, POST" \}/);
   assert.match(editPage, /durableOperationsEnabled=\{isTransactionProofDurableOperationsEnabled\(\)\}/);
   assert.match(component, /canManage && durableOperationsEnabled && <button/);
@@ -136,9 +140,9 @@ test("la suppression dédiée reste inaccessible par défaut et conserve les lec
 });
 
 test("la suppression indirecte ne contourne pas le moteur en mode durable", () => {
-  const guard = transactionService.indexOf("if (isTransactionProofDurableOperationsEnabled())");
-  const directRemove = transactionService.indexOf('.from("transaction-proofs").remove');
-  assert.ok(guard >= 0 && directRemove > guard);
-  assert.match(transactionService, /DURABLE_PROOF_TRANSACTION_DELETE_MESSAGE/);
-  assert.match(actions, /error\.message === DURABLE_PROOF_TRANSACTION_DELETE_MESSAGE/);
+  assert.match(transactionService, /rpc\("cancel_financial_transaction"/);
+  assert.doesNotMatch(transactionService, /delete_transaction_with_document|\.from\("transaction-proofs"\)\.remove/);
+  assert.match(actions, /transactionMutationReasonSchema\.safeParse\(formData\.get\("reason"\)\)/);
+  assert.match(actions, /reason: reason\.data/);
+  assert.doesNotMatch(actions, /Annulation confirmée depuis la fiche/);
 });

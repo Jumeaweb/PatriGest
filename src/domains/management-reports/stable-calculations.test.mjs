@@ -88,6 +88,7 @@ function transaction(overrides = {}) {
     classification_precision: null,
     created_at: "2026-01-15T00:00:00Z",
     updated_at: "2026-01-15T00:00:00Z",
+    cancelled_at: null,
     ...overrides,
   };
 }
@@ -116,6 +117,15 @@ test("additionne plusieurs opérations de la même rubrique officielle", () => {
   const result = aggregate([transaction({ amount: 12 }), transaction({ amount: 8 })]);
   assert.equal(result.expenses.length, 1);
   assert.equal(result.expenses[0].amount, 20);
+});
+
+test("exclut une opération annulée des comptes de gestion ouverts", () => {
+  const result = aggregate([
+    transaction({ amount: 12 }),
+    transaction({ amount: 800, cancelled_at: "2026-02-01T00:00:00Z" }),
+  ]);
+  assert.equal(result.expenses.length, 1);
+  assert.equal(result.expenses[0].amount, 12);
 });
 
 test("accepte une précision obligatoire présente", () => {

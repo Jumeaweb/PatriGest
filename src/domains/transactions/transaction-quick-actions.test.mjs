@@ -33,7 +33,7 @@ test("la page de saisie ouvre directement recette, dépense et virement", () => 
   assert.match(newPage, /defaultMode=\{requestedMode\}/);
   assert.match(newPage, /key=\{`\$\{requestedAccountId \?\? "global"\}:\$\{requestedMode \?\? "default"\}`\}/);
   assert.match(form, /defaultMode \?\? "expense"/);
-  assert.match(form, /\[\s*\["income", "Recette"\], \["expense", "Dépense"\], \["transfer", "Virement"\]\s*\]/);
+  assert.match(form, /\[ \["income", "Recette"\], \["expense", "Dépense"\], \.\.\.\(!transaction \? \[\["transfer", "Virement"\]\]/);
 });
 
 test("l'état vide est actionnable, sans doubler les actions dans l'en-tête", () => {
@@ -48,7 +48,15 @@ test("read_only ne reçoit aucune action de création", () => {
   assert.match(quickActions, /accessRole !== "read_only" && transferAllowed/);
   assert.deepEqual(getTransactionQuickActions(personId, accountId, false, false), []);
   assert.match(globalPage, /person\.accessRole !== "read_only"/);
-  assert.match(accountPage, /person\.accessRole !== "read_only" && account\.status === "active"/);
+  assert.match(accountPage, /person\.accessRole !== "read_only" && !archived && account\.status === "active"/);
+});
+
+test("un dossier archivé reste consultable sans action de mutation", () => {
+  assert.match(globalPage, /const archived = Boolean\(person\.archived_at\)/);
+  assert.match(globalPage, /person\.accessRole !== "read_only" && !archived/);
+  assert.match(globalPage, /Dossier archivé — consultation uniquement/);
+  assert.match(accountPage, /archived=\{archived\}/);
+  assert.match(journal, /accessRole !== "read_only" && !archived && !closed/);
 });
 
 test("les comptes valorisés n'ouvrent pas de recette ou dépense ordinaire", () => {

@@ -26,7 +26,7 @@ export async function getExpenseProofContext(personId: string, transactionId: st
   return { person, transaction };
 }
 
-export async function saveTransactionProof(personId: string, transactionId: string, file: PreparedProofFile) {
+export async function saveTransactionProof(personId: string, transactionId: string, file: PreparedProofFile, requestedClientRequestId?: string) {
   const context = await getExpenseProofContext(personId, transactionId);
   if (!context) throw new ProofServiceError("Dépense introuvable.", 404);
   const denial = getProofWriteDenial({ personId, transactionPersonId: context.transaction.account.protected_person_id, transactionType: context.transaction.transaction_type, transferId: context.transaction.transfer_id, proofReference: context.transaction.proof_reference, role: context.person.accessRole, closed: isDateInClosedPeriod(context.transaction.transaction_date, context.person.managementPeriods) });
@@ -43,20 +43,20 @@ export async function saveTransactionProof(personId: string, transactionId: stri
     async () => {
       try {
         await executeDurableTransactionProofOperation({
-          client: supabase as unknown as Parameters<typeof executeDurableTransactionProofOperation>[0]["client"],
+          client: supabase,
           personId,
           transactionId,
           intent: existing ? "replace" : "create",
           file,
           fileName,
-          clientRequestId: createTransactionProofRequestId({
+          clientRequestId: z.uuid().parse(requestedClientRequestId ?? createTransactionProofRequestId({
             personId,
             transactionId,
             intent: existing ? "replace" : "create",
             existingDocumentId: existing?.id ?? null,
             existingUpdatedAt: existing?.updated_at ?? null,
             bytes: file.bytes,
-          }),
+          })),
         });
       } catch {
         throw new ProofServiceError("Impossible d’enregistrer le justificatif. La dépense reste disponible.");
@@ -138,49 +138,7 @@ async function saveTransactionProofHistorically(input: {
 }
 
 export async function deleteTransactionProof(personId: string, transactionId: string) {
-  if (!isTransactionProofDurableOperationsEnabled()) {
-    throw new ProofServiceError("La suppression sécurisée des justificatifs n’est pas activée.", 405);
-  }
-  const context = await getExpenseProofContext(personId, transactionId);
-  if (!context) throw new ProofServiceError("Justificatif introuvable.", 404);
-  const denial = getProofWriteDenial({
-    personId,
-    transactionPersonId: context.transaction.account.protected_person_id,
-    transactionType: context.transaction.transaction_type,
-    transferId: context.transaction.transfer_id,
-    proofReference: context.transaction.proof_reference,
-    role: context.person.accessRole,
-    closed: isDateInClosedPeriod(
-      context.transaction.transaction_date,
-      context.person.managementPeriods,
-    ),
-  });
-  if (denial === "read_only") throw new ProofServiceError("Vous ne pouvez pas supprimer ce justificatif.", 403);
-  if (denial === "closed") throw new ProofServiceError("Cette dépense appartient à un exercice clôturé.", 403);
-  if (denial) throw new ProofServiceError("Justificatif introuvable.", 404);
-
-  const { supabase } = await getAuthenticatedUser();
-  const existing = await getTransactionDocument(transactionId);
-  if (!existing) throw new ProofServiceError("Justificatif introuvable.", 404);
-
-  try {
-    await executeDurableTransactionProofOperation({
-      client: supabase as unknown as Parameters<typeof executeDurableTransactionProofOperation>[0]["client"],
-      personId,
-      transactionId,
-      intent: "delete",
-      file: null,
-      fileName: null,
-      clientRequestId: createTransactionProofRequestId({
-        personId,
-        transactionId,
-        intent: "delete",
-        existingDocumentId: existing.id,
-        existingUpdatedAt: existing.updated_at,
-        bytes: null,
-      }),
-    });
-  } catch {
-    throw new ProofServiceError("Impossible de supprimer le justificatif.");
-  }
+  void personId;
+  void transactionId;
+  throw new ProofServiceError("Le retrait sécurisé des anciennes versions n’est pas encore disponible.", 405);
 }

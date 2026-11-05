@@ -54,6 +54,7 @@ export async function getFinancialAccounts(protectedPersonId: string): Promise<F
     supabase.from("account_valuations").select("*").in("financial_account_id", accountIds).order("valuation_date", { ascending: false }),
     loadCompleteTransactionHistory((from, to) => supabase.from("transactions").select("*")
       .in("financial_account_id", accountIds)
+      .is("cancelled_at", null)
       .order("transaction_date", { ascending: false })
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
@@ -70,6 +71,7 @@ export async function getFinancialAccount(accountId: string): Promise<FinancialA
       supabase.from("account_valuations").select("*").eq("financial_account_id", accountId).order("valuation_date", { ascending: false }),
       loadCompleteTransactionHistory((from, to) => supabase.from("transactions").select("*")
         .eq("financial_account_id", accountId)
+        .is("cancelled_at", null)
         .order("transaction_date", { ascending: false })
         .order("created_at", { ascending: false })
         .order("id", { ascending: false })
@@ -176,6 +178,7 @@ export async function getAccountBalanceAtDate(
       .from("transactions")
       .select("amount, transaction_date, transaction_type")
       .eq("financial_account_id", financialAccountId)
+      .is("cancelled_at", null)
       .lte("transaction_date", date)
       .order("transaction_date", { ascending: false })
       .order("created_at", { ascending: false })

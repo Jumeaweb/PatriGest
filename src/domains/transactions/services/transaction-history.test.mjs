@@ -16,6 +16,7 @@ function transactions(count, accountId = "account-open") {
     transaction_type: "income",
     amount: 1,
     transfer_id: null,
+    cancelled_at: null,
   }));
 }
 
@@ -48,6 +49,16 @@ test("les soldes et la valeur financière sous-jacente utilisent les 1201 opéra
   const financialUtils = source("../../financial-accounts/utils/financial-account-utils.ts");
   assert.match(financialUtils, /calculateClassicBalance\(account\.initial_balance, movements\)/);
   assert.match(financialUtils, /getCurrentAccountValue\(account, account\.valuations, account\.transactions\)\.value/);
+});
+
+test("une opération annulée reste dans l'historique sans modifier les soldes", () => {
+  const rows = [
+    ...transactions(2),
+    { ...transactions(1)[0], id: "transaction-cancelled", transaction_date: "2026-01-02", amount: 500, cancelled_at: "2026-01-02T00:00:00Z" },
+  ];
+  const balances = calculateRunningBalances(100, rows);
+  assert.equal(calculateClassicBalance(100, rows), 102);
+  assert.equal(balances.get("transaction-cancelled"), 102);
 });
 
 test("toutes les lectures financières exhaustives utilisent le chargeur interne paginé", () => {

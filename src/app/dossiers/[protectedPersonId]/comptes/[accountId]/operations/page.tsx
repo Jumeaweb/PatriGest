@@ -79,9 +79,10 @@ export default async function AccountOperationsPage({
     account.valuations,
     account.transactions,
   );
+  const archived = Boolean(person.archived_at);
   const canManage =
-    person.accessRole !== "read_only" && account.status === "active" && !valuationAccount;
-  const canTransfer = person.accessRole !== "read_only" && account.status === "active";
+    person.accessRole !== "read_only" && !archived && account.status === "active" && !valuationAccount;
+  const canTransfer = person.accessRole !== "read_only" && !archived && account.status === "active";
   return (
     <PrivateShell
       current="dossiers"
@@ -128,6 +129,7 @@ export default async function AccountOperationsPage({
         current="accounts"
       />
       <FinancialNavigation protectedPersonId={protectedPersonId} accountId={accountId} current="operations" />
+      {archived && <p className="mt-4 rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-[#64748B]">Dossier archivé — consultation uniquement. Aucune opération ni aucun virement ne peut être ajouté ou modifié.</p>}
       <AccountFilters categories={categories} values={filterValues} />
       <TransactionPagination pathname={pathname} values={filterValues} page={journalPage.page} totalPages={journalPage.totalPages} />
       <TransactionJournal
@@ -135,6 +137,7 @@ export default async function AccountOperationsPage({
         items={items}
         periods={person.managementPeriods}
         accessRole={person.accessRole}
+        archived={archived}
         accountId={accountId}
         ordinaryAllowed={canManage}
         transferAllowed={canTransfer}

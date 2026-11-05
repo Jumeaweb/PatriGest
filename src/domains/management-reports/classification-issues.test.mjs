@@ -122,7 +122,7 @@ test("la route reconstruit le report côté serveur et le journal rend les forme
   assert.match(page, /Revenir au compte de gestion/);
   assert.match(journal, /structural \? undefined : open/);
   assert.match(journal, /href && !structural/);
-  assert.match(journal, /accessRole === "read_only" \|\| closed \? "Consulter uniquement"/);
+  assert.match(journal, /const actionLabel = canEdit \? "Corriger" : "Historique"/);
   assert.match(edit, /transaction\.transfer_id/);
 });
 

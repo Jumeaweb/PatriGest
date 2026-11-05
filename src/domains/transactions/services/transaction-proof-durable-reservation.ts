@@ -1,15 +1,28 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
 
-export type TransactionProofOperationIntent = "create" | "replace" | "delete";
+export type TransactionProofOperationIntent = "create" | "replace";
 
-type RpcResult = { data: unknown; error: unknown | null };
-type RpcInvoker = (
-  name: string,
-  args: Record<string, unknown>,
-) => PromiseLike<RpcResult>;
+export type TransactionProofReservationClient = SupabaseClient<Database>;
 
-export type TransactionProofReservationClient = { rpc: RpcInvoker };
+const reservationSchema = z.object({
+  operationId: z.uuid(),
+  operationRevision: z.coerce.number().int().positive(),
+  state: z.enum(["reserved", "completed", "attention_required", "cancelled"]),
+  intent: z.enum(["create", "replace"]),
+  documentId: z.uuid(),
+  versionId: z.uuid(),
+  versionNumber: z.coerce.number().int().positive(),
+  storagePath: z.string().min(1),
+  transactionRevision: z.coerce.number().int().positive(),
+  proofReference: z.string().min(1),
+  storageObjectId: z.uuid().nullable().optional(),
+  idempotent: z.boolean(),
+});
+
+export type TransactionProofReservation = z.infer<typeof reservationSchema>;
 
 export function createTransactionProofRequestId(input: {
   personId: string;
@@ -51,7 +64,7 @@ export async function reserveTransactionProofOperation(
   },
 ) {
   const { data, error } = await client.rpc(
-    "begin_transaction_proof_document_operation",
+    "reserve_transaction_proof_version",
     {
       p_protected_person_id: input.personId,
       p_transaction_id: input.transactionId,
@@ -60,7 +73,7 @@ export async function reserveTransactionProofOperation(
     },
   );
   if (error) throw new Error("La réservation du justificatif a échoué.");
-  const operationId = z.uuid().safeParse(data);
-  if (!operationId.success) throw new Error("La réservation du justificatif est invalide.");
-  return operationId.data;
+  const reservation = reservationSchema.safeParse(data);
+  if (!reservation.success) throw new Error("La réservation du justificatif est invalide.");
+  return reservation.data;
 }

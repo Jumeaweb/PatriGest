@@ -272,8 +272,8 @@ select extensions.throws_ok(
     ) values (
       '98000000-0000-4000-8500-000000000001','2026-02-02','income','Recette interdite',25
     )$$,
-  'P4R01', 'Ce dossier est archivé. Restaurez-le avant toute modification.',
-  'une opération bancaire indirecte est refusée'
+  '42501', 'permission denied for table transactions',
+  'une opération bancaire directe est fermée avant même la garde d archive'
 );
 select extensions.throws_ok(
   $$insert into public.debt_balances(debt_id,balance_date,remaining_balance)
@@ -296,21 +296,25 @@ select extensions.throws_ok(
 );
 
 select extensions.throws_ok(
-  $$select public.create_internal_transfer(
+  $$select public.create_internal_transfer_v2(
       '98000000-0000-4000-8100-000000000001',
       '98000000-0000-4000-8500-000000000001',
       '98000000-0000-4000-8500-000000000002',
-      '2026-02-15', 5, 'Virement interdit', null
+      '2026-02-15', 5, 'Virement interdit', null,
+      '98000000-0000-4000-8600-000000000001'
     )$$,
   'P4R01', 'Ce dossier est archivé. Restaurez-le avant toute modification.',
-  'une RPC SECURITY DEFINER de virement ne contourne pas la garde'
+  'la RPC versionnée de virement ne contourne pas la garde'
 );
 select extensions.throws_ok(
-  $$select public.delete_transaction_with_document(
-      '98000000-0000-4000-8700-000000000001'
+  $$select public.cancel_financial_transaction(
+      '98000000-0000-4000-8100-000000000001',
+      '98000000-0000-4000-8700-000000000001', 1,
+      'Annulation interdite',
+      '98000000-0000-4000-8600-000000000002'
     )$$,
   'P4R01', 'Ce dossier est archivé. Restaurez-le avant toute modification.',
-  'une RPC privilégiée de suppression documentaire ne contourne pas la garde'
+  'la RPC d annulation logique ne contourne pas la garde'
 );
 select extensions.throws_ok(
   $$select public.archive_real_estate_property(

@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select extensions.plan(28);
+select extensions.plan(34);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -144,17 +144,35 @@ select extensions.results_eq(
   'income expense transfers same-day entries and inclusive end date match the balance service'
 );
 
-select extensions.lives_ok(
+select extensions.throws_ok(
   $$ select public.validate_bank_reconciliation('31000000-0000-4000-8000-000000000603') $$,
-  'an account with no transaction can be validated'
+  '55000', 'L''écart simple doit être nul avant la validation.',
+  'a negative difference is refused'
 );
 
+select extensions.results_eq(
+  $$ select status::text, calculated_balance, difference
+     from public.bank_reconciliations
+     where id = '31000000-0000-4000-8000-000000000603' $$,
+  $$ values ('draft'::text, null::numeric, null::numeric) $$,
+  'a refused negative difference leaves the draft snapshots empty'
+);
+
+select extensions.lives_ok(
+  $$ update public.bank_statements set statement_balance = 42.50
+     where id = '31000000-0000-4000-8000-000000000503' $$,
+  'the manager can correct the draft statement balance'
+);
+select extensions.lives_ok(
+  $$ select public.validate_bank_reconciliation('31000000-0000-4000-8000-000000000603') $$,
+  'the balanced reconciliation can then be validated'
+);
 select extensions.results_eq(
   $$ select calculated_balance, difference
      from public.bank_reconciliations
      where id = '31000000-0000-4000-8000-000000000603' $$,
-  $$ values (42.50::numeric, -2.50::numeric) $$,
-  'initial balance only and a negative difference are exact'
+  $$ values (42.50::numeric, 0.00::numeric) $$,
+  'the balanced snapshot is frozen exactly'
 );
 
 select extensions.throws_ok(
@@ -196,17 +214,34 @@ set local "request.jwt.claim.sub" = '31000000-0000-4000-8000-000000000002';
 set local "request.jwt.claims" = '{"sub":"31000000-0000-4000-8000-000000000002","role":"authenticated"}';
 set local role authenticated;
 
-select extensions.lives_ok(
+select extensions.throws_ok(
   $$ select public.validate_bank_reconciliation('31000000-0000-4000-8000-000000000602') $$,
-  'manager validates a draft through the RPC'
+  '55000', 'L''écart simple doit être nul avant la validation.',
+  'manager cannot validate a positive difference'
 );
 
+select extensions.results_eq(
+  $$ select status::text, calculated_balance, difference, validated_by
+     from public.bank_reconciliations
+     where id = '31000000-0000-4000-8000-000000000602' $$,
+  $$ values ('draft'::text, null::numeric, null::numeric, null::uuid) $$,
+  'a refused positive difference leaves the draft snapshots empty'
+);
+select extensions.lives_ok(
+  $$ update public.bank_statements set statement_balance = 222.07
+     where id = '31000000-0000-4000-8000-000000000502' $$,
+  'manager corrects the draft statement balance'
+);
+select extensions.lives_ok(
+  $$ select public.validate_bank_reconciliation('31000000-0000-4000-8000-000000000602') $$,
+  'manager validates the balanced draft through the RPC'
+);
 select extensions.results_eq(
   $$ select calculated_balance, difference, validated_by
      from public.bank_reconciliations
      where id = '31000000-0000-4000-8000-000000000602' $$,
-  $$ values (222.07::numeric, 6.93::numeric, '31000000-0000-4000-8000-000000000002'::uuid) $$,
-  'future exclusion and positive difference match the balance service'
+  $$ values (222.07::numeric, 0.00::numeric, '31000000-0000-4000-8000-000000000002'::uuid) $$,
+  'future exclusion is preserved in a balanced validated snapshot'
 );
 
 reset role;
@@ -270,8 +305,8 @@ select extensions.is(
 
 select extensions.is(
   (select difference from public.bank_reconciliations where id = '31000000-0000-4000-8000-000000000602'),
-  6.93::numeric,
-  'validated positive difference remains stored as an immutable snapshot'
+  0.00::numeric,
+  'validated balanced difference remains stored as an immutable snapshot'
 );
 
 select extensions.ok(

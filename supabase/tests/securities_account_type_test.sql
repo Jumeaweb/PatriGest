@@ -97,13 +97,12 @@ set local role authenticated;
 
 select extensions.throws_ok(
   $$
-    insert into public.transactions (
-      id, financial_account_id, transaction_date, transaction_type, label,
-      amount, accounting_nature
-    ) values (
-      '20000000-0000-4000-8000-000000000401',
+    select public.create_financial_transaction(
+      '20000000-0000-4000-8000-000000000101',
       '20000000-0000-4000-8000-000000000301',
-      '2026-06-01', 'income', 'Recette ordinaire interdite', 10, 'ordinary'
+      '2026-06-01', 'income', 'Recette ordinaire interdite', 10,
+      null, null, null, null,
+      '20000000-0000-4000-8000-000000000901'
     )
   $$,
   'P0001',
@@ -113,11 +112,12 @@ select extensions.throws_ok(
 
 select extensions.lives_ok(
   $$
-    select public.create_internal_transfer(
+    select public.create_internal_transfer_v2(
       '20000000-0000-4000-8000-000000000101',
       '20000000-0000-4000-8000-000000000302',
       '20000000-0000-4000-8000-000000000301',
-      '2026-06-02', 250, 'Versement compte-titres', null
+      '2026-06-02', 250, 'Versement compte-titres', null,
+      '20000000-0000-4000-8000-000000000902'
     )
   $$,
   'a structured transfer to a securities account is accepted'

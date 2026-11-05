@@ -36,7 +36,7 @@ test("le journal global permet le choix du compte transactionnel", () => {
 
 test("une ligne utilise le schéma et le service de création ordinaires", () => {
   assert.match(action, /transactionSchema\.safeParse/);
-  assert.match(action, /await createTransaction\(personId, parsed\.data\)/);
+  assert.match(action, /await createTransaction\(personId, parsed\.data, \{ requestId: requestId\.data \}\)/);
   assert.doesNotMatch(action, /createTransfer|rpc\(/);
 });
 
@@ -49,7 +49,8 @@ test("le type virement est absent du formulaire et rejeté par le schéma ordina
 test("classification stable et précision obligatoire restent dans createTransaction", () => {
   const service = source("./services/transaction-service.ts");
   assert.match(service, /resolveTransactionClassification\(\{ supabase, userId, transactionType: input\.transactionType, categoryId: input\.categoryId, classificationPrecision: input\.classificationPrecision, requirePrecision: true \}\)/);
-  assert.match(service, /accounting_nature: classification\.accountingNature, official_category_id: classification\.officialCategoryId, classification_precision: classification\.classificationPrecision/);
+  assert.match(service, /p_official_category_id: classification\.officialCategoryId/);
+  assert.match(service, /p_classification_precision: classification\.classificationPrecision/);
   assert.match(component, /getEffectiveOfficialCategory\(categories, draft\.categoryId\)/);
 });
 
@@ -105,6 +106,7 @@ test("une erreur conserve le brouillon et ne modifie pas l'historique", () => {
   assert.match(component, /value=\{draft\.label\}/);
   assert.match(component, /value=\{draft\.amount\}/);
   assert.match(component, /if \(state\.status === "error"\) submitted\.current = false/);
+  assert.doesNotMatch(component, /setClientRequestId/);
   assert.match(component, /if \(state\.created && reported\.current/);
 });
 

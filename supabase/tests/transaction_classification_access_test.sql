@@ -222,14 +222,12 @@ select extensions.is((select count(*) from public.transactions where id = '00000
 
 select extensions.lives_ok(
   $$
-    insert into public.transactions (
-      id, financial_account_id, transaction_date, transaction_type, label,
-      amount, official_category_id
-    ) values (
-      '00000000-0000-0000-0000-000000000520',
+    select public.create_financial_transaction(
+      '00000000-0000-0000-0000-000000000201',
       '00000000-0000-0000-0000-000000000301',
       '2026-03-01', 'income', 'Recette owner', 100,
-      (select id from public.categories where official_code = 'RES-1-01')
+      null, (select id from public.categories where official_code = 'RES-1-01'),
+      null, null, '00000000-0000-0000-0000-000000000901'
     )
   $$,
   'owner creates an income transaction'
@@ -240,21 +238,25 @@ select extensions.results_eq(
       select id from public.categories where official_code = 'RES-1-01'
     )
     from public.transactions
-    where id = '00000000-0000-0000-0000-000000000520'
+    where label = 'Recette owner'
   $$,
   $$ values ('ordinary'::text, true, true) $$,
   'owner income receives a coherent stable classification'
 );
 select extensions.results_eq(
   $$
-    with changed as (
-      update public.transactions
-      set label = 'Owner updated'
-      where id = '00000000-0000-0000-0000-000000000501'
-      returning 1
-    ) select count(*)::bigint from changed
+    select (public.correct_financial_transaction(
+      '00000000-0000-0000-0000-000000000201',
+      '00000000-0000-0000-0000-000000000501', 1,
+      '00000000-0000-0000-0000-000000000301', '2026-01-10', 'expense',
+      'Owner updated', 20,
+      (select id from public.categories where official_code = 'DEP-1-02'),
+      (select id from public.categories where official_code = 'DEP-1-02'),
+      null, null, 'Correction auditée owner',
+      '00000000-0000-0000-0000-000000000902'
+    ) ->> 'id')::uuid
   $$,
-  $$ values (1::bigint) $$,
+  $$ values ('00000000-0000-0000-0000-000000000501'::uuid) $$,
   'owner modifies a classic transaction'
 );
 
@@ -271,14 +273,12 @@ select extensions.is((select count(*) from public.management_periods where id = 
 select extensions.is((select count(*) from public.transactions where id = '00000000-0000-0000-0000-000000000501'), 1::bigint, 'manager reads the transaction');
 select extensions.lives_ok(
   $$
-    insert into public.transactions (
-      id, financial_account_id, transaction_date, transaction_type, label,
-      amount, official_category_id
-    ) values (
-      '00000000-0000-0000-0000-000000000521',
+    select public.create_financial_transaction(
+      '00000000-0000-0000-0000-000000000201',
       '00000000-0000-0000-0000-000000000301',
       '2026-03-02', 'expense', 'Dépense manager', 25,
-      (select id from public.categories where official_code = 'DEP-1-02')
+      null, (select id from public.categories where official_code = 'DEP-1-02'),
+      null, null, '00000000-0000-0000-0000-000000000903'
     )
   $$,
   'manager creates an expense transaction'
@@ -289,21 +289,25 @@ select extensions.results_eq(
       select id from public.categories where official_code = 'DEP-1-02'
     )
     from public.transactions
-    where id = '00000000-0000-0000-0000-000000000521'
+    where label = 'Dépense manager'
   $$,
   $$ values ('ordinary'::text, true) $$,
   'manager expense receives a coherent stable classification'
 );
 select extensions.results_eq(
   $$
-    with changed as (
-      update public.transactions
-      set label = 'Manager updated'
-      where id = '00000000-0000-0000-0000-000000000501'
-      returning 1
-    ) select count(*)::bigint from changed
+    select (public.correct_financial_transaction(
+      '00000000-0000-0000-0000-000000000201',
+      '00000000-0000-0000-0000-000000000501', 2,
+      '00000000-0000-0000-0000-000000000301', '2026-01-10', 'expense',
+      'Manager updated', 20,
+      (select id from public.categories where official_code = 'DEP-1-02'),
+      (select id from public.categories where official_code = 'DEP-1-02'),
+      null, null, 'Correction auditée manager',
+      '00000000-0000-0000-0000-000000000904'
+    ) ->> 'id')::uuid
   $$,
-  $$ values (1::bigint) $$,
+  $$ values ('00000000-0000-0000-0000-000000000501'::uuid) $$,
   'manager modifies a classic transaction'
 );
 
@@ -321,30 +325,32 @@ select extensions.is((select count(*) from public.management_periods where id = 
 select extensions.is((select count(*) from public.transactions where id = '00000000-0000-0000-0000-000000000501'), 1::bigint, 'read_only reads the transaction');
 select extensions.throws_like(
   $$
-    insert into public.transactions (
-      id, financial_account_id, transaction_date, transaction_type, label,
-      amount, official_category_id
-    ) values (
-      '00000000-0000-0000-0000-000000000522',
+    select public.create_financial_transaction(
+      '00000000-0000-0000-0000-000000000201',
       '00000000-0000-0000-0000-000000000301',
       '2026-03-03', 'expense', 'Dépense read_only', 10,
-      (select id from public.categories where official_code = 'DEP-1-02')
+      null, (select id from public.categories where official_code = 'DEP-1-02'),
+      null, null, '00000000-0000-0000-0000-000000000905'
     )
   $$,
-  '%row-level security policy%',
+  '%Dossier introuvable ou accès refusé.%',
   'read_only cannot create a transaction'
 );
-select extensions.results_eq(
+select extensions.throws_ok(
   $$
-    with changed as (
-      update public.transactions
-      set label = 'Read-only false success'
-      where id = '00000000-0000-0000-0000-000000000501'
-      returning 1
-    ) select count(*)::bigint from changed
+    select public.correct_financial_transaction(
+      '00000000-0000-0000-0000-000000000201',
+      '00000000-0000-0000-0000-000000000501', 3,
+      '00000000-0000-0000-0000-000000000301', '2026-01-10', 'expense',
+      'Read-only false success', 20,
+      (select id from public.categories where official_code = 'DEP-1-02'),
+      (select id from public.categories where official_code = 'DEP-1-02'),
+      null, null, 'Tentative lecteur',
+      '00000000-0000-0000-0000-000000000906'
+    )
   $$,
-  $$ values (0::bigint) $$,
-  'read_only UPDATE touches and returns exactly zero rows'
+  '42501', 'Dossier introuvable ou accès refusé.',
+  'read_only cannot correct a transaction through the audited RPC'
 );
 select extensions.is(
   (select label from public.transactions where id = '00000000-0000-0000-0000-000000000501'),
@@ -401,6 +407,7 @@ set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-000000000101",
 set local role authenticated;
 
 select extensions.is(auth.uid(), '00000000-0000-0000-0000-000000000101'::uuid, 'classification scenarios restore the owner JWT context');
+reset role;
 select extensions.lives_ok(
   $$
     insert into public.transactions (
@@ -592,27 +599,38 @@ select extensions.results_eq(
   $$ values ('capital_movement'::text, true, true, true) $$,
   'valid capital movement has the required empty classification shape'
 );
+set local role authenticated;
+
 select extensions.throws_ok(
   $$
-    update public.transactions
-    set label = 'Modification exercice clos'
-    where id = '00000000-0000-0000-0000-000000000503'
+    select public.correct_financial_transaction(
+      '00000000-0000-0000-0000-000000000201',
+      '00000000-0000-0000-0000-000000000503', 1,
+      '00000000-0000-0000-0000-000000000301', '2025-06-10', 'expense',
+      'Modification exercice clos', 40,
+      (select id from public.categories where official_code = 'DEP-1-03'),
+      (select id from public.categories where official_code = 'DEP-1-03'),
+      null, null, 'Tentative exercice clos',
+      '00000000-0000-0000-0000-000000000907'
+    )
   $$,
   'P0001',
   'Cette opération appartient à un exercice clôturé.',
   'closed management period prevents transaction modification'
 );
-select extensions.results_eq(
+select extensions.throws_ok(
   $$
-    with changed as (
-      update public.transactions
-      set label = 'Modification ordinaire interdite'
-      where id = '00000000-0000-0000-0000-000000000510'
-      returning 1
-    ) select count(*)::bigint from changed
+    select public.correct_financial_transaction(
+      '00000000-0000-0000-0000-000000000201',
+      '00000000-0000-0000-0000-000000000510', 1,
+      '00000000-0000-0000-0000-000000000301', '2026-04-10', 'expense',
+      'Modification ordinaire interdite', 50, null, null, null, null,
+      'Tentative mouvement isolé',
+      '00000000-0000-0000-0000-000000000908'
+    )
   $$,
-  $$ values (0::bigint) $$,
-  'ordinary UPDATE touches and returns zero structured transfer rows'
+  'P0002', 'Opération introuvable.',
+  'an isolated structured-transfer leg cannot be corrected through the ordinary RPC'
 );
 select extensions.is(
   (select label from public.transactions where id = '00000000-0000-0000-0000-000000000510'),

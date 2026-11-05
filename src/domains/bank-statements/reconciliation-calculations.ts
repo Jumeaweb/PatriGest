@@ -1,6 +1,15 @@
-import type { BankStatement, FinancialAccount } from "@/types/database";
+import type { BankReconciliation, BankStatement, FinancialAccount } from "@/types/database";
 
 export type ReconciliationUnavailableReason = "missing_statement_balance" | "before_minimum_date" | "after_closing_date";
+
+type ReconciliationAttentionStatement = Pick<BankStatement, "id" | "statement_balance" | "statement_end_date">;
+type ReconciliationAttentionState = Pick<BankReconciliation, "bank_statement_id" | "status">;
+
+export type BankReconciliationAttentionSummary = {
+  pendingCount: number;
+  differenceByStatementId: Record<string, number | null>;
+  singlePending: { statementEndDate: string; difference: number | null } | null;
+};
 
 export function toMoneyCents(value: number) {
   const cents = Math.round(value * 100);
@@ -57,5 +66,35 @@ export function calculateDetailedReconciliation(
     outstandingCredits: outstandingCreditsInCents / 100,
     explainedBankBalance: explainedBalanceInCents / 100,
     residualDifference: residualDifferenceInCents / 100,
+  };
+}
+
+export function buildBankReconciliationAttentionSummary(
+  statements: readonly ReconciliationAttentionStatement[],
+  reconciliations: readonly ReconciliationAttentionState[],
+  getPendingDifference: (statement: ReconciliationAttentionStatement) => number | null,
+): BankReconciliationAttentionSummary {
+  const reconciliationByStatement = new Map(
+    reconciliations.map((reconciliation) => [reconciliation.bank_statement_id, reconciliation]),
+  );
+  const pendingStatements = statements.filter(
+    (statement) => reconciliationByStatement.get(statement.id)?.status !== "validated",
+  );
+  const differenceByStatementId: Record<string, number | null> = {};
+
+  for (const statement of pendingStatements) {
+    differenceByStatementId[statement.id] = getPendingDifference(statement);
+  }
+
+  const singlePendingStatement = pendingStatements.length === 1 ? pendingStatements[0] : null;
+  return {
+    pendingCount: pendingStatements.length,
+    differenceByStatementId,
+    singlePending: singlePendingStatement
+      ? {
+          statementEndDate: singlePendingStatement.statement_end_date,
+          difference: differenceByStatementId[singlePendingStatement.id] ?? null,
+        }
+      : null,
   };
 }

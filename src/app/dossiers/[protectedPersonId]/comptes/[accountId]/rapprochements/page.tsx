@@ -6,11 +6,17 @@ import { AppBreadcrumb } from "@/components/ui/app-breadcrumb";
 import { parseBankStatementPage, type BankStatementQuery } from "@/domains/bank-statements/bank-statement-pagination";
 import { BankReconciliationManager } from "@/domains/bank-statements/components/bank-reconciliation-manager";
 import { BankStatementPagination } from "@/domains/bank-statements/components/bank-statement-pagination";
-import { getBankReconciliationListStates } from "@/domains/bank-statements/reconciliation-service";
+import {
+  buildBankReconciliationAttentionSummary,
+  calculateReconciliationDifference,
+  getReconciliationUnavailableReason,
+} from "@/domains/bank-statements/reconciliation-calculations";
+import { getBankReconciliationOverviewRows } from "@/domains/bank-statements/reconciliation-service";
 import { getBankStatementPage } from "@/domains/bank-statements/services";
 import { FinancialNavigation } from "@/domains/financial-accounts/components/financial-navigation";
 import { getFinancialAccountEntryHref } from "@/domains/financial-accounts/financial-account-entry";
 import { getFinancialAccount } from "@/domains/financial-accounts/services/financial-account-service";
+import { calculateAccountBalanceAtDate } from "@/domains/financial-accounts/services/account-balance-at-date";
 import { isValuationAccount } from "@/domains/financial-accounts/utils/financial-account-utils";
 import { DossierNavigation } from "@/domains/protected-persons/components/dossier-navigation";
 import { getProtectedPerson } from "@/domains/protected-persons/services/protected-person-service";
@@ -38,9 +44,31 @@ export default async function AccountReconciliationsPage({
     notFound();
   }
 
-  const statementPage = await getBankStatementPage(accountId, parseBankStatementPage(query.page));
-  const reconciliations = await getBankReconciliationListStates(
-    statementPage.items.map((statement) => statement.id),
+  const [statementPage, overviewRows] = await Promise.all([
+    getBankStatementPage(accountId, parseBankStatementPage(query.page)),
+    getBankReconciliationOverviewRows(accountId),
+  ]);
+  const currentStatementIds = new Set(statementPage.items.map((statement) => statement.id));
+  const reconciliations = overviewRows.reconciliations.filter(
+    (reconciliation) => currentStatementIds.has(reconciliation.bank_statement_id),
+  );
+  const attentionSummary = buildBankReconciliationAttentionSummary(
+    overviewRows.statements,
+    overviewRows.reconciliations,
+    (statement) => {
+      if (getReconciliationUnavailableReason(statement, account) || statement.statement_balance === null) {
+        return null;
+      }
+      const calculated = calculateAccountBalanceAtDate(
+        account.initial_balance,
+        account.transactions,
+        statement.statement_end_date,
+      );
+      return calculateReconciliationDifference(
+        statement.statement_balance,
+        calculated.balanceInCents,
+      ).difference;
+    },
   );
   const accountHref = getFinancialAccountEntryHref(
     protectedPersonId,
@@ -76,6 +104,7 @@ export default async function AccountReconciliationsPage({
       </p>
       <DossierNavigation protectedPersonId={protectedPersonId} current="accounts" />
       <FinancialNavigation protectedPersonId={protectedPersonId} accountId={accountId} current="reconciliations" />
+      {person.archived_at && <p className="mt-4 rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-[#64748B]">Dossier archivé — consultation des rapprochements uniquement.</p>}
       <BankStatementPagination
         pathname={pathname}
         values={query}
@@ -87,13 +116,14 @@ export default async function AccountReconciliationsPage({
         accountId={accountId}
         items={statementPage.items}
         totalCount={statementPage.totalCount}
+        attentionSummary={attentionSummary}
         reconciliations={reconciliations}
         accountDates={{
           initial_balance_date: account.initial_balance_date,
           opening_date: account.opening_date,
           closing_date: account.closing_date,
         }}
-        canManage={person.accessRole !== "read_only"}
+        canManage={person.accessRole !== "read_only" && !person.archived_at}
       />
       <BankStatementPagination
         pathname={pathname}

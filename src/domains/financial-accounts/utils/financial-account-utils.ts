@@ -21,7 +21,7 @@ export function formatFinancialDate(value: string) {
 }
 
 export function getCurrentAccountValue(account: FinancialAccount, valuations: AccountValuation[], transactions: Transaction[] = []) {
-  const movements = transactions.length ? transactions : (account as FinancialAccount & { transactions?: Transaction[] }).transactions ?? [];
+  const movements = (transactions.length ? transactions : (account as FinancialAccount & { transactions?: Transaction[] }).transactions ?? []).filter((transaction) => !transaction.cancelled_at);
   if (!isValuationAccount(account.account_type)) return { value: calculateClassicBalance(account.initial_balance, movements), valuation: null };
   return getCurrentValuationValue(account.initial_balance, valuations);
 }
@@ -31,7 +31,7 @@ export function getCurrentPatrimonyValue(accounts: Array<FinancialAccount & { va
   const displayedValue = activeAccounts.reduce((total, account) => total + getCurrentAccountValue(account, account.valuations, account.transactions).value, 0);
   const accountById = new Map(activeAccounts.map((account) => [account.id, account]));
   const transferLegs = new Map<string, Transaction[]>();
-  for (const account of activeAccounts) for (const transaction of account.transactions) if (transaction.transfer_id) transferLegs.set(transaction.transfer_id, [...(transferLegs.get(transaction.transfer_id) ?? []), transaction]);
+  for (const account of activeAccounts) for (const transaction of account.transactions) if (!transaction.cancelled_at && transaction.transfer_id) transferLegs.set(transaction.transfer_id, [...(transferLegs.get(transaction.transfer_id) ?? []), transaction]);
   let placementTransferAdjustment = 0;
   for (const legs of transferLegs.values()) {
     if (legs.length !== 2) continue;

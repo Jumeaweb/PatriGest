@@ -119,6 +119,7 @@ export function aggregateStableReportOperations(
   let needsPrecision = 0;
 
   for (const transaction of transactions) {
+    if (transaction.cancelled_at) continue;
     if (
       transaction.transaction_type === "transfer_in"
       || transaction.transaction_type === "transfer_out"

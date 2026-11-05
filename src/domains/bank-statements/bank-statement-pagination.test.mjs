@@ -67,15 +67,17 @@ test("les liens précédent et suivant conservent les paramètres utiles", () =>
   assert.match(pagination, /page < totalPages \? getBankStatementPageHref\(pathname, values, totalPages\)/);
 });
 
-test("les deux vues chargent seulement la page courante et ses états en lot", () => {
+test("les deux vues paginent les cartes et la synthèse charge seulement les champs minimaux", () => {
   for (const page of [statementsPage, reconciliationsPage]) {
     assert.match(page, /getBankStatementPage\(accountId, parseBankStatementPage\(query\.page\)\)/);
-    assert.match(page, /statementPage\.items\.map\(\((?:item|statement)\) => (?:item|statement)\.id\)/);
     assert.equal((page.match(/<BankStatementPagination/g) ?? []).length, 2);
     assert.doesNotMatch(page, /getBankStatements\(/);
   }
+  assert.match(statementsPage, /statementPage\.items\.map\(\((?:item|statement)\) => (?:item|statement)\.id\)/);
+  assert.match(reconciliationsPage, /getBankReconciliationOverviewRows\(accountId\)/);
+  assert.match(reconciliationsPage, /currentStatementIds\.has\(reconciliation\.bank_statement_id\)/);
+  assert.match(source("./reconciliation-service.ts"), /select\("id, statement_balance, statement_end_date"\)/);
   assert.match(source("./reconciliation-service.ts"), /RECONCILIATION_QUERY_BATCH_SIZE = 100/);
-  assert.doesNotMatch(reconciliationsPage, /\.map\([^)]*getBankReconciliationListStates/s);
 });
 
 test("Relevés reste documentaire et protège les relevés validés", () => {
@@ -99,6 +101,10 @@ test("Rapprochements réutilise toutes les actions et distingue les états et é
   assert.match(reconciliationManager, /Un écart subsiste/);
   assert.match(reconciliationManager, /Rapprochement équilibré/);
   assert.match(reconciliationManager, /Un écart résiduel subsiste/);
+  assert.match(reconciliationManager, /rapprochement.*en attente/);
+  assert.match(reconciliationManager, /Écart indisponible/);
+  assert.match(reconciliationManager, /À contrôler/);
+  assert.match(reconciliationManager, />Validé</);
   assert.match(reconciliationManager, /sm:grid-cols-3/);
   assert.match(reconciliationManager, /lg:grid-cols-4/);
 });

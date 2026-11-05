@@ -48,6 +48,7 @@ function EntryForm({ personId, accounts, categories, draft, onDraftChange, onCre
   const router = useRouter();
   const [state, formAction, pending] = useActionState(createSuccessiveTransactionAction.bind(null, personId), initialSuccessiveActionState);
   const [abandonOpen, setAbandonOpen] = useState(false);
+  const [clientRequestId] = useState(() => crypto.randomUUID());
   const initialDraft = useRef(draft);
   const submitted = useRef(false);
   const submittedDraft = useRef(draft);
@@ -73,6 +74,7 @@ function EntryForm({ personId, accounts, categories, draft, onDraftChange, onCre
   const field = (name: string) => errors?.[name]?.length ? `${name}-error` : undefined;
   return <>
     <form action={formAction} onSubmit={(event) => { if (submitted.current || pending) event.preventDefault(); else { submitted.current = true; submittedDraft.current = draft; } }} className="grid gap-3 sm:grid-cols-2">
+      <input type="hidden" name="clientRequestId" value={clientRequestId} />
       <h2 className="sm:col-span-2 text-base font-bold">Opération suivante</h2>
       <div className="sm:col-span-2"><span className="auth-label">Type d’opération</span><div className="flex gap-2" role="group" aria-label="Type d’opération">{(["income", "expense"] as const).map((mode) => <button key={mode} type="button" className={`button ${draft.transactionType === mode ? "button-primary" : "button-secondary"}`} onClick={() => change({ transactionType: mode, categoryId: "", classificationPrecision: "" })} aria-pressed={draft.transactionType === mode}>{mode === "income" ? "Recette" : "Dépense"}</button>)}</div><input type="hidden" name="transactionType" value={draft.transactionType} /></div>
       <div><label className="auth-label" htmlFor="financialAccountId">Compte *</label><select ref={accountRef} className="auth-input" id="financialAccountId" name="financialAccountId" value={draft.financialAccountId} onChange={(event) => change({ financialAccountId: event.target.value })} aria-describedby={field("financialAccountId")} required><option value="">Choisir un compte</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.account_name} — {account.institution_name}</option>)}</select><span id="financialAccountId-error"><FieldError messages={errors?.financialAccountId} /></span></div>
@@ -92,6 +94,7 @@ function EntryForm({ personId, accounts, categories, draft, onDraftChange, onCre
 function CreatedStep({ personId, transaction, onNext, onFinishHref }: { personId: string; transaction: CreatedSuccessiveTransaction; onNext: () => void; onFinishHref: string }) {
   const [pending, setPending] = useState(false);
   const [proofStatus, setProofStatus] = useState<"idle" | "success" | "error">("idle");
+  const [proofRequestId, setProofRequestId] = useState(() => crypto.randomUUID());
   const inputRef = useRef<HTMLInputElement>(null);
   async function upload(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -101,12 +104,13 @@ function CreatedStep({ personId, transaction, onNext, onFinishHref }: { personId
       const response = await fetch(`/api/dossiers/${personId}/operations/${transaction.id}/justificatif`, { method: "POST", body: new FormData(event.currentTarget) });
       if (!response.ok) throw new Error("Justificatif non enregistré");
       if (inputRef.current) inputRef.current.value = "";
+      setProofRequestId(crypto.randomUUID());
       setProofStatus("success");
     } catch { setProofStatus("error"); }
     finally { setPending(false); }
   }
   return <div role="status"><h2 className="text-lg font-bold text-green-800">Opération enregistrée</h2><p className="mt-2 text-sm">{transaction.transaction_type === "income" ? "Recette" : "Dépense"} · {transaction.label} · {formatCurrency(transaction.amount)}</p>
-    {transaction.transaction_type === "expense" && transaction.proof_reference && <section className="mt-4 rounded-lg border border-[#E2E8F0] p-3"><h3 className="font-semibold">Justificatif facultatif</h3><p className="mt-1 text-xs text-[#64748B]">Référence {transaction.proof_reference}</p>{proofStatus !== "success" && <form onSubmit={upload} className="mt-3 flex flex-wrap items-center gap-2"><label htmlFor="successive-proof" className="sr-only">Fichier justificatif</label><input ref={inputRef} id="successive-proof" name="file" type="file" accept="application/pdf,image/jpeg,image/png" required /><button className="button button-secondary" type="submit" disabled={pending}>{pending ? "Envoi…" : proofStatus === "error" ? "Réessayer l’ajout" : "Ajouter un justificatif"}</button></form>}{proofStatus === "success" && <p className="mt-2 text-sm text-green-800">Justificatif enregistré.</p>}{proofStatus === "error" && <p role="alert" className="mt-2 text-sm text-red-700">Le justificatif n’a pas pu être ajouté. La dépense reste enregistrée ; réessayez ou continuez.</p>}</section>}
+    {transaction.transaction_type === "expense" && transaction.proof_reference && <section className="mt-4 rounded-lg border border-[#E2E8F0] p-3"><h3 className="font-semibold">Justificatif facultatif</h3><p className="mt-1 text-xs text-[#64748B]">Référence {transaction.proof_reference}</p>{proofStatus !== "success" && <form onSubmit={upload} className="mt-3 flex flex-wrap items-center gap-2"><input type="hidden" name="clientRequestId" value={proofRequestId} /><label htmlFor="successive-proof" className="sr-only">Fichier justificatif</label><input ref={inputRef} id="successive-proof" name="file" type="file" accept="application/pdf,image/jpeg,image/png" required /><button className="button button-secondary" type="submit" disabled={pending}>{pending ? "Envoi…" : proofStatus === "error" ? "Réessayer l’ajout" : "Ajouter un justificatif"}</button></form>}{proofStatus === "success" && <p className="mt-2 text-sm text-green-800">Justificatif enregistré.</p>}{proofStatus === "error" && <p role="alert" className="mt-2 text-sm text-red-700">Le justificatif n’a pas pu être ajouté. La dépense reste enregistrée ; réessayez ou continuez.</p>}</section>}
     <div className="mt-4 flex flex-wrap gap-2"><button className="button button-primary" type="button" onClick={onNext} disabled={pending}>Saisir la suivante</button><Link className="button button-secondary" href={onFinishHref} aria-disabled={pending} onClick={(event) => { if (pending) event.preventDefault(); }}>Terminer la saisie</Link></div>
   </div>;
 }

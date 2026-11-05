@@ -1,25 +1,40 @@
+import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import type { Category, FinancialAccount, Transaction, TransactionDocument, Transfer } from "@/types/database";
 import { isValuationAccount } from "@/domains/financial-accounts/utils/financial-account-utils";
 import { getAuthenticatedUser } from "@/domains/protected-persons/services/authenticated-user";
 import type { TransactionFilters, TransactionInput } from "../schemas/transaction-schema";
-import { CLOSED_PERIOD_ERROR } from "../errors";
 import { resolveTransactionClassification, resolveTransactionClassificationForUpdate } from "./transaction-classification";
 import { loadTransactionDocumentsInBatches } from "./transaction-document-batches";
 import { getTransactionPageMetadata, TRANSACTION_JOURNAL_PAGE_SIZE } from "../transaction-pagination";
 import { loadCompleteTransactionHistory, loadTransactionRelationsInBatches } from "./transaction-history";
 
 import { resolveEffectiveTransactionClassification, type EffectiveTransactionClassification } from "./transaction-classification-read";
-import { isTransactionProofDurableOperationsEnabled } from "./transaction-proof-durable-availability";
-
-export const DURABLE_PROOF_TRANSACTION_DELETE_MESSAGE =
-  "Supprimez d’abord le justificatif avant de supprimer l’opération.";
 
 export type TransactionJournalItem = Transaction & { account: FinancialAccount; category: Category | null; classification: EffectiveTransactionClassification; transfer: Transfer | null; counterpartAccount: FinancialAccount | null; attachmentCount: number };
 export type TransactionJournalPage = ReturnType<typeof getTransactionPageMetadata> & { items: TransactionJournalItem[] };
 async function ownedPerson(id: string) { const auth = await getAuthenticatedUser(); const { data } = await auth.supabase.from("protected_persons").select("id").eq("id", id).maybeSingle(); if (!data) throw new Error("Dossier introuvable."); return auth; }
 async function ownedAccount(id: string, personId?: string) { const auth = await getAuthenticatedUser(); const { data: account } = await auth.supabase.from("financial_accounts").select("*").eq("id", id).maybeSingle(); if (!account || (personId && account.protected_person_id !== personId)) throw new Error("Compte introuvable."); const { data: person } = await auth.supabase.from("protected_persons").select("id").eq("id", account.protected_person_id).maybeSingle(); if (!person) throw new Error("Compte introuvable."); return { ...auth, account }; }
 function validDate(account: FinancialAccount, date: string) { return date >= account.initial_balance_date && (!account.opening_date || date >= account.opening_date) && (!account.closing_date || date <= account.closing_date); }
-async function ensureDateIsNotClosed(supabase: Awaited<ReturnType<typeof getAuthenticatedUser>>["supabase"], personId: string, date: string) { const { data } = await supabase.from("management_periods").select("id").eq("protected_person_id", personId).eq("status", "closed").lte("start_date", date).gte("end_date", date).limit(1); if (data?.length) throw new Error("Cette opération appartient à un exercice clôturé."); }
+
+const mutationResultSchema = z.object({ id: z.uuid(), revision: z.coerce.number().int().positive(), replayed: z.boolean() });
+const mutationReasonSchema = z.string().trim().min(3).max(1000);
+export type FinancialTransactionMutationResult = z.infer<typeof mutationResultSchema>;
+export type FinancialTransactionMutationOptions = { requestId?: string };
+export type FinancialTransactionCorrectionOptions = FinancialTransactionMutationOptions & { expectedRevision: number; reason: string };
+
+function transactionMutationError(error: { code?: string; message?: string } | null, fallback: string) {
+  if (!error) return new Error(fallback);
+  if (error.code === "40001") return new Error("L’opération a été modifiée. Rechargez la page.");
+  if (error.code === "22007") return new Error("La date d’une opération réelle ne peut pas être future.");
+  if (error.code === "42501") return new Error("Dossier introuvable ou accès refusé.");
+  if (error.code === "P0002") return new Error("Opération introuvable.");
+  if (error.code === "23503") return new Error("Compte introuvable dans ce dossier.");
+  if (error.code === "23505") return new Error("Cette demande a déjà été utilisée pour une autre opération.");
+  if (error.code === "55000" && error.message) return new Error(error.message);
+  if (error.message?.toLocaleLowerCase("fr-FR").includes("exercice clôturé")) return new Error("Cette opération appartient à un exercice clôturé.");
+  return new Error(fallback);
+}
 
 async function enrichTransactions(
   supabase: Awaited<ReturnType<typeof getAuthenticatedUser>>["supabase"],
@@ -91,6 +106,7 @@ export async function getTransactions(personId: string, filters: TransactionFilt
       .order("transaction_date", { ascending: false })
       .order("created_at", { ascending: false })
       .order("id", { ascending: false });
+    if (filters.includeCancelled === false) query = query.is("cancelled_at", null);
     if (filters.startDate) query = query.gte("transaction_date", filters.startDate);
     if (filters.endDate) query = query.lte("transaction_date", filters.endDate);
     if (filters.accountId) query = query.eq("financial_account_id", filters.accountId);
@@ -131,6 +147,7 @@ export async function getTransactionJournalPage(
       .order("transaction_date", { ascending: false })
       .order("created_at", { ascending: false })
       .order("id", { ascending: false });
+    if (filters.includeCancelled === false) query = query.is("cancelled_at", null);
     if (filters.startDate) query = query.gte("transaction_date", filters.startDate);
     if (filters.endDate) query = query.lte("transaction_date", filters.endDate);
     if (filters.accountId) query = query.eq("financial_account_id", filters.accountId);
@@ -157,36 +174,86 @@ export async function getTransactionJournalPage(
 }
 
 export async function getTransaction(id: string) { const auth = await getAuthenticatedUser(); const { data } = await auth.supabase.from("transactions").select("*").eq("id", id).maybeSingle(); if (!data) return null; try { const { account } = await ownedAccount(data.financial_account_id); return { ...data, account }; } catch { return null; } }
-export async function createTransaction(personId: string, input: TransactionInput) { const { supabase, userId, account } = await ownedAccount(input.financialAccountId, personId); if (isValuationAccount(account.account_type)) throw new Error("Les recettes et dépenses nécessitent un compte transactionnel."); if (!validDate(account, input.transactionDate)) throw new Error("Date incompatible avec le compte."); const classification = await resolveTransactionClassification({ supabase, userId, transactionType: input.transactionType, categoryId: input.categoryId, classificationPrecision: input.classificationPrecision, requirePrecision: true }); const { data, error } = await supabase.from("transactions").insert({ financial_account_id: input.financialAccountId, transaction_date: input.transactionDate, transaction_type: input.transactionType, label: input.label, amount: input.amount, category_id: classification.categoryId, accounting_nature: classification.accountingNature, official_category_id: classification.officialCategoryId, classification_precision: classification.classificationPrecision, proof_reference: null, comment: input.comment }).select("id,proof_reference").single(); if (error?.message.toLocaleLowerCase("fr-FR").includes("exercice clôturé")) throw new Error(CLOSED_PERIOD_ERROR); if (error) throw new Error(error.message.includes("année") ? error.message : "Impossible de créer l’opération."); if (!data) throw new Error("Impossible de confirmer la création de l’opération."); return data; }
-export async function updateTransaction(id: string, personId: string, input: TransactionInput) { const existing = await getTransaction(id); if (!existing || existing.transfer_id || existing.account.protected_person_id !== personId) throw new Error("Opération introuvable."); const { supabase, userId, account } = await ownedAccount(input.financialAccountId, personId); if (isValuationAccount(account.account_type)) throw new Error("Les recettes et dépenses nécessitent un compte transactionnel."); await ensureDateIsNotClosed(supabase, personId, existing.transaction_date); await ensureDateIsNotClosed(supabase, personId, input.transactionDate); if (!validDate(account, input.transactionDate)) throw new Error("Date incompatible avec le compte."); const classification = await resolveTransactionClassificationForUpdate({ supabase, userId, transactionType: input.transactionType, existing, categoryId: input.categoryId, classificationPrecision: input.classificationPrecision, requirePrecision: true }); const { error } = await supabase.from("transactions").update({ financial_account_id: input.financialAccountId, transaction_date: input.transactionDate, transaction_type: input.transactionType, label: input.label, amount: input.amount, category_id: classification.categoryId, accounting_nature: classification.accountingNature, official_category_id: classification.officialCategoryId, classification_precision: classification.classificationPrecision, proof_reference: existing.proof_reference, comment: input.comment }).eq("id", id).select("id").single(); if (error?.message.toLocaleLowerCase("fr-FR").includes("exercice clôturé")) throw new Error(CLOSED_PERIOD_ERROR); if (error) throw new Error(error.message.includes("année") ? error.message : "Impossible de modifier l’opération."); }
+export async function createTransaction(
+  personId: string,
+  input: TransactionInput,
+  options: FinancialTransactionMutationOptions = {},
+) {
+  const { supabase, userId, account } = await ownedAccount(input.financialAccountId, personId);
+  if (isValuationAccount(account.account_type)) throw new Error("Les recettes et dépenses nécessitent un compte transactionnel.");
+  if (!validDate(account, input.transactionDate)) throw new Error("Date incompatible avec le compte.");
+  const classification = await resolveTransactionClassification({ supabase, userId, transactionType: input.transactionType, categoryId: input.categoryId, classificationPrecision: input.classificationPrecision, requirePrecision: true });
+  const requestId = z.uuid().parse(options.requestId ?? randomUUID());
+  const { data, error } = await supabase.rpc("create_financial_transaction", {
+    p_protected_person_id: personId,
+    p_financial_account_id: input.financialAccountId,
+    p_transaction_date: input.transactionDate,
+    p_transaction_type: input.transactionType,
+    p_label: input.label,
+    p_amount: input.amount,
+    p_category_id: classification.categoryId,
+    p_official_category_id: classification.officialCategoryId,
+    p_classification_precision: classification.classificationPrecision,
+    p_comment: input.comment,
+    p_request_id: requestId,
+  });
+  if (error) throw transactionMutationError(error, "Impossible de créer l’opération.");
+  const result = mutationResultSchema.safeParse(data);
+  if (!result.success) throw new Error("Impossible de confirmer la création de l’opération.");
+  const created = await supabase.from("transactions").select("id,proof_reference,revision").eq("id", result.data.id).single();
+  if (created.error || !created.data) throw new Error("Impossible de confirmer la création de l’opération.");
+  return { ...created.data, replayed: result.data.replayed };
+}
+
+export async function updateTransaction(
+  id: string,
+  personId: string,
+  input: TransactionInput,
+  options: FinancialTransactionCorrectionOptions,
+): Promise<FinancialTransactionMutationResult> {
+  const existing = await getTransaction(id);
+  if (!existing || existing.transfer_id || existing.account.protected_person_id !== personId) throw new Error("Opération introuvable.");
+  const { supabase, userId, account } = await ownedAccount(input.financialAccountId, personId);
+  if (isValuationAccount(account.account_type)) throw new Error("Les recettes et dépenses nécessitent un compte transactionnel.");
+  if (!validDate(account, input.transactionDate)) throw new Error("Date incompatible avec le compte.");
+  const classification = await resolveTransactionClassificationForUpdate({ supabase, userId, transactionType: input.transactionType, existing, categoryId: input.categoryId, classificationPrecision: input.classificationPrecision, requirePrecision: true });
+  const reason = mutationReasonSchema.parse(options.reason);
+  const { data, error } = await supabase.rpc("correct_financial_transaction", {
+    p_protected_person_id: personId,
+    p_transaction_id: id,
+    p_expected_revision: options.expectedRevision,
+    p_financial_account_id: input.financialAccountId,
+    p_transaction_date: input.transactionDate,
+    p_transaction_type: input.transactionType,
+    p_label: input.label,
+    p_amount: input.amount,
+    p_category_id: classification.categoryId,
+    p_official_category_id: classification.officialCategoryId,
+    p_classification_precision: classification.classificationPrecision,
+    p_comment: input.comment,
+    p_reason: reason,
+    p_request_id: z.uuid().parse(options.requestId ?? randomUUID()),
+  });
+  if (error) throw transactionMutationError(error, "Impossible de modifier l’opération.");
+  return mutationResultSchema.parse(data);
+}
 
 export async function getTransactionDocument(transactionId: string): Promise<TransactionDocument | null> { const { supabase } = await getAuthenticatedUser(); const { data, error } = await supabase.from("transaction_documents").select("*").eq("transaction_id", transactionId).maybeSingle(); if (error) throw new Error("Impossible de charger le justificatif."); return data; }
-export async function deleteTransaction(id: string, personId: string) {
+export async function deleteTransaction(
+  id: string,
+  personId: string,
+  options: FinancialTransactionCorrectionOptions,
+): Promise<FinancialTransactionMutationResult> {
   const existing = await getTransaction(id);
   if (!existing || existing.transfer_id || existing.account.protected_person_id !== personId) throw new Error("Opération introuvable.");
   const { supabase } = await ownedPerson(personId);
-  await ensureDateIsNotClosed(supabase, personId, existing.transaction_date);
-  const document = await getTransactionDocument(id);
-  let backup: Blob | null = null;
-
-  if (document) {
-    if (isTransactionProofDurableOperationsEnabled()) {
-      throw new Error(DURABLE_PROOF_TRANSACTION_DELETE_MESSAGE);
-    }
-    const { data, error: downloadError } = await supabase.storage.from("transaction-proofs").download(document.storage_path);
-    if (downloadError || !data) throw new Error("Impossible de sécuriser le justificatif avant la suppression.");
-    backup = data;
-    const { error: storageError } = await supabase.storage.from("transaction-proofs").remove([document.storage_path]);
-    if (storageError) throw new Error("Impossible de supprimer le justificatif.");
-  }
-
-  const { error } = await supabase.rpc("delete_transaction_with_document", { p_transaction_id: id });
-  if (!error) return;
-
-  if (document && backup) {
-    const { error: restoreError } = await supabase.storage.from("transaction-proofs").upload(document.storage_path, backup, { contentType: document.mime_type, upsert: false });
-    if (restoreError) throw new Error("La suppression a échoué et le justificatif n’a pas pu être restauré. Contactez l’administrateur.");
-  }
-  if (error.message.toLocaleLowerCase("fr-FR").includes("exercice clôturé")) throw new Error(CLOSED_PERIOD_ERROR);
-  throw new Error("Impossible de supprimer l’opération.");
+  const { data, error } = await supabase.rpc("cancel_financial_transaction", {
+    p_protected_person_id: personId,
+    p_transaction_id: id,
+    p_expected_revision: options.expectedRevision,
+    p_reason: mutationReasonSchema.parse(options.reason),
+    p_request_id: z.uuid().parse(options.requestId ?? randomUUID()),
+  });
+  if (error) throw transactionMutationError(error, "Impossible d’annuler l’opération.");
+  return mutationResultSchema.parse(data);
 }

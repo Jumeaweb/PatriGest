@@ -186,13 +186,13 @@ export type Database = {
         Relationships: [{ foreignKeyName: "categories_official_category_id_fkey"; columns: ["official_category_id"]; isOneToOne: false; referencedRelation: "categories"; referencedColumns: ["id"] }];
       };
       transfers: {
-        Row: { id: string; protected_person_id: string; source_account_id: string; destination_account_id: string; transfer_date: string; amount: number; label: string | null; comment: string | null; created_at: string; updated_at: string };
+        Row: { id: string; protected_person_id: string; source_account_id: string; destination_account_id: string; transfer_date: string; amount: number; label: string | null; comment: string | null; created_at: string; updated_at: string; revision: number; cancelled_at: string | null; cancelled_by: string | null };
         Insert: { id?: string; protected_person_id: string; source_account_id: string; destination_account_id: string; transfer_date: string; amount: number; label?: string | null; comment?: string | null; created_at?: string; updated_at?: string };
         Update: Partial<Database["public"]["Tables"]["transfers"]["Insert"]>;
         Relationships: [];
       };
       transactions: {
-        Row: { id: string; financial_account_id: string; transaction_date: string; transaction_type: TransactionType; label: string; amount: number; category_id: string | null; transfer_id: string | null; proof_reference: string | null; comment: string | null; accounting_nature: AccountingNature | null; official_category_id: string | null; classification_precision: string | null; created_at: string; updated_at: string };
+        Row: { id: string; financial_account_id: string; transaction_date: string; transaction_type: TransactionType; label: string; amount: number; category_id: string | null; transfer_id: string | null; proof_reference: string | null; comment: string | null; accounting_nature: AccountingNature | null; official_category_id: string | null; classification_precision: string | null; created_at: string; updated_at: string; revision: number; cancelled_at: string | null; cancelled_by: string | null };
         Insert: { id?: string; financial_account_id: string; transaction_date: string; transaction_type: TransactionType; label: string; amount: number; category_id?: string | null; transfer_id?: string | null; proof_reference?: string | null; comment?: string | null; accounting_nature?: AccountingNature | null; official_category_id?: string | null; classification_precision?: string | null; created_at?: string; updated_at?: string };
         Update: Partial<Database["public"]["Tables"]["transactions"]["Insert"]>;
         Relationships: [{ foreignKeyName: "transactions_official_category_id_fkey"; columns: ["official_category_id"]; isOneToOne: false; referencedRelation: "categories"; referencedColumns: ["id"] }];
@@ -204,16 +204,46 @@ export type Database = {
         Relationships: [];
       };
       proof_reference_assignments: {
-        Row: { transaction_id: string; protected_person_id: string; reference_year: number; reference_number: number; proof_reference: string; created_at: string };
-        Insert: { transaction_id: string; protected_person_id: string; reference_year: number; reference_number: number; proof_reference: string; created_at?: string };
+        Row: { id: string; transaction_id: string; protected_person_id: string; reference_year: number; reference_number: number; proof_reference: string; created_at: string; started_revision: number | null; ended_revision: number | null; ended_at: string | null; ended_by_change_id: string | null };
+        Insert: { id?: string; transaction_id: string; protected_person_id: string; reference_year: number; reference_number: number; proof_reference: string; created_at?: string; started_revision?: number | null; ended_revision?: number | null; ended_at?: string | null; ended_by_change_id?: string | null };
         Update: never;
         Relationships: [];
       };
       transaction_documents: {
-        Row: { id: string; transaction_id: string; storage_path: string; file_name: string; mime_type: string; file_size: number; created_by: string; created_at: string; updated_at: string };
-        Insert: { id?: string; transaction_id: string; storage_path: string; file_name: string; mime_type: string; file_size: number; created_by: string; created_at?: string; updated_at?: string };
+        Row: { id: string; transaction_id: string; storage_path: string; file_name: string; mime_type: string; file_size: number; created_by: string; created_at: string; updated_at: string; proof_document_id: string | null; proof_version_id: string | null };
+        Insert: { id?: string; transaction_id: string; storage_path: string; file_name: string; mime_type: string; file_size: number; created_by: string; created_at?: string; updated_at?: string; proof_document_id?: string | null; proof_version_id?: string | null };
         Update: { file_name?: string; mime_type?: string; file_size?: number; created_by?: string; updated_at?: string };
         Relationships: [];
+      };
+      transaction_changes: {
+        Row: { id: string; protected_person_id: string; transaction_id: string; request_id: string; change_kind: "correction" | "cancellation"; reason: string; revision_before: number; revision_after: number; previous_values: Json; new_values: Json; changed_by: string | null; changed_by_name: string; changed_at: string };
+        Insert: never; Update: never; Relationships: [];
+      };
+      transfer_changes: {
+        Row: { id: string; protected_person_id: string; transfer_id: string; request_id: string; change_kind: "correction" | "cancellation"; reason: string; revision_before: number; revision_after: number; previous_values: Json; new_values: Json; changed_by: string | null; changed_by_name: string; changed_at: string };
+        Insert: never; Update: never; Relationships: [];
+      };
+      transaction_banking_impacts: {
+        Row: { id: string; protected_person_id: string; transaction_change_id: string | null; transfer_change_id: string | null; transaction_id: string | null; transfer_id: string | null; financial_account_id: string; effective_date: string; impact_kind: "reverse_previous" | "apply_current"; signed_amount: number; created_at: string };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      transaction_document_history: {
+        Row: { id: string; protected_person_id: string; transaction_id: string; transaction_change_id: string; original_document_id: string; storage_path: string; file_name: string; mime_type: string; file_size: number; original_created_by: string | null; original_created_at: string; original_updated_at: string; archived_by: string | null; archived_by_name: string; archived_at: string; archive_reason: string; proof_document_id: string | null; proof_version_id: string | null; expense_reference_assignment_id: string | null; proof_reference: string | null; availability_status: "unverified" | "available" | "missing" };
+        Insert: never; Update: never; Relationships: [];
+      };
+      transaction_proof_documents: {
+        Row: { id: string; protected_person_id: string; transaction_id: string; expense_reference_assignment_id: string; proof_reference: string; lifecycle_status: "current" | "historical"; created_by: string | null; created_at: string; detached_at: string | null; detached_by_change_id: string | null };
+        Insert: never; Update: never; Relationships: [];
+      };
+      transaction_proof_versions: {
+        Row: { id: string; proof_document_id: string; version_number: number; storage_path: string; path_kind: "legacy" | "versioned"; lifecycle_state: "current" | "historical" | "superseded_pending_deletion" | "deleted"; availability_status: "unverified" | "available" | "missing"; file_name: string; mime_type: string; file_size: number; sha256: string | null; storage_object_id: string | null; storage_object_version: string | null; created_by: string | null; created_at: string; superseded_at: string | null; replacement_operation_id: string | null };
+        Insert: never; Update: never; Relationships: [];
+      };
+      transaction_proof_replacement_retirements: {
+        Row: { id: string; proof_document_id: string; superseded_version_id: string; replacement_version_id: string; operation_id: string; state: "pending_secure_deletion" | "completed" | "attention_required"; created_at: string; completed_at: string | null };
+        Insert: never; Update: never; Relationships: [];
       };
       real_estate_properties: {
         Row: { id: string; protected_person_id: string; property_type: PropertyType; designation: string; address_line1: string | null; address_line2: string | null; postal_code: string | null; city: string | null; country: string; entry_date: string | null; entry_mode: PropertyEntryMode | null; estimated_value: number | null; valuation_date: string | null; status: PropertyStatus; disposal_date: string | null; notes: string | null; created_at: string; updated_at: string; archive_revision: number; archived_at: string | null; archived_by: string | null; archive_reason: string | null };
@@ -299,6 +329,12 @@ export type Database = {
         Update: { transaction_id?: string | null; transaction_date_snapshot?: string | null; transaction_type_snapshot?: TransactionType | null; amount_snapshot?: number | null; label_snapshot?: string | null; created_by?: string | null };
         Relationships: [];
       };
+      transaction_banking_impact_acknowledgements: {
+        Row: { id: string; impact_id: string; bank_reconciliation_id: string; justification: string; acknowledged_by: string | null; acknowledged_by_name: string; acknowledged_at: string };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       management_reports: {
         Row: { id: string; protected_person_id: string; management_period_id: string | null; report_year: number; period_start: string; period_end: string; status: ManagementReportStatus; residence_changed: boolean | null; representative_address_changed: boolean | null; real_estate_confirmed: boolean | null; financial_investments_confirmed: boolean | null; observations: string | null; signature_place: string | null; generated_at: string | null; finalized_at: string | null; transmitted_at: string | null; approved_at: string | null; difficulty_reported_at: string | null; refresh_required_at: string | null; created_by: string; created_at: string; updated_at: string };
         Insert: { id?: string; protected_person_id: string; management_period_id?: string | null; report_year: number; period_start: string; period_end: string; status?: ManagementReportStatus; residence_changed?: boolean | null; representative_address_changed?: boolean | null; real_estate_confirmed?: boolean | null; financial_investments_confirmed?: boolean | null; observations?: string | null; signature_place?: string | null; generated_at?: string | null; finalized_at?: string | null; transmitted_at?: string | null; approved_at?: string | null; difficulty_reported_at?: string | null; refresh_required_at?: string | null; created_by: string; created_at?: string; updated_at?: string };
@@ -347,6 +383,8 @@ export type Database = {
       remove_bank_reconciliation_outstanding_transaction: { Args: { p_reconciliation_id: string; p_transaction_id: string }; Returns: undefined };
       list_bank_reconciliation_candidate_transactions: { Args: { p_reconciliation_id: string; p_after_date?: string | null; p_after_created_at?: string | null; p_after_id?: string | null; p_limit?: number }; Returns: Array<{ transaction_id: string; transaction_date: string; transaction_created_at: string; transaction_type: TransactionType; label: string; amount: number; is_outstanding: boolean; carried_from_previous: boolean }> };
       get_bank_reconciliation_detailed_summary: { Args: { p_reconciliation_id: string }; Returns: Array<{ calculated_balance: number; outstanding_debits: number; outstanding_credits: number; explained_bank_balance: number; residual_difference: number; outstanding_count: number }> };
+      list_transaction_banking_impacts_for_reconciliation: { Args: { p_reconciliation_id: string }; Returns: Array<{ impact_id: string; transaction_id: string | null; impact_kind: "reverse_previous" | "apply_current"; signed_amount: number; effective_date: string; impact_created_at: string; historical_reconciliation_id: string; historical_statement_end_date: string; acknowledgement_state: "pending" | "acknowledged"; acknowledgement_id: string | null; justification: string | null; acknowledged_at: string | null }> };
+      acknowledge_transaction_banking_impact: { Args: { p_reconciliation_id: string; p_impact_id: string; p_justification: string }; Returns: Json };
       review_application_user_registration: { Args: { p_user_id: string; p_decision: "active" | "rejected" }; Returns: "active" | "rejected" };
       is_protected_person_owner: { Args: { person_id: string }; Returns: boolean };
       can_read_protected_person: { Args: { person_id: string }; Returns: boolean };
@@ -375,6 +413,14 @@ export type Database = {
       delete_empty_financial_account: { Args: { p_account_id: string }; Returns: undefined };
       delete_empty_protected_person: { Args: { p_protected_person_id: string }; Returns: undefined };
       delete_transaction_with_document: { Args: { p_transaction_id: string }; Returns: undefined };
+      create_financial_transaction: { Args: { p_protected_person_id: string; p_financial_account_id: string; p_transaction_date: string; p_transaction_type: "income" | "expense"; p_label: string; p_amount: number; p_category_id: string | null; p_official_category_id: string | null; p_classification_precision: string | null; p_comment: string | null; p_request_id: string }; Returns: Json };
+      correct_financial_transaction: { Args: { p_protected_person_id: string; p_transaction_id: string; p_expected_revision: number; p_financial_account_id: string; p_transaction_date: string; p_transaction_type: "income" | "expense"; p_label: string; p_amount: number; p_category_id: string | null; p_official_category_id: string | null; p_classification_precision: string | null; p_comment: string | null; p_reason: string; p_request_id: string }; Returns: Json };
+      cancel_financial_transaction: { Args: { p_protected_person_id: string; p_transaction_id: string; p_expected_revision: number; p_reason: string; p_request_id: string }; Returns: Json };
+      create_internal_transfer_v2: { Args: { p_protected_person_id: string; p_source_account_id: string; p_destination_account_id: string; p_transfer_date: string; p_amount: number; p_label: string | null; p_comment: string | null; p_request_id: string }; Returns: Json };
+      correct_internal_transfer: { Args: { p_protected_person_id: string; p_transfer_id: string; p_expected_revision: number; p_source_account_id: string; p_destination_account_id: string; p_transfer_date: string; p_amount: number; p_label: string | null; p_comment: string | null; p_reason: string; p_request_id: string }; Returns: Json };
+      cancel_internal_transfer_v2: { Args: { p_protected_person_id: string; p_transfer_id: string; p_expected_revision: number; p_reason: string; p_request_id: string }; Returns: Json };
+      reserve_transaction_proof_version: { Args: { p_protected_person_id: string; p_transaction_id: string; p_intent: "create" | "replace"; p_client_request_id: string }; Returns: Json };
+      finalize_transaction_proof_version: { Args: { p_operation_id: string; p_expected_operation_revision: number; p_file_name: string; p_mime_type: string; p_file_size: number; p_sha256: string; p_storage_object_id: string }; Returns: Json };
       finalize_management_report_draft_generation: { Args: { p_report_id: string; p_storage_path: string; p_file_name: string; p_mime_type: string; p_file_size: number; p_preview_snapshot: Json; p_snapshot_schema_version: number }; Returns: string };
       resume_management_report_preparation: { Args: { p_report_id: string }; Returns: undefined };
       finalize_management_report: { Args: { p_report_id: string; p_storage_path: string; p_file_name: string; p_mime_type: string; p_file_size: number; p_preview_snapshot: Json; p_snapshot_schema_version: number }; Returns: string };
@@ -432,7 +478,13 @@ export type AccountValuation = Database["public"]["Tables"]["account_valuations"
 export type Category = Database["public"]["Tables"]["categories"]["Row"];
 export type Transaction = Database["public"]["Tables"]["transactions"]["Row"];
 export type TransactionDocument = Database["public"]["Tables"]["transaction_documents"]["Row"];
+export type TransactionChange = Database["public"]["Tables"]["transaction_changes"]["Row"];
+export type TransactionDocumentHistory = Database["public"]["Tables"]["transaction_document_history"]["Row"];
+export type TransactionProofDocument = Database["public"]["Tables"]["transaction_proof_documents"]["Row"];
+export type TransactionProofVersion = Database["public"]["Tables"]["transaction_proof_versions"]["Row"];
+export type TransactionProofReplacementRetirement = Database["public"]["Tables"]["transaction_proof_replacement_retirements"]["Row"];
 export type Transfer = Database["public"]["Tables"]["transfers"]["Row"];
+export type TransferChange = Database["public"]["Tables"]["transfer_changes"]["Row"];
 export type AccountRequest = Database["public"]["Tables"]["account_requests"]["Row"];
 export type ProtectedPersonAccess = Database["public"]["Tables"]["protected_person_access"]["Row"];
 export type ProtectedPersonInvitation = Database["public"]["Tables"]["protected_person_invitations"]["Row"];

@@ -33,9 +33,10 @@ test("un exercice clôturé interdit ajout et remplacement côté service", () =
 });
 
 test("la route API existante utilise les validations et le service partagés", () => {
-  assert.match(route, /prepareProofFile\(\(await request\.formData\(\)\)\.get\("file"\), false\)/);
-  assert.match(route, /await saveTransactionProof\(protectedPersonId, transactionId, proof\)/);
-  assert.match(route, /getExpenseProofContext\(protectedPersonId, transactionId\)/);
+  assert.match(route, /const formData = await request\.formData\(\)/);
+  assert.match(route, /await saveTransactionProof\(protectedPersonId, transactionId, proof,/);
+  assert.match(route, /getTransactionProofDescriptor\(protectedPersonId, transactionId/);
+  assert.match(route, /listTransactionProofHistory\(protectedPersonId, transactionId\)/);
   assert.match(service, /protected-persons\/\$\{personId\}\/transactions\/\$\{transactionId\}/);
   assert.match(service, /storage\.upload\(path, file\.bytes/);
   assert.match(service, /\.from\("transaction_documents"\)/);
@@ -43,9 +44,10 @@ test("la route API existante utilise les validations et le service partagés", (
 });
 
 test("le champ fichier existe seulement pour une dépense en création", () => {
-  assert.match(form, /mode === "expense" && !transaction && <div[^\n]+name="proofFile" type="file"/);
+  assert.match(form, /mode === "expense" && !transaction && <ProofFileField/);
+  assert.match(form, /id="proofFile" name="proofFile" type="file"/);
   assert.match(form, /accept="application\/pdf,image\/jpeg,image\/png"/);
-  assert.match(form, /10 Mo maximum/);
+  assert.match(form, /un seul PDF, JPEG ou PNG de 10 Mo maximum/);
   assert.doesNotMatch(form, /mode === "income"[^\n]+name="proofFile"/);
   assert.doesNotMatch(form, /mode === "transfer"[^\n]+name="proofFile"/);
   assert.match(nextConfig, /bodySizeLimit: "11mb"/);
@@ -89,4 +91,26 @@ test("validation du fichier précède l'INSERT, succès complet conserve le reto
   assert.ok(validation >= 0 && creation > validation);
   assert.match(form, /!state\.proofUploadFailed\) \{ router\.push\(returnHref\); router\.refresh\(\)/);
   assert.match(form, /defaultAccountId \? `\/dossiers\/\$\{personId\}\/comptes\/\$\{defaultAccountId\}\/operations` : `\/dossiers\/\$\{personId\}\/operations`/);
+});
+
+test("une erreur récupérable conserve les champs et le fichier du formulaire", () => {
+  assert.match(form, /const \[state, formAction, pending\] = useActionState/);
+  assert.match(form, /const submit = \(event: FormEvent<HTMLFormElement>\)/);
+  assert.match(form, /event\.preventDefault\(\);[\s\S]*const formData = new FormData\(event\.currentTarget\);[\s\S]*startTransition\(\(\) => formAction\(formData\)\)/);
+  assert.match(form, /<form className="grid gap-3 sm:grid-cols-2" onSubmit=\{submit\}/);
+  assert.doesNotMatch(form, /<form action=\{formAction\}/);
+  assert.match(form, /disabled=\{pending\}/);
+  assert.doesNotMatch(form, /\.reset\(|reset\(/);
+  assert.match(action, /prepareProofFile\(formData\.get\("proofFile"\), true\)[\s\S]*createTransactionWithOptionalProof/);
+});
+
+test("le justificatif facultatif est mono-fichier, remplaçable et retirable avant création", () => {
+  assert.match(form, /const \[proofFile, setProofFile\] = useState<File \| null>\(null\)/);
+  assert.match(form, /event\.target\.files\?\.\[0\] \?\? null/);
+  assert.doesNotMatch(form, /multiple/);
+  assert.match(form, /file\?\.name \?\? "Aucun fichier sélectionné"/);
+  assert.match(form, /file \? "Remplacer" : "Choisir"/);
+  assert.match(form, /aria-label=\{`Retirer le justificatif \$\{file\.name\}`\}/);
+  assert.match(form, /inputRef\.current\.value = ""/);
+  assert.match(form, /if \(!proofFile\) formData\.delete\("proofFile"\)/);
 });

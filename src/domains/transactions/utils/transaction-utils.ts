@@ -1,6 +1,6 @@
 import type { ManagementPeriod, Transaction, TransactionType } from "@/types/database";
 export const transactionTypeLabels: Record<TransactionType, string> = { income: "Recette", expense: "Dépense", transfer_in: "Virement entrant", transfer_out: "Virement sortant" };
-export function calculateClassicBalance(initialBalance: number, transactions: Transaction[]) { return transactions.reduce((balance, item) => balance + (item.transaction_type === "income" || item.transaction_type === "transfer_in" ? item.amount : -item.amount), initialBalance); }
+export function calculateClassicBalance(initialBalance: number, transactions: Transaction[]) { return transactions.reduce((balance, item) => item.cancelled_at ? balance : balance + (item.transaction_type === "income" || item.transaction_type === "transfer_in" ? item.amount : -item.amount), initialBalance); }
 
 export function calculateRunningBalances(initialBalance: number, transactions: Transaction[]) {
   const ordered = [...transactions].sort((left, right) =>
@@ -10,7 +10,7 @@ export function calculateRunningBalances(initialBalance: number, transactions: T
   );
   let balance = initialBalance;
   return new Map(ordered.map((transaction) => {
-    balance += transaction.transaction_type === "income" || transaction.transaction_type === "transfer_in" ? transaction.amount : -transaction.amount;
+    if (!transaction.cancelled_at) balance += transaction.transaction_type === "income" || transaction.transaction_type === "transfer_in" ? transaction.amount : -transaction.amount;
     return [transaction.id, balance] as const;
   }));
 }

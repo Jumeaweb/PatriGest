@@ -1,0 +1,12 @@
+import { Download, ExternalLink, FileWarning } from "lucide-react";
+import type { TransactionProofHistoryItem } from "../services/transaction-proof-read-service";
+
+const dateTime = (value: string) => new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+const size = (value: number) => value < 1024 * 1024 ? `${Math.max(1, Math.round(value / 1024))} Ko` : `${(value / 1024 / 1024).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} Mo`;
+
+export function TransactionProofHistory({ personId, transactionId, items }: { personId: string; transactionId: string; items: TransactionProofHistoryItem[] }) {
+  const historical = items.filter((item) => item.lifecycleState !== "current");
+  if (!historical.length) return null;
+  const endpoint = `/api/dossiers/${personId}/operations/${transactionId}/justificatif`;
+  return <section className="mt-4 max-w-4xl rounded-xl border border-[#E2E8F0] bg-white p-4 sm:p-5"><h2 className="text-base font-bold">Justificatifs historiques</h2><p className="mt-1 text-xs text-[#64748B]">Ces documents sont conservés avec l’historique de l’opération et ne sont plus le justificatif courant.</p><ul className="mt-3 space-y-2">{historical.map((item) => <li key={item.id} className="rounded-lg border border-[#E2E8F0] p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><p className="truncate text-sm font-semibold">{item.fileName}</p><p className="text-xs text-[#64748B]">{item.proofReference ?? "Référence non disponible"} · {size(item.fileSize)} · {dateTime(item.createdAt)}</p></div>{item.availabilityStatus === "missing" ? <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800"><FileWarning size={13} />Document indisponible</span> : <div className="flex flex-wrap gap-1.5"><a className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" href={`${endpoint}?versionId=${item.id}`} target="_blank" rel="noreferrer"><ExternalLink size={13} />Voir</a><a className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" href={`${endpoint}?versionId=${item.id}&download=1`}><Download size={13} />Télécharger</a></div>}</div>{item.availabilityStatus === "unverified" && <p className="mt-2 text-xs text-[#64748B]">Disponibilité non vérifiée. Le téléchargement confirmera si le fichier est encore présent.</p>}</li>)}</ul></section>;
+}

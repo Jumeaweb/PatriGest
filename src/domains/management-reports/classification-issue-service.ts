@@ -23,7 +23,7 @@ export async function getReportClassificationIssueJournal(
   if (selectionResult.error || categoryResult.error) throw new Error("Impossible de charger les opérations à corriger.");
   const includedAccountIds = getIncludedReportAccountIds(accounts, selectionResult.data, report.period_start, report.period_end);
   const transactions = includedAccountIds.length
-    ? await getTransactions(personId, { startDate: report.period_start, endDate: report.period_end, reportAccountIds: includedAccountIds })
+    ? await getTransactions(personId, { startDate: report.period_start, endDate: report.period_end, reportAccountIds: includedAccountIds, includeCancelled: false })
     : [];
   return {
     report,
