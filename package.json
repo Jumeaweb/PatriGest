@@ -4,6 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:transactions-local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local/transactions-validation/start.ps1",
+    "seed:transactions-local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local/transactions-validation/seed.ps1",
+    "resume:transactions-local-proofs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local/transactions-validation/resume-proofs.ps1",
+    "repair:transactions-local-proofs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local/transactions-validation/repair-proof-fixtures.ps1",
+    "build:transactions-local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local/transactions-validation/start.ps1 -Mode build",
     "build": "next build",
     "typecheck": "tsc --noEmit",
     "start": "next start",
