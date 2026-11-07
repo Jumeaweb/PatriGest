@@ -17,6 +17,7 @@ export const DOSSIER_FEATURE_DENIAL_REASONS = [
   "not_in_plan",
   "role_forbidden",
   "operation_not_supported",
+  "trial_export_unavailable",
 ] as const;
 
 export type DossierFeatureKey = (typeof DOSSIER_FEATURE_KEYS)[number];

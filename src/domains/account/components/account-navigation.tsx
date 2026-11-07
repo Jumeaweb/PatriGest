@@ -26,13 +26,16 @@ const PROFILE_ICONS = {
   deletion: Trash2,
 } satisfies Record<AccountProfileView, typeof UserRound>;
 
-export function AccountNavigation({ current }: { current: AccountView }) {
+export function AccountNavigation({ current, subscriptionOnly = false }: { current: AccountView; subscriptionOnly?: boolean }) {
   const currentSection = getAccountSection(current);
+  const items = subscriptionOnly
+    ? ACCOUNT_VIEW_ITEMS.filter((item) => item.key === "subscription")
+    : ACCOUNT_VIEW_ITEMS;
   return (
     <nav aria-label="Navigation de mon compte" className="mt-5 border-b border-[#E2E8F0]">
       <HorizontalNavigationScroll activeKey={currentSection}>
         <div className="flex min-w-max gap-1">
-          {ACCOUNT_VIEW_ITEMS.map((item) => <AccountNavigationLink key={item.key} item={item} active={currentSection === item.key} Icon={ICONS[item.key]} />)}
+          {items.map((item) => <AccountNavigationLink key={item.key} item={item} active={currentSection === item.key} Icon={ICONS[item.key]} />)}
         </div>
       </HorizontalNavigationScroll>
     </nav>

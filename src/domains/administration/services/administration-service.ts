@@ -78,6 +78,7 @@ export async function reviewApplicationRegistration(userId: string, decision: "a
   });
   if (error) {
     if (error.message.includes("déjà été traitée")) throw new Error("Cette inscription a déjà été traitée.");
+    if (error.code === "P4T07") throw new Error("Les conditions de l’essai gratuit doivent être acceptées avant l’activation du compte.");
     throw new Error("Impossible de traiter cette inscription.");
   }
 

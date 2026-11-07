@@ -3,10 +3,14 @@ import { Archive, Clock3, CreditCard, Database, FileText, ShieldCheck } from "lu
 import { DOSSIER_CAPACITIES, PRICING_PLANS } from "@/lib/pricing";
 import type { AccountDossierCapacityResult } from "../account-dossier-capacity";
 import { AccountDossierCapacity } from "./account-dossier-capacity";
+import type { AccountTrialState } from "@/domains/trials/trial-state";
 
-export function AccountSubscriptionView({ dossierCapacity }: { dossierCapacity: AccountDossierCapacityResult | null }) {
+export function AccountSubscriptionView({ dossierCapacity, trialState }: { dossierCapacity: AccountDossierCapacityResult | null; trialState: AccountTrialState }) {
   return <AccountServicePanel icon={CreditCard} title="Abonnement" description="Les abonnements PatriGest ne sont pas encore disponibles.">
-    <AvailabilityNotice>Votre compte ne dispose actuellement d’aucun forfait attribué. Aucune date de renouvellement, capacité souscrite ou information de paiement n’est affichée.</AvailabilityNotice>
+    <AccountTrialNotice trialState={trialState} />
+    <AvailabilityNotice>{trialState.state === "subscribed"
+      ? "Un abonnement actif couvre actuellement votre accès. Aucun détail de paiement ou de renouvellement non vérifié n’est affiché."
+      : "Votre compte ne dispose actuellement d’aucun forfait attribué. Aucune date de renouvellement, capacité souscrite ou information de paiement n’est affichée."}</AvailabilityNotice>
     {dossierCapacity && <AccountDossierCapacity result={dossierCapacity} />}
     <div className="mt-5 grid gap-3 lg:grid-cols-3">
       {PRICING_PLANS.map((plan) => <article key={plan.id} className="rounded-xl border border-[#E2E8F0] bg-slate-50 p-4">
@@ -27,6 +31,44 @@ export function AccountSubscriptionView({ dossierCapacity }: { dossierCapacity: 
     </div>
     <Link href="/tarifs" className="button button-secondary mt-5 w-full sm:w-auto">Voir tous les tarifs</Link>
   </AccountServicePanel>;
+}
+
+function AccountTrialNotice({ trialState }: { trialState: AccountTrialState }) {
+  const formatDate = (value: string | null) => value
+    ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "long", timeZone: "Europe/Paris" }).format(new Date(value))
+    : null;
+
+  if (trialState.state === "active") {
+    return <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/70 p-4 text-sm leading-6 text-blue-950" role="status">
+      <p className="font-bold">Essai gratuit actif — {trialState.remainingDays} {trialState.remainingDays === 1 ? "jour restant" : "jours restants"}</p>
+      <p className="mt-1">Fin de l’essai : {formatDate(trialState.endsAt)}. Limite : {trialState.activeDossierLimit} dossiers actifs.</p>
+      <p className="mt-1 text-xs">Dossiers actifs actuellement : {trialState.activeDossierCount}.</p>
+    </div>;
+  }
+
+  if (trialState.state === "suspended") {
+    return <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-950" role="alert">
+      <p className="font-bold">Votre essai est terminé : les dossiers et fonctions métier sont suspendus.</p>
+      <p className="mt-1">Vous pouvez souscrire jusqu’au {formatDate(trialState.deletionEligibleAt)}. Passé ce délai, le compte et les données de l’essai deviendront éligibles à la suppression.</p>
+    </div>;
+  }
+
+  if (trialState.state === "deletion_due") {
+    return <div className="mt-4 rounded-xl border border-red-300 bg-red-50 p-4 text-sm leading-6 text-red-950" role="alert">
+      <p className="font-bold">Compte en attente de suppression.</p>
+      <p className="mt-1">La période supplémentaire de 30 jours est écoulée. L’essai ne peut pas être réactivé. Aucune suppression automatique n’est exécutée dans cette version.</p>
+    </div>;
+  }
+
+  if (trialState.state === "awaiting_activation") {
+    return <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700" role="status">Les conditions de l’essai sont enregistrées. Les 30 jours commenceront lors de la validation du compte.</div>;
+  }
+
+  if (trialState.state === "subscribed") {
+    return <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm leading-6 text-green-950" role="status">Un abonnement actif a été confirmé côté serveur. La période d’essai n’impose plus de suspension.</div>;
+  }
+
+  return null;
 }
 
 export function AccountInvoicesView() {

@@ -21,6 +21,7 @@ export type SharedAccessRole = Exclude<DossierAccessRole, "owner">;
 type AccountRequestStatus = "pending" | "approved" | "rejected";
 export type ApplicationUserAuthorizationStatus = "pending" | "active" | "rejected";
 export type AccountMode = "autonomous" | "collaborator";
+export type AccountTrialStateName = "not_authorized" | "terms_required" | "awaiting_activation" | "active" | "suspended" | "deletion_due" | "subscribed" | "legacy_access";
 export type ReleaseNotificationDeliveryKind = "test" | "global";
 export type ReleaseNotificationStatus = "pending" | "sending" | "sent" | "failed";
 export type PropertyType = "house" | "apartment" | "land" | "commercial" | "other";
@@ -376,6 +377,8 @@ export type Database = {
     Functions: {
       is_platform_admin: { Args: Record<string, never>; Returns: boolean };
       is_application_user_active: { Args: Record<string, never>; Returns: boolean };
+      record_account_trial_terms_acceptance: { Args: { p_user_id: string; p_terms_version: string }; Returns: undefined };
+      get_current_account_trial_state: { Args: Record<string, never>; Returns: Array<{ state: AccountTrialStateName; terms_version: string | null; terms_accepted_at: string | null; started_at: string | null; ends_at: string | null; deletion_eligible_at: string | null; remaining_days: number; active_dossier_limit: number; active_dossier_count: number; enforcement_enabled: boolean }> };
       get_infrastructure_usage_metrics: { Args: Record<string, never>; Returns: Array<{ database_size_bytes: number; storage_size_bytes: number }> };
       check_own_email_change_availability: { Args: { p_new_email: string }; Returns: boolean };
       activate_complete_bank_reconciliation: { Args: { p_reconciliation_id: string }; Returns: Database["public"]["Tables"]["bank_reconciliations"]["Row"] };

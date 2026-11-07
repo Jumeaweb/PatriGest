@@ -71,6 +71,7 @@ test("les contrats exposent exactement les cinq fonctionnalités et les deux mod
     "not_in_plan",
     "role_forbidden",
     "operation_not_supported",
+    "trial_export_unavailable",
   ]);
 });
 

@@ -17,6 +17,8 @@ import { PasswordForm } from "@/domains/account/components/password-form";
 import { ProfileForm } from "@/domains/account/components/profile-form";
 import { getAccountData } from "@/domains/account/services";
 import { getOwnedDossierCapacity } from "@/domains/subscriptions/services";
+import { getCurrentAccountTrialState } from "@/domains/trials/services";
+import { isAccountTrialRestricted } from "@/domains/trials/trial-state";
 
 export const metadata: Metadata = { title: "Mon compte" };
 export const dynamic = "force-dynamic";
@@ -27,7 +29,9 @@ export default async function AccountPage({
   searchParams: Promise<{ vue?: string | string[] }>;
 }) {
   const query = await searchParams;
-  const current = getAccountView(query.vue);
+  const trialState = await getCurrentAccountTrialState();
+  const trialRestricted = trialState.enforcementEnabled && isAccountTrialRestricted(trialState.state);
+  const current = trialRestricted ? "subscription" : getAccountView(query.vue);
   const currentProfileView = isAccountProfileView(current) ? current : null;
   const [account, accessContext] = await Promise.all([
     getAccountData(),
@@ -53,7 +57,7 @@ export default async function AccountPage({
           <p className="mt-1 text-sm text-[#64748B]">Gérez votre profil et consultez les futurs services liés à votre compte.</p>
         </header>
 
-        <AccountNavigation current={current} />
+        <AccountNavigation current={current} subscriptionOnly={trialRestricted} />
         {currentProfileView && <AccountProfileNavigation current={currentProfileView} />}
 
         <div className="mt-5">
@@ -105,7 +109,7 @@ export default async function AccountPage({
             </section>
           )}
 
-          {current === "subscription" && <AccountSubscriptionView dossierCapacity={dossierCapacity} />}
+          {current === "subscription" && <AccountSubscriptionView dossierCapacity={dossierCapacity} trialState={trialState} />}
           {current === "invoices" && <AccountInvoicesView />}
           {current === "cancellation" && <AccountCancellationView />}
           {current === "data" && <AccountDataView />}

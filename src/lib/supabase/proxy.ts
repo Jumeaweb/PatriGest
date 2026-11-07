@@ -32,7 +32,7 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const pathname = request.nextUrl.pathname;
   const isAccessWaitingRoute = pathname.startsWith("/acces-en-attente");
-  const isProtectedRoute = ["/tableau-de-bord", "/dossiers", "/administration", "/parametres", "/mon-compte", "/historique-versions", "/api/dossiers"].some((path) =>
+  const isProtectedRoute = ["/tableau-de-bord", "/dossiers", "/administration", "/parametres", "/mon-compte", "/historique-versions", "/invitations", "/api"].some((path) =>
     pathname.startsWith(path),
   );
 
@@ -45,9 +45,10 @@ export async function updateSession(request: NextRequest) {
 
   if (data?.claims) {
     const userId = data.claims.sub;
-    const [{ data: administrator }, { data: authorization }] = await Promise.all([
+    const [{ data: administrator }, { data: authorization }, trialStateResult] = await Promise.all([
       supabase.from("platform_administrators").select("user_id").eq("user_id", userId).maybeSingle(),
       supabase.from("application_user_authorizations").select("status").eq("user_id", userId).maybeSingle(),
+      supabase.rpc("get_current_account_trial_state"),
     ]);
     const hasApplicationAccess = Boolean(administrator) || authorization?.status === "active";
 
@@ -56,6 +57,27 @@ export async function updateSession(request: NextRequest) {
       waitingUrl.pathname = "/acces-en-attente";
       waitingUrl.search = "";
       return NextResponse.redirect(waitingUrl);
+    }
+
+    const trialState = trialStateResult.data?.[0];
+    const trialRestricted = !administrator
+      && trialState?.enforcement_enabled === true
+      && (trialState.state === "suspended" || trialState.state === "deletion_due");
+    if (isProtectedRoute && trialRestricted) {
+      if (pathname.startsWith("/api")) {
+        return NextResponse.json(
+          { error: "L’accès métier est suspendu. Consultez votre abonnement." },
+          { status: 403 },
+        );
+      }
+      const isSubscriptionRoute = pathname === "/parametres/compte"
+        && request.nextUrl.searchParams.get("vue") === "abonnement";
+      if (!isSubscriptionRoute) {
+        const subscriptionUrl = request.nextUrl.clone();
+        subscriptionUrl.pathname = "/parametres/compte";
+        subscriptionUrl.search = "?vue=abonnement";
+        return NextResponse.redirect(subscriptionUrl);
+      }
     }
 
     if (isAccessWaitingRoute && hasApplicationAccess) {

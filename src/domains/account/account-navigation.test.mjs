@@ -37,10 +37,11 @@ test("construit les destinations canoniques de chaque vue", () => {
   assert.equal(getAccountViewHref("data"), "/parametres/compte?vue=donnees");
 });
 
-test("rend une seule vue contextuelle et la même navigation pour tous les comptes", () => {
+test("rend une seule vue contextuelle et limite un compte suspendu à l'abonnement", () => {
   const page = readFileSync(new URL("../../app/parametres/compte/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /const current = getAccountView\(query\.vue\)/);
-  assert.match(page, /<AccountNavigation current=\{current\} \/>/);
+  assert.match(page, /trialState\.enforcementEnabled && isAccountTrialRestricted/);
+  assert.match(page, /const current = trialRestricted \? "subscription" : getAccountView\(query\.vue\)/);
+  assert.match(page, /<AccountNavigation current=\{current\} subscriptionOnly=\{trialRestricted\} \/>/);
   assert.match(page, /current === "profile"/);
   assert.match(page, /current === "email"/);
   assert.match(page, /current === "security"/);

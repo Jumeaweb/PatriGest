@@ -20,6 +20,7 @@ import type { AuthActionState } from "@/lib/auth/state";
 import { createClient } from "@/lib/supabase/server";
 import { markSignupInvitationUsed, validateSignupInvitation } from "@/domains/access/actions";
 import { getInvitationPreview, hasRecoverableDossierInvitations } from "@/domains/access/services";
+import { recordAccountTrialTermsAcceptance } from "@/domains/trials/services";
 
 const emailSchema = z.email("Saisissez une adresse email valide.").trim();
 const passwordSchema = z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères.").max(72, "Le mot de passe ne peut pas dépasser 72 caractères.");
@@ -30,6 +31,9 @@ const signupSchema = z.object({
   lastName: z.string().trim().min(1, "Saisissez votre nom.").max(80),
   password: passwordSchema,
   passwordConfirmation: z.string(),
+  trialTermsAccepted: z.literal("on", {
+    error: "Acceptez les conditions de l’essai gratuit pour poursuivre.",
+  }),
 }).refine((data) => data.password === data.passwordConfirmation, {
   message: "Les mots de passe ne correspondent pas.",
   path: ["passwordConfirmation"],
@@ -95,6 +99,7 @@ export async function signupAction(_state: AuthActionState, formData: FormData):
     lastName: formData.get("lastName"),
     password: formData.get("password"),
     passwordConfirmation: formData.get("passwordConfirmation"),
+    trialTermsAccepted: formData.get("trialTermsAccepted"),
   });
   if (!parsed.success) return validationError(parsed.error);
   const normalizedEmail = parsed.data.email.toLowerCase();
@@ -134,6 +139,16 @@ export async function signupAction(_state: AuthActionState, formData: FormData):
     return { status: "error", message: getAuthErrorMessage(error, "Impossible de créer le compte. Réessayez dans quelques instants.") };
   }
   const accountWasCreated = Boolean(signupData.user?.identities?.length);
+  if (accountWasCreated && signupData.user) {
+    try {
+      await recordAccountTrialTermsAcceptance(signupData.user.id);
+    } catch {
+      return {
+        status: "error",
+        message: "Impossible d’enregistrer les conditions de l’essai. Aucun accès n’a été activé. Contactez le support avant de réessayer.",
+      };
+    }
+  }
   if (accountWasCreated && invitation?.kind === "account" && invitationToken?.success) await markSignupInvitationUsed(invitationToken.data);
   return { status: "success", message: "Confirmez votre adresse e-mail pour transmettre votre inscription à validation.", email: normalizedEmail };
 }

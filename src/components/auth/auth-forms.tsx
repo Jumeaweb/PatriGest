@@ -80,6 +80,22 @@ export function SignupForm({ invitationToken, email, firstName, lastName }: { in
       <Field id="password" label="Mot de passe" type="password" autoComplete="new-password" errors={state.fieldErrors?.password} />
       <Field id="passwordConfirmation" label="Confirmation du mot de passe" type="password" autoComplete="new-password" errors={state.fieldErrors?.passwordConfirmation} />
       <p className="text-xs leading-5 text-[#64748B]">Utilisez au moins 8 caractères. Un mot de passe long et unique protège mieux vos données.</p>
+      <div>
+        <label className="flex items-start gap-3 rounded-xl border border-[#CBD5E1] bg-slate-50 p-3 text-sm leading-6 text-[#334155]" htmlFor="trialTermsAccepted">
+          <input
+            id="trialTermsAccepted"
+            name="trialTermsAccepted"
+            type="checkbox"
+            className="mt-1 size-4 shrink-0 accent-[#2563EB]"
+            aria-invalid={Boolean(state.fieldErrors?.trialTermsAccepted?.length)}
+            aria-describedby="trialTermsAccepted-description trialTermsAccepted-error"
+          />
+          <span id="trialTermsAccepted-description">
+            J’accepte l’essai gratuit de 30 jours, limité à 2 dossiers actifs. Sans abonnement, l’accès métier sera suspendu à son terme. Je disposerai alors de 30 jours supplémentaires pour souscrire avant que le compte et les données de l’essai deviennent éligibles à la suppression. L’export d’archive n’est pas disponible pendant l’essai et aucune récupération n’est possible après suppression, sous réserve des obligations légales applicables.
+          </span>
+        </label>
+        <div id="trialTermsAccepted-error"><FieldError messages={state.fieldErrors?.trialTermsAccepted} /></div>
+      </div>
       <FormMessage state={state} />
       <SubmitButton pendingLabel="Création…">{invitationToken ? "Créer ou finaliser mon compte" : "Créer mon compte"}</SubmitButton>
       <p className="text-center text-sm text-[#64748B]">Déjà inscrit ? <Link className="auth-link" href={loginHref}>Se connecter</Link></p>
