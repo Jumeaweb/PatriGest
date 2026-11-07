@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { DossierCapacityServiceError } from "@/domains/subscriptions/dossier-capacity";
+import { getCurrentAccountTrialState } from "@/domains/trials/services";
 import {
   protectedPersonArchiveTransitionSchema,
   ProtectedPersonArchiveTransitionError,
@@ -140,6 +141,19 @@ export async function createProtectedPersonAction(
   try {
     person = await createProtectedPerson(parsed.data);
   } catch (error) {
+    if (error instanceof DossierCapacityServiceError && error.code === "quota_reached") {
+      try {
+        const trial = await getCurrentAccountTrialState();
+        if (trial.state === "active") {
+          return {
+            status: "error",
+            message: `Limite de votre essai gratuit atteinte. Votre essai gratuit vous permet de gérer jusqu'à ${trial.activeDossierLimit} dossiers actifs. Vous avez atteint cette limite.`,
+          };
+        }
+      } catch {
+        // Conserver le message habituel si le statut d'essai est indisponible.
+      }
+    }
     if (error instanceof AccountModeConflictError || error instanceof DossierCapacityServiceError) {
       return { status: "error", message: error.message };
     }

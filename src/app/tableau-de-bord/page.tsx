@@ -5,6 +5,7 @@ import { ArrowRight, CalendarDays, UserRound } from "lucide-react";
 import { PrivateShell } from "@/components/layout/private-shell";
 import { getPrivateAccessContext } from "@/domains/administration/services/private-access-context";
 import { getDashboardData, type DashboardDossier, type DashboardReportSummary, type DashboardTask } from "@/domains/dashboard/services/dashboard-service";
+import { getCurrentAccountTrialState } from "@/domains/trials/services";
 import { formatFinancialDate } from "@/domains/financial-accounts/utils/financial-account-utils";
 
 export const metadata: Metadata = { title: "Tableau de bord" };
@@ -16,9 +17,32 @@ const reportStatusLabels = { draft: "En préparation", ready: "Prêt", generated
 export default async function DashboardPage() {
   const { isPlatformAdmin, canCreateDossier } = await getPrivateAccessContext();
   if (isPlatformAdmin) redirect("/administration");
-  const data = await getDashboardData();
+  const [data, trial] = await Promise.all([
+    getDashboardData(),
+    getCurrentAccountTrialState(),
+  ]);
   return <PrivateShell current="dashboard">
     <header><p className="text-sm font-semibold text-[#64748B]">{data.firstName ? `Bonjour, ${data.firstName}` : "Bonjour"}</p><h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">Tableau de bord</h1><p className="mt-1 text-sm text-[#64748B]">Suivez vos dossiers et les prochaines actions à traiter.</p></header>
+    {trial.state === "active" && trial.endsAt && (
+      <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-slate-700">
+        <p className="font-semibold text-blue-900">
+          Votre essai gratuit est en cours
+        </p>
+        <p className="mt-1">
+          Il vous reste <strong>{trial.remainingDays} jours</strong> d'essai,
+          jusqu'au <strong>{new Intl.DateTimeFormat("fr-FR", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+            timeZone: "Europe/Paris",
+          }).format(new Date(trial.endsAt))}</strong>.
+          Vous pouvez gérer jusqu'à <strong>{trial.activeDossierLimit} dossiers actifs</strong>.
+        </p>
+        <Link href="/parametres/compte?vue=abonnement" className="mt-2 inline-block font-semibold text-blue-700 hover:underline">
+          Consulter mon abonnement →
+        </Link>
+      </div>
+    )}
     <div className="mt-5 grid items-start gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(19rem,0.85fr)]">
       <DossiersSection dossiers={data.dossiers} dossierCount={data.activeDossierCount} canCreate={canCreateDossier} />
       <TasksSection tasks={data.tasks} />

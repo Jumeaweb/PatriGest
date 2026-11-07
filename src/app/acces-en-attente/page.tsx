@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { logoutAction } from "@/app/(auth)/actions";
 import { hasRecoverableDossierInvitations } from "@/domains/access/services";
@@ -7,7 +8,12 @@ import { createClient } from "@/lib/supabase/server";
 export const metadata: Metadata = { title: "Accès en attente" };
 export const dynamic = "force-dynamic";
 
-export default async function AccessWaitingPage() {
+export default async function AccessWaitingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ verification?: string }>;
+}) {
+  const { verification } = await searchParams;
   const supabase = await createClient();
   const { data: claims } = await supabase.auth.getClaims();
   const userId = claims?.claims?.sub;
@@ -40,8 +46,14 @@ export default async function AccessWaitingPage() {
           : "Votre adresse e-mail a bien été confirmée. Votre inscription doit maintenant être validée avant que vous puissiez accéder à PatriGest."}
       </p>
       {!rejected && <p className="mt-2 text-sm leading-6 text-[#64748B]">Vous recevrez un e-mail dès que votre accès sera activé.</p>}
+      {!rejected && verification === "1" && (
+        <p role="status" className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
+          Votre compte est toujours en attente de validation par l'administrateur.
+          Vous recevrez un e-mail dès son activation. Pensez à vérifier également vos courriers indésirables.
+        </p>
+      )}
       <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
-        {!rejected && <a href="/tableau-de-bord" className="button button-primary">Vérifier mon accès</a>}
+        {!rejected && <Link href="/acces-en-attente?verification=1" prefetch={false} className="button button-primary">Vérifier mon accès</Link>}
         <form action={logoutAction}><button type="submit" className="button button-secondary">Se déconnecter</button></form>
       </div>
     </section>
