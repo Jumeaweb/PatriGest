@@ -22,6 +22,20 @@ type AccountRequestStatus = "pending" | "approved" | "rejected";
 export type ApplicationUserAuthorizationStatus = "pending" | "active" | "rejected";
 export type AccountMode = "autonomous" | "collaborator";
 export type AccountTrialStateName = "not_authorized" | "terms_required" | "awaiting_activation" | "active" | "suspended" | "deletion_due" | "subscribed" | "legacy_access";
+export type SubscriptionPlanKey = "essential" | "comfort" | "premium";
+export type SubscriptionDossierCapacityKey = "included" | "five" | "ten" | "custom";
+export type AccountSubscriptionStatus = "development" | "active" | "past_due" | "canceled" | "ended";
+export type AccountEntitlementAccessSource = "none" | "commercial" | "administrative" | "trial" | "legacy" | "development" | "shared_access";
+export type AdministrativeBillingPeriod = "monthly" | "annual";
+export type AdministrativeDossierCapacityKey = "included" | "five" | "ten";
+export type AdministrativeEntitlementBlockCode =
+  | "platform_administrator"
+  | "authorization_inactive"
+  | "account_not_autonomous"
+  | "purge_in_progress"
+  | "commercial_subscription_active"
+  | "active_override_must_be_revoked"
+  | "entitlement_base_required";
 export type ReleaseNotificationDeliveryKind = "test" | "global";
 export type ReleaseNotificationStatus = "pending" | "sending" | "sent" | "failed";
 export type PropertyType = "house" | "apartment" | "land" | "commercial" | "other";
@@ -50,6 +64,40 @@ export type Database = {
         Row: { user_id: string; status: ApplicationUserAuthorizationStatus; account_mode: AccountMode | null; status_changed_at: string; status_changed_by: string | null; created_at: string; updated_at: string };
         Insert: { user_id: string; status?: ApplicationUserAuthorizationStatus; account_mode?: AccountMode | null; status_changed_at?: string; status_changed_by?: string | null; created_at?: string; updated_at?: string };
         Update: { status?: ApplicationUserAuthorizationStatus; account_mode?: AccountMode | null; status_changed_at?: string; status_changed_by?: string | null; updated_at?: string };
+        Relationships: [];
+      };
+      account_subscriptions: {
+        Row: {
+          id: string;
+          owner_id: string;
+          plan_key: SubscriptionPlanKey | null;
+          dossier_capacity_key: SubscriptionDossierCapacityKey | null;
+          custom_active_dossier_limit: number | null;
+          status: AccountSubscriptionStatus;
+          started_at: string;
+          current_period_started_at: string | null;
+          current_period_ends_at: string | null;
+          canceled_at: string | null;
+          ended_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          plan_key?: SubscriptionPlanKey | null;
+          dossier_capacity_key?: SubscriptionDossierCapacityKey | null;
+          custom_active_dossier_limit?: number | null;
+          status?: AccountSubscriptionStatus;
+          started_at?: string;
+          current_period_started_at?: string | null;
+          current_period_ends_at?: string | null;
+          canceled_at?: string | null;
+          ended_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["account_subscriptions"]["Insert"]>;
         Relationships: [];
       };
       protected_persons: {
@@ -379,6 +427,32 @@ export type Database = {
       is_application_user_active: { Args: Record<string, never>; Returns: boolean };
       record_account_trial_terms_acceptance: { Args: { p_user_id: string; p_terms_version: string }; Returns: undefined };
       get_current_account_trial_state: { Args: Record<string, never>; Returns: Array<{ state: AccountTrialStateName; terms_version: string | null; terms_accepted_at: string | null; started_at: string | null; ends_at: string | null; deletion_eligible_at: string | null; remaining_days: number; active_dossier_limit: number; active_dossier_count: number; enforcement_enabled: boolean }> };
+      list_administrative_account_trial_states: { Args: { p_user_ids: string[] }; Returns: Array<{ user_id: string; state: AccountTrialStateName; started_at: string | null; ends_at: string | null; deletion_eligible_at: string | null }> };
+      list_administrative_account_entitlement_states: {
+        Args: { p_user_ids: string[] };
+        Returns: Array<{
+          user_id: string;
+          access_source: AccountEntitlementAccessSource;
+          commercial_subscription_id: string | null;
+          base_plan_key: SubscriptionPlanKey | null;
+          effective_plan_key: SubscriptionPlanKey | null;
+          base_active_dossier_limit: number | null;
+          effective_active_dossier_limit: number | null;
+          active_dossier_count: number;
+          administrative_assignment_id: string | null;
+          administrative_assignment_revision: number | null;
+          administrative_plan_key: SubscriptionPlanKey | null;
+          administrative_billing_period: AdministrativeBillingPeriod | null;
+          administrative_dossier_capacity_key: AdministrativeDossierCapacityKey | null;
+          administrative_override_id: string | null;
+          administrative_override_revision: number | null;
+          administrative_override_base_source: "commercial" | "administrative" | null;
+          administrative_override_feature_plan_key: SubscriptionPlanKey | null;
+          administrative_override_dossier_capacity_key: Exclude<AdministrativeDossierCapacityKey, "included"> | null;
+          plan_assignment_block_code: AdministrativeEntitlementBlockCode | null;
+          entitlement_override_block_code: AdministrativeEntitlementBlockCode | null;
+        }>;
+      };
       get_infrastructure_usage_metrics: { Args: Record<string, never>; Returns: Array<{ database_size_bytes: number; storage_size_bytes: number }> };
       check_own_email_change_availability: { Args: { p_new_email: string }; Returns: boolean };
       activate_complete_bank_reconciliation: { Args: { p_reconciliation_id: string }; Returns: Database["public"]["Tables"]["bank_reconciliations"]["Row"] };

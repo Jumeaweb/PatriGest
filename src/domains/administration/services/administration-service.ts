@@ -3,7 +3,19 @@ import { notFound } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import type { AccountMode, ApplicationUserAuthorizationStatus, SharedAccessRole } from "@/types/database";
+import type {
+  AccountMode,
+  AccountEntitlementAccessSource,
+  AccountSubscriptionStatus,
+  AccountTrialStateName,
+  AdministrativeBillingPeriod,
+  AdministrativeDossierCapacityKey,
+  AdministrativeEntitlementBlockCode,
+  ApplicationUserAuthorizationStatus,
+  SharedAccessRole,
+  SubscriptionDossierCapacityKey,
+  SubscriptionPlanKey,
+} from "@/types/database";
 import { sendApplicationActivationEmail } from "../registration-email";
 import { isAdminAccountDeletionDurableNeutralizationEnabled } from "../administrative-account-deletion-durable-availability";
 import { deletePlatformUserWithDurableNeutralization } from "../administrative-account-deletion-durable";
@@ -117,8 +129,51 @@ export type PlatformUserSummary = {
   lastName: string;
   emailConfirmed: boolean;
   ownedDossiers: number;
+  activeOwnedDossiers: number;
   authorizationStatus: ApplicationUserAuthorizationStatus | undefined;
   accountMode: AccountMode | null;
+  isPlatformAdmin: boolean;
+  accountAccessKind: "platform_administrator" | "commercial_subscription" | "trial_active" | "trial_expired" | "legacy_access" | "trial_pending" | "not_authorized";
+  trial: {
+    state: AccountTrialStateName;
+    startedAt: string | null;
+    endsAt: string | null;
+    deletionEligibleAt: string | null;
+  } | null;
+  subscription: {
+    id: string;
+    planKey: SubscriptionPlanKey | null;
+    dossierCapacityKey: SubscriptionDossierCapacityKey | null;
+    customActiveDossierLimit: number | null;
+    status: AccountSubscriptionStatus;
+    currentPeriodStartedAt: string | null;
+    currentPeriodEndsAt: string | null;
+    canceledAt: string | null;
+  } | null;
+  entitlements: {
+    accessSource: AccountEntitlementAccessSource;
+    basePlanKey: SubscriptionPlanKey | null;
+    effectivePlanKey: SubscriptionPlanKey | null;
+    baseActiveDossierLimit: number | null;
+    effectiveActiveDossierLimit: number | null;
+    activeDossierCount: number;
+    planAssignmentBlockCode: AdministrativeEntitlementBlockCode | null;
+    entitlementOverrideBlockCode: AdministrativeEntitlementBlockCode | null;
+    administrativeAssignment: {
+      id: string;
+      revision: number;
+      planKey: SubscriptionPlanKey;
+      billingPeriod: AdministrativeBillingPeriod;
+      dossierCapacityKey: AdministrativeDossierCapacityKey;
+    } | null;
+    administrativeOverride: {
+      id: string;
+      revision: number;
+      baseSource: "commercial" | "administrative";
+      featurePlanKey: SubscriptionPlanKey | null;
+      dossierCapacityKey: Exclude<AdministrativeDossierCapacityKey, "included"> | null;
+    } | null;
+  } | null;
   sharedAccesses: Array<{ protectedPersonId: string; protectedPersonName: string; role: SharedAccessRole }>;
   canResendActivationEmail: boolean;
   canDelete: boolean;
@@ -126,7 +181,7 @@ export type PlatformUserSummary = {
 };
 
 export async function getPlatformUsers(requestedPage = 1) {
-  const { userId: currentUserId } = await requirePlatformAdministrator();
+  const { supabase, userId: currentUserId } = await requirePlatformAdministrator();
   const admin = createAdminClient();
   const firstResult = await admin.auth.admin.listUsers({ page: requestedPage, perPage: ADMIN_USERS_PAGE_SIZE });
   if (firstResult.error) throw new Error("Impossible de charger les utilisateurs.");
@@ -141,10 +196,13 @@ export async function getPlatformUsers(requestedPage = 1) {
   const now = new Date().toISOString();
   const results = await Promise.all([
     ids.length ? admin.from("profiles").select("id,first_name,last_name").in("id", ids) : Promise.resolve({ data: [] }),
-    ids.length ? admin.from("protected_persons").select("id,owner_id").in("owner_id", ids) : Promise.resolve({ data: [] }),
+    ids.length ? admin.from("protected_persons").select("id,owner_id,status").in("owner_id", ids) : Promise.resolve({ data: [] }),
     ids.length ? admin.from("platform_administrators").select("user_id,appointed_by").in("user_id", ids) : Promise.resolve({ data: [] }),
     ids.length ? admin.from("platform_administrators").select("user_id,appointed_by").in("appointed_by", ids) : Promise.resolve({ data: [] }),
     ids.length ? admin.from("application_user_authorizations").select("user_id,status,account_mode").in("user_id", ids) : Promise.resolve({ data: [] }),
+    ids.length ? supabase.rpc("list_administrative_account_trial_states", { p_user_ids: ids }) : Promise.resolve({ data: [] }),
+    ids.length ? supabase.rpc("list_administrative_account_entitlement_states", { p_user_ids: ids }) : Promise.resolve({ data: [] }),
+    ids.length ? supabase.from("account_subscriptions").select("id,owner_id,plan_key,dossier_capacity_key,custom_active_dossier_limit,status,current_period_started_at,current_period_ends_at,canceled_at").in("owner_id", ids).is("ended_at", null) : Promise.resolve({ data: [] }),
     ids.length ? admin.from("protected_person_access").select("user_id,protected_person_id,role").in("user_id", ids) : Promise.resolve({ data: [] }),
     ids.length ? admin.from("protected_person_invitations").select("invited_by,email").in("invited_by", ids).is("accepted_at", null).is("revoked_at", null).gt("expires_at", now) : Promise.resolve({ data: [] }),
     emails.length ? admin.from("protected_person_invitations").select("invited_by,email").in("email", emails).is("accepted_at", null).is("revoked_at", null).gt("expires_at", now) : Promise.resolve({ data: [] }),
@@ -159,7 +217,7 @@ export async function getPlatformUsers(requestedPage = 1) {
     ids.length ? admin.from("management_report_account_selections").select("created_by").in("created_by", ids) : Promise.resolve({ data: [] }),
   ]);
   if (results.some((result) => "error" in result && result.error)) throw new Error("Impossible de charger les informations des utilisateurs.");
-  const [profilesResult, ownedResult, administratorsResult, appointedResult, authorizationsResult, accessesResult, invitationsByUserResult, invitationsByEmailResult, ...businessResults] = results;
+  const [profilesResult, ownedResult, administratorsResult, appointedResult, authorizationsResult, trialsResult, entitlementsResult, subscriptionsResult, accessesResult, invitationsByUserResult, invitationsByEmailResult, ...businessResults] = results;
   const profiles = profilesResult.data ?? [];
   const owned = ownedResult.data ?? [];
   const administrators = administratorsResult.data ?? [];
@@ -174,10 +232,17 @@ export async function getPlatformUsers(requestedPage = 1) {
 
   const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
   const counts = new Map<string, number>();
+  const activeCounts = new Map<string, number>();
   for (const person of owned ?? []) counts.set(person.owner_id, (counts.get(person.owner_id) ?? 0) + 1);
+  for (const person of owned ?? []) {
+    if (person.status === "active") activeCounts.set(person.owner_id, (activeCounts.get(person.owner_id) ?? 0) + 1);
+  }
   const administratorIds = new Set((administrators ?? []).map((administrator) => administrator.user_id));
   const appointedByIds = new Set((appointed ?? []).flatMap((administrator) => administrator.appointed_by ? [administrator.appointed_by] : []));
   const authorizationById = new Map((authorizations ?? []).map((authorization) => [authorization.user_id, authorization]));
+  const trialByUserId = new Map((trialsResult.data ?? []).map((trial) => [trial.user_id, trial]));
+  const entitlementByUserId = new Map((entitlementsResult.data ?? []).map((entitlement) => [entitlement.user_id, entitlement]));
+  const subscriptionByOwnerId = new Map((subscriptionsResult.data ?? []).map((subscription) => [subscription.owner_id, subscription]));
   const personById = new Map((personResult.data ?? []).map((person) => [person.id, person]));
   const activeInvitationUserIds = new Set((invitationsByUserResult.data ?? []).flatMap((invitation) => invitation.invited_by ? [invitation.invited_by] : []));
   const activeInvitationEmails = new Set((invitationsByEmailResult.data ?? []).map((invitation) => invitation.email.trim().toLowerCase()));
@@ -191,6 +256,10 @@ export async function getPlatformUsers(requestedPage = 1) {
 
   const summaries: PlatformUserSummary[] = users.map((user) => {
     const authorization = authorizationById.get(user.id);
+    const trial = trialByUserId.get(user.id);
+    const subscription = subscriptionByOwnerId.get(user.id);
+    const entitlement = entitlementByUserId.get(user.id);
+    const isPlatformAdmin = administratorIds.has(user.id);
     const sharedAccesses = accesses.filter((access) => access.user_id === user.id).map((access) => {
       const person = personById.get(access.protected_person_id);
       return {
@@ -215,8 +284,73 @@ export async function getPlatformUsers(requestedPage = 1) {
       lastName: profileById.get(user.id)?.last_name ?? "",
       emailConfirmed: Boolean(user.email_confirmed_at),
       ownedDossiers: counts.get(user.id) ?? 0,
+      activeOwnedDossiers: activeCounts.get(user.id) ?? 0,
       authorizationStatus: authorization?.status,
       accountMode: authorization?.account_mode ?? null,
+      isPlatformAdmin,
+      accountAccessKind: isPlatformAdmin
+        ? "platform_administrator"
+        : trial?.state === "subscribed"
+          ? "commercial_subscription"
+          : trial?.state === "active"
+            ? "trial_active"
+            : trial?.state === "suspended" || trial?.state === "deletion_due"
+              ? "trial_expired"
+              : trial?.state === "legacy_access"
+                ? "legacy_access"
+                : trial?.state === "terms_required" || trial?.state === "awaiting_activation"
+                  ? "trial_pending"
+                  : "not_authorized",
+      trial: trial ? {
+        state: trial.state,
+        startedAt: trial.started_at,
+        endsAt: trial.ends_at,
+        deletionEligibleAt: trial.deletion_eligible_at,
+      } : null,
+      subscription: subscription ? {
+        id: subscription.id,
+        planKey: subscription.plan_key,
+        dossierCapacityKey: subscription.dossier_capacity_key,
+        customActiveDossierLimit: subscription.custom_active_dossier_limit,
+        status: subscription.status,
+        currentPeriodStartedAt: subscription.current_period_started_at,
+        currentPeriodEndsAt: subscription.current_period_ends_at,
+        canceledAt: subscription.canceled_at,
+      } : null,
+      entitlements: entitlement ? {
+        accessSource: entitlement.access_source,
+        basePlanKey: entitlement.base_plan_key,
+        effectivePlanKey: entitlement.effective_plan_key,
+        baseActiveDossierLimit: entitlement.base_active_dossier_limit,
+        effectiveActiveDossierLimit: entitlement.effective_active_dossier_limit,
+        activeDossierCount: entitlement.active_dossier_count,
+        planAssignmentBlockCode: entitlement.plan_assignment_block_code,
+        entitlementOverrideBlockCode: entitlement.entitlement_override_block_code,
+        administrativeAssignment: entitlement.administrative_assignment_id
+          && entitlement.administrative_assignment_revision !== null
+          && entitlement.administrative_plan_key
+          && entitlement.administrative_billing_period
+          && entitlement.administrative_dossier_capacity_key
+          ? {
+              id: entitlement.administrative_assignment_id,
+              revision: entitlement.administrative_assignment_revision,
+              planKey: entitlement.administrative_plan_key,
+              billingPeriod: entitlement.administrative_billing_period,
+              dossierCapacityKey: entitlement.administrative_dossier_capacity_key,
+            }
+          : null,
+        administrativeOverride: entitlement.administrative_override_id
+          && entitlement.administrative_override_revision !== null
+          && entitlement.administrative_override_base_source
+          ? {
+              id: entitlement.administrative_override_id,
+              revision: entitlement.administrative_override_revision,
+              baseSource: entitlement.administrative_override_base_source,
+              featurePlanKey: entitlement.administrative_override_feature_plan_key,
+              dossierCapacityKey: entitlement.administrative_override_dossier_capacity_key,
+            }
+          : null,
+      } : null,
       sharedAccesses,
       canResendActivationEmail: authorization?.status === "active" && !administratorIds.has(user.id),
       canDelete: reasons.size === 0,
