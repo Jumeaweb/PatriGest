@@ -21,6 +21,8 @@ export type SharedAccessRole = Exclude<DossierAccessRole, "owner">;
 type AccountRequestStatus = "pending" | "approved" | "rejected";
 export type ApplicationUserAuthorizationStatus = "pending" | "active" | "rejected";
 export type AccountMode = "autonomous" | "collaborator";
+export type AccountRegistrationIntent = "autonomous" | "collaborator";
+export type AutonomousRegistrationStatus = "pending" | "active" | "rejected";
 export type AccountTrialStateName = "not_authorized" | "terms_required" | "awaiting_activation" | "active" | "suspended" | "deletion_due" | "subscribed" | "legacy_access";
 export type SubscriptionPlanKey = "essential" | "comfort" | "premium";
 export type SubscriptionDossierCapacityKey = "included" | "five" | "ten" | "custom";
@@ -61,9 +63,9 @@ export type Database = {
         Relationships: [];
       };
       application_user_authorizations: {
-        Row: { user_id: string; status: ApplicationUserAuthorizationStatus; account_mode: AccountMode | null; status_changed_at: string; status_changed_by: string | null; created_at: string; updated_at: string };
-        Insert: { user_id: string; status?: ApplicationUserAuthorizationStatus; account_mode?: AccountMode | null; status_changed_at?: string; status_changed_by?: string | null; created_at?: string; updated_at?: string };
-        Update: { status?: ApplicationUserAuthorizationStatus; account_mode?: AccountMode | null; status_changed_at?: string; status_changed_by?: string | null; updated_at?: string };
+        Row: { user_id: string; status: ApplicationUserAuthorizationStatus; account_mode: AccountMode | null; registration_intent: AccountRegistrationIntent | null; autonomous_registration_status: AutonomousRegistrationStatus | null; status_changed_at: string; status_changed_by: string | null; created_at: string; updated_at: string };
+        Insert: { user_id: string; status?: ApplicationUserAuthorizationStatus; account_mode?: AccountMode | null; registration_intent?: AccountRegistrationIntent | null; autonomous_registration_status?: AutonomousRegistrationStatus | null; status_changed_at?: string; status_changed_by?: string | null; created_at?: string; updated_at?: string };
+        Update: { status?: ApplicationUserAuthorizationStatus; account_mode?: AccountMode | null; registration_intent?: AccountRegistrationIntent | null; autonomous_registration_status?: AutonomousRegistrationStatus | null; status_changed_at?: string; status_changed_by?: string | null; updated_at?: string };
         Relationships: [];
       };
       account_subscriptions: {
@@ -426,6 +428,7 @@ export type Database = {
       is_platform_admin: { Args: Record<string, never>; Returns: boolean };
       is_application_user_active: { Args: Record<string, never>; Returns: boolean };
       record_account_trial_terms_acceptance: { Args: { p_user_id: string; p_terms_version: string }; Returns: undefined };
+      complete_own_autonomous_trial_registration: { Args: Record<string, never>; Returns: undefined };
       get_current_account_trial_state: { Args: Record<string, never>; Returns: Array<{ state: AccountTrialStateName; terms_version: string | null; terms_accepted_at: string | null; started_at: string | null; ends_at: string | null; deletion_eligible_at: string | null; remaining_days: number; active_dossier_limit: number; active_dossier_count: number; enforcement_enabled: boolean }> };
       list_administrative_account_trial_states: { Args: { p_user_ids: string[] }; Returns: Array<{ user_id: string; state: AccountTrialStateName; started_at: string | null; ends_at: string | null; deletion_eligible_at: string | null }> };
       list_administrative_account_entitlement_states: {

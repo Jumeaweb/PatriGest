@@ -21,6 +21,7 @@ import { createClient } from "@/lib/supabase/server";
 import { markSignupInvitationUsed, validateSignupInvitation } from "@/domains/access/actions";
 import { getInvitationPreview, hasRecoverableDossierInvitations } from "@/domains/access/services";
 import { recordAccountTrialTermsAcceptance } from "@/domains/trials/services";
+import { ACCOUNT_TRIAL_TERMS_VERSION } from "@/domains/trials/constants";
 
 const emailSchema = z.email("Saisissez une adresse email valide.").trim();
 const passwordSchema = z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères.").max(72, "Le mot de passe ne peut pas dépasser 72 caractères.");
@@ -31,9 +32,7 @@ const signupSchema = z.object({
   lastName: z.string().trim().min(1, "Saisissez votre nom.").max(80),
   password: passwordSchema,
   passwordConfirmation: z.string(),
-  trialTermsAccepted: z.literal("on", {
-    error: "Acceptez les conditions de l’essai gratuit pour poursuivre.",
-  }),
+  trialTermsAccepted: z.string().optional(),
 }).refine((data) => data.password === data.passwordConfirmation, {
   message: "Les mots de passe ne correspondent pas.",
   path: ["passwordConfirmation"],
@@ -71,6 +70,14 @@ export async function loginAction(_state: AuthActionState, formData: FormData): 
   if (error) {
     return { status: "error", message: getAuthErrorMessage(error, "Connexion impossible. Vérifiez vos informations et réessayez.") };
   }
+  // Une confirmation d'e-mail ou une panne transitoire peut avoir interrompu
+  // l'enregistrement initial du consentement. La RPC ne peut réparer que le
+  // propre parcours autonome, après authentification et confirmation de l'e-mail.
+  await supabase.rpc("complete_own_autonomous_trial_registration").then(({ error: completionError }) => {
+    if (completionError && completionError.code !== "P4T08") {
+      console.error("[PatriGest] Reprise d'inscription autonome indisponible", { code: completionError.code });
+    }
+  });
   const requestedNext = typeof formData.get("next") === "string" ? String(formData.get("next")) : null;
   const safeNext = getSafeNextPath(requestedNext, "");
   if (safeNext) redirect(safeNext);
@@ -93,6 +100,7 @@ export async function signupAction(_state: AuthActionState, formData: FormData):
   if (invitationToken && !invitationToken.success) return { status: "error", message: "Cette invitation est invalide ou a expiré." };
   const invitation = invitationToken?.success ? await validateSignupInvitation(invitationToken.data) : null;
   if (hasInvitation && !invitation) return { status: "error", message: "Cette invitation est invalide ou a expiré." };
+  const registrationIntent = invitation?.kind === "dossier" ? "collaborator" : "autonomous";
   const parsed = signupSchema.safeParse({
     email: formData.get("email"),
     firstName: formData.get("firstName"),
@@ -102,6 +110,13 @@ export async function signupAction(_state: AuthActionState, formData: FormData):
     trialTermsAccepted: formData.get("trialTermsAccepted"),
   });
   if (!parsed.success) return validationError(parsed.error);
+  if (registrationIntent === "autonomous" && parsed.data.trialTermsAccepted !== "on") {
+    return {
+      status: "error",
+      message: "Vérifiez les informations saisies.",
+      fieldErrors: { trialTermsAccepted: ["Acceptez les conditions de l’essai gratuit pour poursuivre."] },
+    };
+  }
   const normalizedEmail = parsed.data.email.toLowerCase();
   if (invitation && parsed.data.email.toLowerCase() !== invitation.email.toLowerCase()) return { status: "error", message: "Utilisez l’adresse email associée à cette invitation." };
 
@@ -112,7 +127,15 @@ export async function signupAction(_state: AuthActionState, formData: FormData):
     password: parsed.data.password,
     options: {
       emailRedirectTo: `${origin}/auth/callback${invitation?.kind === "dossier" && invitationToken?.success ? `?next=${encodeURIComponent(getDossierInvitationPath(invitationToken.data))}` : ""}`,
-      data: { first_name: parsed.data.firstName, last_name: parsed.data.lastName },
+      data: {
+        first_name: parsed.data.firstName,
+        last_name: parsed.data.lastName,
+        patrigest_registration_intent: registrationIntent,
+        ...(registrationIntent === "autonomous" ? {
+          patrigest_trial_terms_accepted: true,
+          patrigest_trial_terms_version: ACCOUNT_TRIAL_TERMS_VERSION,
+        } : {}),
+      },
     },
   });
 
@@ -139,18 +162,23 @@ export async function signupAction(_state: AuthActionState, formData: FormData):
     return { status: "error", message: getAuthErrorMessage(error, "Impossible de créer le compte. Réessayez dans quelques instants.") };
   }
   const accountWasCreated = Boolean(signupData.user?.identities?.length);
-  if (accountWasCreated && signupData.user) {
+  if (accountWasCreated && signupData.user && registrationIntent === "autonomous") {
     try {
       await recordAccountTrialTermsAcceptance(signupData.user.id);
     } catch {
-      return {
-        status: "error",
-        message: "Impossible d’enregistrer les conditions de l’essai. Aucun accès n’a été activé. Contactez le support avant de réessayer.",
-      };
+      // Le compte Auth existe déjà : le callback authentifié reprendra
+      // l'enregistrement après confirmation de l'adresse, sans second compte.
+      console.error("[PatriGest] Consentement d'essai à reprendre après confirmation");
     }
   }
   if (accountWasCreated && invitation?.kind === "account" && invitationToken?.success) await markSignupInvitationUsed(invitationToken.data);
-  return { status: "success", message: "Confirmez votre adresse e-mail pour transmettre votre inscription à validation.", email: normalizedEmail };
+  return {
+    status: "success",
+    message: registrationIntent === "autonomous"
+      ? "Confirmez votre adresse e-mail. Jumeaweb examinera ensuite votre inscription et vos 30 jours d’essai commenceront lors de l’activation."
+      : "Confirmez votre adresse e-mail pour poursuivre l’acceptation de votre invitation.",
+    email: normalizedEmail,
+  };
 }
 
 export async function forgotPasswordAction(_state: AuthActionState, formData: FormData): Promise<AuthActionState> {

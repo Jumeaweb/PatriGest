@@ -26,9 +26,20 @@ export async function GET(request: NextRequest) {
       }
 
       const [{ data: authorization }, { data: administrator }] = await Promise.all([
-        supabase.from("application_user_authorizations").select("status").eq("user_id", userId).maybeSingle(),
+        supabase.from("application_user_authorizations").select("status,registration_intent,autonomous_registration_status").eq("user_id", userId).maybeSingle(),
         supabase.from("platform_administrators").select("user_id").eq("user_id", userId).maybeSingle(),
       ]);
+      let autonomousRegistrationIncomplete = false;
+      if (authorization?.registration_intent === "autonomous"
+          && authorization.autonomous_registration_status !== "rejected") {
+        const { error: completionError } = await supabase.rpc("complete_own_autonomous_trial_registration");
+        autonomousRegistrationIncomplete = Boolean(completionError);
+        if (completionError) {
+          console.error("[PatriGest] Reprise d'inscription autonome après confirmation indisponible", {
+            code: completionError.code,
+          });
+        }
+      }
       const hasApplicationAccess = Boolean(administrator || authorization?.status === "active");
       const authFlowPath = nextPath?.startsWith("/invitation/") || nextPath?.startsWith("/nouveau-mot-de-passe") ? nextPath : null;
       const accountPath = (nextPath === "/parametres/compte" || nextPath === "/parametres/compte?vue=email") && hasApplicationAccess
@@ -45,7 +56,9 @@ export async function GET(request: NextRequest) {
           invitationRecoveryPath = null;
         }
       }
-      const destination = authFlowPath ?? accountPath ?? invitationRecoveryPath ?? (hasApplicationAccess ? "/tableau-de-bord" : "/acces-en-attente");
+      const destination = autonomousRegistrationIncomplete
+        ? "/acces-en-attente?inscription=incomplete"
+        : authFlowPath ?? accountPath ?? invitationRecoveryPath ?? (hasApplicationAccess ? "/tableau-de-bord" : "/acces-en-attente");
       const response = NextResponse.redirect(new URL(destination, request.url));
       response.cookies.set(INVITATION_RECOVERY_COOKIE, "", {
         httpOnly: true,

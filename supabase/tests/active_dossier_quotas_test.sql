@@ -91,6 +91,12 @@ update public.application_user_authorizations
 set status = 'active', status_changed_at = now()
 where user_id::text like '96000000-0000-4000-8000-%';
 
+-- Le compte 11 représente un titulaire dont l'inscription autonome a déjà été
+-- validée, mais qui n'a pas encore créé son premier dossier.
+update public.application_user_authorizations
+set autonomous_registration_status = 'active'
+where user_id = '96000000-0000-4000-8000-000000000011';
+
 -- Propriétaires commerciaux et development préparés administrativement.
 update public.application_user_authorizations
 set account_mode = 'autonomous'

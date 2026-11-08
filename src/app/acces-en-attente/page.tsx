@@ -11,9 +11,9 @@ export const dynamic = "force-dynamic";
 export default async function AccessWaitingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ verification?: string }>;
+  searchParams: Promise<{ verification?: string; inscription?: string }>;
 }) {
-  const { verification } = await searchParams;
+  const { verification, inscription } = await searchParams;
   const supabase = await createClient();
   const { data: claims } = await supabase.auth.getClaims();
   const userId = claims?.claims?.sub;
@@ -46,9 +46,15 @@ export default async function AccessWaitingPage({
           : "Votre adresse e-mail a bien été confirmée. Votre inscription doit maintenant être validée avant que vous puissiez accéder à PatriGest."}
       </p>
       {!rejected && <p className="mt-2 text-sm leading-6 text-[#64748B]">Vous recevrez un e-mail dès que votre accès sera activé.</p>}
+      {!rejected && <p className="mt-2 text-sm leading-6 text-[#64748B]">Votre essai gratuit de 30 jours, limité à 2 dossiers actifs avec les exports inclus, commencera seulement à cette activation.</p>}
+      {!rejected && inscription === "incomplete" && (
+        <p role="alert" className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-950">
+          Votre adresse e-mail est confirmée, mais la finalisation de l’inscription est momentanément indisponible. Déconnectez-vous puis reconnectez-vous pour reprendre l’opération, sans créer un second compte.
+        </p>
+      )}
       {!rejected && verification === "1" && (
         <p role="status" className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
-          Votre compte est toujours en attente de validation par l'administrateur.
+          Votre compte est toujours en attente de validation par l&apos;administrateur.
           Vous recevrez un e-mail dès son activation. Pensez à vérifier également vos courriers indésirables.
         </p>
       )}

@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Créer un compte" };
 export default async function SignupPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
   const { token } = await searchParams;
   if (!token) {
-    return <AuthShell title="Créer votre compte PatriGest" description="PatriGest est actuellement accessible sur validation. Créez votre compte ci-dessous. Après confirmation de votre adresse e-mail, votre inscription sera examinée avant l’activation de votre accès."><SignupForm /></AuthShell>;
+    return <AuthShell title="Créer votre compte PatriGest" description="Créez votre compte puis confirmez votre adresse e-mail. Jumeaweb examinera ensuite votre inscription. Vos 30 jours d’essai, avec 2 dossiers actifs maximum et les exports inclus, commenceront uniquement lors de l’activation de votre accès."><SignupForm /></AuthShell>;
   }
 
   const invitation = await validateSignupInvitation(token);
@@ -17,5 +17,5 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
   const description = invitation.kind === "dossier"
     ? `${getDossierInvitationSentence(invitation)} Rôle proposé : ${getInvitationRoleLabel(invitation.role)}.`
     : "Votre invitation a été vérifiée. Créez votre compte puis confirmez votre adresse e-mail.";
-  return <AuthShell title="Créer votre compte PatriGest" description={description}><SignupForm invitationToken={token} email={invitation.email} firstName={invitation.first_name} lastName={invitation.last_name} /></AuthShell>;
+  return <AuthShell title="Créer votre compte PatriGest" description={description}><SignupForm invitationToken={token} email={invitation.email} firstName={invitation.first_name} lastName={invitation.last_name} collaboratorInvitation={invitation.kind === "dossier"} /></AuthShell>;
 }

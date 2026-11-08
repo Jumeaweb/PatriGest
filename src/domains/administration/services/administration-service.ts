@@ -44,8 +44,9 @@ export async function getPendingApplicationRegistrations() {
   const admin = createAdminClient();
   const { data: authorizations, error } = await admin
     .from("application_user_authorizations")
-    .select("user_id,status,created_at")
-    .eq("status", "pending")
+    .select("user_id,status,autonomous_registration_status,created_at")
+    .eq("registration_intent", "autonomous")
+    .eq("autonomous_registration_status", "pending")
     .order("created_at", { ascending: false });
   if (error) throw new Error("Impossible de charger les inscriptions en attente.");
   if (!authorizations.length) return [];
