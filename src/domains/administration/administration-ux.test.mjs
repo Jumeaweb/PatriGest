@@ -11,6 +11,8 @@ const dashboard = read("./components/administration-dashboard.tsx");
 const requests = read("../../app/administration/demandes/page.tsx");
 const usersPage = read("../../app/administration/utilisateurs/page.tsx");
 const usersTable = read("./components/administration-users-table.tsx");
+const entitlementEditor = read("./components/administration-user-entitlement-editor.tsx");
+const entitlementActions = read("./administrative-entitlement-actions.ts");
 const communicationPage = read("../../app/administration/communication/page.tsx");
 const infrastructurePage = read("../../app/administration/infrastructure/page.tsx");
 const service = read("./services/administration-service.ts");
@@ -58,7 +60,7 @@ test("affiche uniquement des libellés français pour l’historique des inscrip
   assert.doesNotMatch(requests, />Approved<|>Rejected</);
 });
 
-test("affiche séparément les quatre catégories de droits et conserve les actions existantes", () => {
+test("affiche séparément les quatre catégories de droits et active seulement les droits administratifs", () => {
   assert.match(service, /select\("user_id,status,account_mode"\)/);
   assert.match(service, /select\("user_id,protected_person_id,role"\)/);
   assert.match(service, /select\("id,owner_id,plan_key,dossier_capacity_key,custom_active_dossier_limit,status,current_period_started_at,current_period_ends_at,canceled_at"\)/);
@@ -76,11 +78,16 @@ test("affiche séparément les quatre catégories de droits et conserve les acti
   assert.match(usersTable, /lg:hidden/);
   assert.match(usersTable, /<ResendActivationEmailButton/);
   assert.match(usersTable, /<DeleteUserButton/);
-  assert.match(usersTable, /Droits des comptes en lecture seule/);
-  assert.match(usersTable, /Modification des droits non activée/);
+  assert.match(usersTable, /Gestion des droits administratifs/);
+  assert.match(usersTable, /operation: "assign"/);
+  assert.match(usersTable, /operation: "replace"/);
+  assert.match(usersTable, /operation: "revoke"/);
+  assert.doesNotMatch(entitlementEditor, /account_subscriptions|Essai gratuit.*input/);
+  assert.match(entitlementEditor, /Motif de la modification/);
+  assert.match(entitlementActions, /mutateAdministrativeEntitlementAction/);
   assert.match(usersTable, /Accès historique/);
   assert.match(usersTable, /Compte administrateur non modifiable/);
-  assert.doesNotMatch(usersTable, /Confirmer l’enregistrement|assign_administrative_plan|replace_administrative_plan/);
+  assert.doesNotMatch(usersTable, /account_subscriptions.*update|account_subscriptions.*insert/);
 });
 
 test("lit les droits administratifs par une projection paginée et fermée", () => {

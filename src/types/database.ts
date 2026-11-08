@@ -453,6 +453,12 @@ export type Database = {
           entitlement_override_block_code: AdministrativeEntitlementBlockCode | null;
         }>;
       };
+      assign_administrative_plan: { Args: { p_owner_id: string; p_plan_key: SubscriptionPlanKey; p_billing_period: AdministrativeBillingPeriod; p_dossier_capacity_key: AdministrativeDossierCapacityKey; p_reason: string; p_request_id: string; p_expected_revision: number }; Returns: Array<{ entity_id: string; revision: number; status: string }> };
+      replace_administrative_plan: { Args: { p_owner_id: string; p_assignment_id: string; p_plan_key: SubscriptionPlanKey; p_billing_period: AdministrativeBillingPeriod; p_dossier_capacity_key: AdministrativeDossierCapacityKey; p_reason: string; p_request_id: string; p_expected_revision: number }; Returns: Array<{ entity_id: string; revision: number; status: string }> };
+      revoke_administrative_plan: { Args: { p_owner_id: string; p_assignment_id: string; p_reason: string; p_request_id: string; p_expected_revision: number }; Returns: Array<{ entity_id: string; revision: number; status: string }> };
+      assign_administrative_entitlement_override: { Args: { p_owner_id: string; p_feature_plan_key: "comfort" | "premium" | null; p_dossier_capacity_key: "five" | "ten" | null; p_reason: string; p_request_id: string; p_expected_revision: number }; Returns: Array<{ entity_id: string; revision: number; status: string }> };
+      replace_administrative_entitlement_override: { Args: { p_owner_id: string; p_override_id: string; p_feature_plan_key: "comfort" | "premium" | null; p_dossier_capacity_key: "five" | "ten" | null; p_reason: string; p_request_id: string; p_expected_revision: number }; Returns: Array<{ entity_id: string; revision: number; status: string }> };
+      revoke_administrative_entitlement_override: { Args: { p_owner_id: string; p_override_id: string; p_reason: string; p_request_id: string; p_expected_revision: number }; Returns: Array<{ entity_id: string; revision: number; status: string }> };
       get_infrastructure_usage_metrics: { Args: Record<string, never>; Returns: Array<{ database_size_bytes: number; storage_size_bytes: number }> };
       check_own_email_change_availability: { Args: { p_new_email: string }; Returns: boolean };
       activate_complete_bank_reconciliation: { Args: { p_reconciliation_id: string }; Returns: Database["public"]["Tables"]["bank_reconciliations"]["Row"] };

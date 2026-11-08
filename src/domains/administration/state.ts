@@ -30,3 +30,14 @@ export const initialAdministrativeDocumentRepairActionState: AdministrativeDocum
   status: "idle",
   message: "",
 };
+
+export type AdministrativeEntitlementActionState = {
+  status: "idle" | "error" | "success";
+  message: string;
+  fieldErrors?: { reason?: string[] };
+};
+
+export const initialAdministrativeEntitlementActionState: AdministrativeEntitlementActionState = {
+  status: "idle",
+  message: "",
+};

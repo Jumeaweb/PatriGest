@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type {
   AccountEntitlementAccessSource,
   AccountSubscriptionStatus,
@@ -12,6 +13,7 @@ import type {
 import type { PlatformUserSummary } from "../services/administration-service";
 import { DeleteUserButton } from "./delete-user-button";
 import { ResendActivationEmailButton } from "./registration-review-actions";
+import { AdministrationUserEntitlementEditor, type EntitlementEditorRequest } from "./administration-user-entitlement-editor";
 
 const planLabels: Record<SubscriptionPlanKey, string> = { essential: "Essentiel", comfort: "Confort", premium: "Premium" };
 const billingLabels: Record<AdministrativeBillingPeriod, string> = { monthly: "Mensuel", annual: "Annuel" };
@@ -33,10 +35,12 @@ const blockCodeLabels: Record<AdministrativeEntitlementBlockCode, string> = {
 };
 
 export function AdministrationUsersTable({ users }: { users: PlatformUserSummary[] }) {
+  const [editor, setEditor] = useState<EntitlementEditorRequest | null>(null);
+  const editingUserId = editor?.user.id ?? null;
   return <>
     <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/60 px-4 py-3 text-sm leading-6 text-blue-950">
-      <p className="font-semibold">Droits des comptes en lecture seule</p>
-      <p>Les abonnements commerciaux, attributions administratives, dérogations et droits effectifs sont affichés séparément. Les essais restent informatifs. Aucune modification de droits n’est disponible à cette étape.</p>
+      <p className="font-semibold">Gestion des droits administratifs</p>
+      <p>Les abonnements commerciaux et les essais restent en lecture seule. Les attributions et dérogations sont modifiables un compte à la fois, avec confirmation et motif audité.</p>
     </div>
     <div className="mt-4 hidden overflow-x-auto rounded-xl border border-[#E2E8F0] bg-white pb-1 [scrollbar-color:#94A3B8_#E2E8F0] [scrollbar-width:auto] lg:block" tabIndex={0} aria-label="Tableau des comptes utilisateurs, défilement horizontal disponible">
       <table className="min-w-[1770px] table-fixed text-left text-xs">
@@ -56,20 +60,23 @@ export function AdministrationUsersTable({ users }: { users: PlatformUserSummary
           <th scope="col" className="px-3 py-2 text-center font-bold">Accès partagés</th><th scope="col" className="px-3 py-2 font-bold">Résiliation</th>
           <th scope="col" className="px-3 py-2 font-bold">Actions</th>
         </tr></thead>
-        <tbody>{users.map((user) => <DesktopUserRow key={user.id} user={user} />)}</tbody>
+        <tbody>{users.map((user) => <DesktopUserRow key={user.id} user={user} editingUserId={editingUserId} onEdit={setEditor} />)}</tbody>
       </table>
     </div>
-    <div className="mt-4 grid gap-4 lg:hidden">{users.map((user) => <MobileUserCard key={user.id} user={user} />)}</div>
+    <div className="mt-4 grid gap-4 lg:hidden">{users.map((user) => <MobileUserCard key={user.id} user={user} editingUserId={editingUserId} onEdit={setEditor} />)}</div>
+    {editor && <AdministrationUserEntitlementEditor key={`${editor.user.id}-${editor.entityType}-${editor.operation}`} request={editor} onClose={() => setEditor(null)} />}
   </>;
 }
 
-function DesktopUserRow({ user }: { user: PlatformUserSummary }) {
+type UserRowProps = { user: PlatformUserSummary; editingUserId: string | null; onEdit: (request: EntitlementEditorRequest) => void };
+
+function DesktopUserRow({ user, editingUserId, onEdit }: UserRowProps) {
   return <tr className="border-t border-[#E2E8F0] align-top">
     <td className="sticky left-0 z-10 bg-white px-3 py-2 shadow-[4px_0_6px_-5px_rgba(15,23,42,0.55)]"><UserIdentity user={user} /></td>
     <td className="px-3 py-2"><UserStatus user={user} /></td><td className="px-3 py-2"><TrialSummary user={user} /></td>
     <td className="border-l border-[#CBD5E1] px-3 py-2"><CommercialSubscriptionSummary user={user} /></td>
-    <td className="border-l border-[#CBD5E1] px-3 py-2"><AdministrativeAssignmentSummary user={user} /></td>
-    <td className="border-l border-[#CBD5E1] px-3 py-2"><AdministrativeOverrideSummary user={user} /></td>
+    <td className="border-l border-[#CBD5E1] px-3 py-2"><AdministrativeAssignmentSummary user={user} editingUserId={editingUserId} onEdit={onEdit} /></td>
+    <td className="border-l border-[#CBD5E1] px-3 py-2"><AdministrativeOverrideSummary user={user} editingUserId={editingUserId} onEdit={onEdit} /></td>
     <td className="border-l border-[#CBD5E1] px-3 py-2"><EffectiveEntitlementsSummary user={user} /></td>
     <td className="border-l border-[#CBD5E1] px-3 py-2"><DossierSummary user={user} /></td>
     <td className="px-3 py-2 text-center"><InformativeCheckbox label={`Accès partagés existants pour ${getUserName(user)}`} checked={user.sharedAccesses.length > 0} /></td>
@@ -78,14 +85,14 @@ function DesktopUserRow({ user }: { user: PlatformUserSummary }) {
   </tr>;
 }
 
-function MobileUserCard({ user }: { user: PlatformUserSummary }) {
+function MobileUserCard({ user, editingUserId, onEdit }: UserRowProps) {
   return <article className="rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-[0_4px_14px_rgba(15,23,42,0.03)]">
     <UserIdentity user={user} /><div className="mt-3"><UserStatus user={user} /></div>
     <dl className="mt-4 grid gap-4 sm:grid-cols-2">
       <SummaryBlock title="Essai gratuit"><TrialSummary user={user} /></SummaryBlock>
       <SummaryBlock title="Abonnement commercial"><CommercialSubscriptionSummary user={user} /></SummaryBlock>
-      <SummaryBlock title="Attribution administrative"><AdministrativeAssignmentSummary user={user} /></SummaryBlock>
-      <SummaryBlock title="Dérogation active"><AdministrativeOverrideSummary user={user} /></SummaryBlock>
+      <SummaryBlock title="Attribution administrative"><AdministrativeAssignmentSummary user={user} editingUserId={editingUserId} onEdit={onEdit} /></SummaryBlock>
+      <SummaryBlock title="Dérogation active"><AdministrativeOverrideSummary user={user} editingUserId={editingUserId} onEdit={onEdit} /></SummaryBlock>
       <SummaryBlock title="Droits effectifs"><EffectiveEntitlementsSummary user={user} /></SummaryBlock>
       <SummaryBlock title="Dossiers"><DossierSummary user={user} /></SummaryBlock>
       <SummaryBlock title="Accès partagés"><span>{user.sharedAccesses.length > 0 ? `Oui — ${user.sharedAccesses.length}` : "Aucun"}</span></SummaryBlock>
@@ -112,15 +119,19 @@ function CommercialSubscriptionSummary({ user }: { user: PlatformUserSummary }) 
   if (!subscription?.planKey) return <MutedText>Aucun abonnement commercial</MutedText>;
   return <div className="space-y-1"><p className="font-bold">{planLabels[subscription.planKey]}</p><p>{formatCommercialCapacity(subscription.dossierCapacityKey, subscription.customActiveDossierLimit)}</p><p className="text-[#64748B]">{subscriptionStatusLabels[subscription.status]}</p></div>;
 }
-function AdministrativeAssignmentSummary({ user }: { user: PlatformUserSummary }) {
+function AdministrativeAssignmentSummary({ user, editingUserId, onEdit }: UserRowProps) {
   const assignment = user.entitlements?.administrativeAssignment;
-  if (!assignment) return <MutedText>Aucune attribution</MutedText>;
-  return <div className="space-y-1"><p className="font-bold">{planLabels[assignment.planKey]}</p><p>{billingLabels[assignment.billingPeriod]} · {formatAdministrativeCapacity(assignment.dossierCapacityKey)}</p><p className="text-[#64748B]">Attribution active</p></div>;
+  const allowed = user.entitlements?.planAssignmentBlockCode === null;
+  const disabled = editingUserId !== null && editingUserId !== user.id;
+  if (!assignment) return <div className="space-y-2"><MutedText>Aucune attribution</MutedText>{allowed && <EntitlementButton disabled={disabled} onClick={() => onEdit({ user, entityType: "plan", operation: "assign" })}>Attribuer</EntitlementButton>}</div>;
+  return <div className="space-y-2"><div className="space-y-1"><p className="font-bold">{planLabels[assignment.planKey]}</p><p>{billingLabels[assignment.billingPeriod]} · {formatAdministrativeCapacity(assignment.dossierCapacityKey)}</p><p className="text-[#64748B]">Attribution active</p></div>{allowed && <div className="flex flex-wrap gap-2"><EntitlementButton disabled={disabled} onClick={() => onEdit({ user, entityType: "plan", operation: "replace" })}>Modifier</EntitlementButton><EntitlementButton destructive disabled={disabled} onClick={() => onEdit({ user, entityType: "plan", operation: "revoke" })}>Révoquer</EntitlementButton></div>}</div>;
 }
-function AdministrativeOverrideSummary({ user }: { user: PlatformUserSummary }) {
+function AdministrativeOverrideSummary({ user, editingUserId, onEdit }: UserRowProps) {
   const entitlementOverride = user.entitlements?.administrativeOverride;
-  if (!entitlementOverride) return <MutedText>Aucune dérogation</MutedText>;
-  return <div className="space-y-1"><p className="font-bold">Base {entitlementOverride.baseSource === "commercial" ? "commerciale" : "administrative"}</p>{entitlementOverride.featurePlanKey && <p>Fonctions : {planLabels[entitlementOverride.featurePlanKey]}</p>}{entitlementOverride.dossierCapacityKey && <p>Capacité : {formatAdministrativeCapacity(entitlementOverride.dossierCapacityKey)}</p>}</div>;
+  const allowed = user.entitlements?.entitlementOverrideBlockCode === null;
+  const disabled = editingUserId !== null && editingUserId !== user.id;
+  if (!entitlementOverride) return <div className="space-y-2"><MutedText>Aucune dérogation</MutedText>{allowed && <EntitlementButton disabled={disabled} onClick={() => onEdit({ user, entityType: "override", operation: "assign" })}>Attribuer</EntitlementButton>}</div>;
+  return <div className="space-y-2"><div className="space-y-1"><p className="font-bold">Base {entitlementOverride.baseSource === "commercial" ? "commerciale" : "administrative"}</p>{entitlementOverride.featurePlanKey && <p>Fonctions : {planLabels[entitlementOverride.featurePlanKey]}</p>}{entitlementOverride.dossierCapacityKey && <p>Capacité : {formatAdministrativeCapacity(entitlementOverride.dossierCapacityKey)}</p>}</div>{allowed && <div className="flex flex-wrap gap-2"><EntitlementButton disabled={disabled} onClick={() => onEdit({ user, entityType: "override", operation: "replace" })}>Modifier</EntitlementButton><EntitlementButton destructive disabled={disabled} onClick={() => onEdit({ user, entityType: "override", operation: "revoke" })}>Révoquer</EntitlementButton></div>}</div>;
 }
 function EffectiveEntitlementsSummary({ user }: { user: PlatformUserSummary }) {
   if (user.isPlatformAdmin) return <div className="space-y-1"><p className="font-bold">Administration de la plateforme</p><p className="text-[#64748B]">Hors formule utilisateur</p></div>;
@@ -134,7 +145,6 @@ function DossierSummary({ user }: { user: PlatformUserSummary }) {
 function UserRowActions({ user }: { user: PlatformUserSummary }) {
   const blockCode = user.entitlements?.planAssignmentBlockCode ?? user.entitlements?.entitlementOverrideBlockCode;
   return <div className="flex flex-col items-start gap-2">
-    <p className="max-w-64 text-xs font-semibold text-[#64748B]">Modification des droits non activée</p>
     {blockCode && <p className="max-w-64 text-xs text-amber-800">{blockCodeLabels[blockCode]}</p>}
     {user.canResendActivationEmail && <ResendActivationEmailButton userId={user.id} email={user.email} />}
     {user.canDelete ? <DeleteUserButton userId={user.id} name={getUserName(user)} email={user.email} /> : <div className="max-w-64 text-left"><p className="text-xs font-bold text-[#64748B]">Suppression indisponible</p><ul className="mt-1 list-disc pl-4 text-xs leading-5 text-[#64748B]">{user.deletionBlockReasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>}
@@ -147,6 +157,9 @@ function UserStatus({ user }: { user: PlatformUserSummary }) {
 }
 function InformativeCheckbox({ label, checked }: { label: string; checked: boolean }) {
   return <input type="checkbox" className="size-4 shrink-0 accent-[#2563EB]" aria-label={label} checked={checked} disabled readOnly />;
+}
+function EntitlementButton({ children, onClick, disabled, destructive = false }: { children: React.ReactNode; onClick: () => void; disabled: boolean; destructive?: boolean }) {
+  return <button type="button" className={`rounded-lg border px-2 py-1 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-45 ${destructive ? "border-red-200 text-red-700 hover:bg-red-50" : "border-blue-200 text-blue-700 hover:bg-blue-50"}`} onClick={onClick} disabled={disabled}>{children}</button>;
 }
 function MutedText({ children }: { children: React.ReactNode }) { return <span className="text-[#64748B]">{children}</span>; }
 function formatAdministrativeCapacity(capacity: AdministrativeDossierCapacityKey) {
