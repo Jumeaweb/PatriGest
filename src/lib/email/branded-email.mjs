@@ -3,6 +3,7 @@
  * @property {string} appName
  * @property {string} actionUrl
  * @property {string} actionLabel
+ * @property {string} [logoBaseUrl]
  * @property {string} title
  * @property {string} [greeting]
  * @property {string} [eyebrow]
@@ -27,6 +28,7 @@ export function buildBrandedEmailHtml({
   appName,
   actionUrl,
   actionLabel,
+  logoBaseUrl,
   title,
   greeting,
   eyebrow,
@@ -34,7 +36,7 @@ export function buildBrandedEmailHtml({
   items = [],
   footerText = "La gestion claire du patrimoine protégé.",
 }) {
-  const logoUrl = new URL("/logos/patrigest-symbol.png", actionUrl).toString();
+  const logoUrl = new URL("/logos/patrigest-symbol.png", logoBaseUrl ?? actionUrl).toString();
   const paragraphHtml = paragraphs.map((paragraph) => `<p style="margin:0 0 16px">${escapeHtml(paragraph)}</p>`).join("");
   const itemsHtml = items.length
     ? `<ul style="margin:4px 0 20px;padding-left:22px">${items.map((item) => `<li style="margin:0 0 8px">${escapeHtml(item)}</li>`).join("")}</ul>`

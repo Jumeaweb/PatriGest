@@ -17,6 +17,7 @@ import type {
   SubscriptionPlanKey,
 } from "@/types/database";
 import { sendApplicationActivationEmail } from "../registration-email";
+import { trySendRegistrationRejectionNotification } from "./registration-rejection-notification-service";
 import { isAdminAccountDeletionDurableNeutralizationEnabled } from "../administrative-account-deletion-durable-availability";
 import { deletePlatformUserWithDurableNeutralization } from "../administrative-account-deletion-durable";
 
@@ -90,12 +91,21 @@ export async function reviewApplicationRegistration(userId: string, decision: "a
     p_decision: decision,
   });
   if (error) {
-    if (error.message.includes("déjà été traitée")) throw new Error("Cette inscription a déjà été traitée.");
+    if (error.message.includes("déjà été traitée")) {
+      if (decision === "rejected") {
+        const notificationStatus = await trySendRegistrationRejectionNotification(userId, { allowCreate: false });
+        return { emailSent: notificationStatus !== "failed" };
+      }
+      throw new Error("Cette inscription a déjà été traitée.");
+    }
     if (error.code === "P4T07") throw new Error("Les conditions de l’essai gratuit doivent être acceptées avant l’activation du compte.");
     throw new Error("Impossible de traiter cette inscription.");
   }
 
-  if (decision === "rejected") return { emailSent: false };
+  if (decision === "rejected") {
+    const notificationStatus = await trySendRegistrationRejectionNotification(userId, { allowCreate: true });
+    return { emailSent: notificationStatus === "sent" };
+  }
   try {
     await sendApplicationActivationEmail({
       email: targetResult.user.email ?? "",

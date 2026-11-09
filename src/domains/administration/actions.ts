@@ -70,7 +70,10 @@ export async function reviewApplicationRegistrationAction(_state: RegistrationRe
 
   try {
     const result = await reviewApplicationRegistration(parsed.data.userId, parsed.data.decision);
-    if (parsed.data.decision === "rejected") return { status: "success", message: "Inscription refusée.", decision: "rejected" };
+    if (parsed.data.decision === "rejected") {
+      if (!result.emailSent) return { status: "warning", message: "Inscription refusée, mais l’e-mail n’a pas pu être envoyé. Vous pouvez réessayer.", decision: "rejected" };
+      return { status: "success", message: "Inscription refusée et e-mail envoyé.", decision: "rejected" };
+    }
     if (!result.emailSent) return { status: "warning", message: "Accès activé, mais l’e-mail n’a pas pu être envoyé.", decision: "active" };
     return { status: "success", message: "Accès activé et e-mail envoyé.", decision: "active" };
   } catch (error) {

@@ -11,7 +11,8 @@ export function RegistrationReviewActions({ userId, email }: { userId: string; e
   const router = useRouter();
   const [decision, setDecision] = useState<"active" | "rejected" | null>(null);
   const [state, action] = useActionState(reviewApplicationRegistrationAction, initialRegistrationReviewState);
-  const completed = state.status === "success" || state.status === "warning";
+  const rejectionEmailFailed = state.status === "warning" && state.decision === "rejected";
+  const completed = state.status === "success" || (state.status === "warning" && !rejectionEmailFailed);
   function closeDialog() {
     setDecision(null);
     if (completed) router.refresh();
@@ -29,11 +30,11 @@ export function RegistrationReviewActions({ userId, email }: { userId: string; e
       <AppConfirmDialog
         open={decision !== null}
         title={decision === "active" ? "Autoriser l’accès à PatriGest ?" : "Refuser cette inscription ?"}
-        description={completed ? "La décision a été enregistrée." : decision === "active" ? "Le compte pourra accéder à PatriGest et un e-mail d’activation sera envoyé." : "Le compte sera conservé, mais ne pourra accéder à aucune donnée métier."}
+        description={completed ? "La décision a été enregistrée." : rejectionEmailFailed ? "Le refus est enregistré. Seul l’envoi de l’e-mail va être retenté." : decision === "active" ? "Le compte pourra accéder à PatriGest et un e-mail d’activation sera envoyé." : "Le compte sera conservé, mais ne pourra accéder à aucune donnée métier."}
         subject={email}
         onClose={closeDialog}
         cancelLabel={completed ? "Fermer" : "Annuler"}
-        actions={completed ? null : <ReviewSubmit label={decision === "active" ? "Autoriser l’accès" : "Refuser"} />}
+        actions={completed ? null : <ReviewSubmit label={rejectionEmailFailed ? "Réessayer l’e-mail" : decision === "active" ? "Autoriser l’accès" : "Refuser"} />}
       >
         {state.message && <p className={`text-sm font-semibold ${state.status === "error" ? "text-red-700" : state.status === "warning" ? "text-amber-700" : "text-green-700"}`} role={state.status === "error" ? "alert" : "status"} aria-live="polite">{state.message}</p>}
       </AppConfirmDialog>
