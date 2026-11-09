@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { trySendPendingRegistrationNotification } from "@/domains/administration/services/registration-review-notification-service";
 import { getRecoverableDossierInvitations } from "@/domains/access/services";
 import { getSafeAuthCallbackNextPath } from "@/lib/auth/callback-destination";
 import {
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
           });
         }
       }
+      await trySendPendingRegistrationNotification(userId);
       const hasApplicationAccess = Boolean(administrator || authorization?.status === "active");
       const authFlowPath = nextPath?.startsWith("/invitation/") || nextPath?.startsWith("/nouveau-mot-de-passe") ? nextPath : null;
       const accountPath = (nextPath === "/parametres/compte" || nextPath === "/parametres/compte?vue=email") && hasApplicationAccess

@@ -22,6 +22,7 @@ import { markSignupInvitationUsed, validateSignupInvitation } from "@/domains/ac
 import { getInvitationPreview, hasRecoverableDossierInvitations } from "@/domains/access/services";
 import { recordAccountTrialTermsAcceptance } from "@/domains/trials/services";
 import { ACCOUNT_TRIAL_TERMS_VERSION } from "@/domains/trials/constants";
+import { trySendPendingRegistrationNotification } from "@/domains/administration/services/registration-review-notification-service";
 
 const emailSchema = z.email("Saisissez une adresse email valide.").trim();
 const passwordSchema = z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères.").max(72, "Le mot de passe ne peut pas dépasser 72 caractères.");
@@ -78,6 +79,7 @@ export async function loginAction(_state: AuthActionState, formData: FormData): 
       console.error("[PatriGest] Reprise d'inscription autonome indisponible", { code: completionError.code });
     }
   });
+  if (data.user) await trySendPendingRegistrationNotification(data.user.id);
   const requestedNext = typeof formData.get("next") === "string" ? String(formData.get("next")) : null;
   const safeNext = getSafeNextPath(requestedNext, "");
   if (safeNext) redirect(safeNext);

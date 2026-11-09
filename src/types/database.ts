@@ -40,6 +40,7 @@ export type AdministrativeEntitlementBlockCode =
   | "entitlement_base_required";
 export type ReleaseNotificationDeliveryKind = "test" | "global";
 export type ReleaseNotificationStatus = "pending" | "sending" | "sent" | "failed";
+export type RegistrationReviewNotificationStatus = "sending" | "sent" | "failed";
 export type PropertyType = "house" | "apartment" | "land" | "commercial" | "other";
 export type PropertyEntryMode = "acquisition" | "inheritance" | "donation" | "other";
 export type PropertyStatus = "active" | "disposed";
@@ -366,6 +367,12 @@ export type Database = {
         Row: { id: string; version: string; user_id: string; email_snapshot: string; delivery_kind: ReleaseNotificationDeliveryKind; status: ReleaseNotificationStatus; provider_message_id: string | null; attempt_count: number; last_error_safe: string | null; requested_by: string | null; created_at: string; sent_at: string | null; updated_at: string };
         Insert: { id?: string; version: string; user_id: string; email_snapshot: string; delivery_kind: ReleaseNotificationDeliveryKind; status?: ReleaseNotificationStatus; provider_message_id?: string | null; attempt_count?: number; last_error_safe?: string | null; requested_by?: string | null; created_at?: string; sent_at?: string | null; updated_at?: string };
         Update: { email_snapshot?: string; status?: ReleaseNotificationStatus; provider_message_id?: string | null; attempt_count?: number; last_error_safe?: string | null; requested_by?: string | null; sent_at?: string | null; updated_at?: string };
+        Relationships: [];
+      };
+      registration_review_notifications: {
+        Row: { user_id: string; status: RegistrationReviewNotificationStatus; attempt_count: number; provider_message_id: string | null; last_error_safe: string | null; last_attempt_at: string; sent_at: string | null; created_at: string; updated_at: string };
+        Insert: { user_id: string; status?: RegistrationReviewNotificationStatus; attempt_count?: number; provider_message_id?: string | null; last_error_safe?: string | null; last_attempt_at?: string; sent_at?: string | null; created_at?: string; updated_at?: string };
+        Update: { status?: RegistrationReviewNotificationStatus; attempt_count?: number; provider_message_id?: string | null; last_error_safe?: string | null; last_attempt_at?: string; sent_at?: string | null; updated_at?: string };
         Relationships: [];
       };
       bank_reconciliations: {
