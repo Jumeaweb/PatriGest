@@ -6,17 +6,26 @@ import {
   INVITATION_RECOVERY_COOKIE,
   INVITATION_RECOVERY_COOKIE_PATH,
 } from "@/lib/auth/invitation-recovery";
+import { parseSignupConfirmationParams } from "@/lib/auth/signup-confirmation";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
+  const confirmation = parseSignupConfirmationParams(request.nextUrl.searchParams);
   const nextPath = getSafeAuthCallbackNextPath(request.nextUrl.searchParams.get("next"));
   const preferredInvitationId = request.cookies.get(INVITATION_RECOVERY_COOKIE)?.value ?? null;
 
-  if (code) {
+  if (code || confirmation) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
+    const authResult = code
+      ? await supabase.auth.exchangeCodeForSession(code)
+      : confirmation
+        ? await supabase.auth.verifyOtp({
+            token_hash: confirmation.tokenHash,
+            type: confirmation.type,
+          })
+        : null;
+    if (authResult && !authResult.error) {
       const { data: claims } = await supabase.auth.getClaims();
       const userId = claims?.claims?.sub;
       if (!userId) {
