@@ -13,6 +13,10 @@ const accountUtilsSource = readFileSync(
   new URL("./utils/financial-account-utils.ts", import.meta.url),
   "utf8",
 );
+const valuationTransferAdjustmentSource = readFileSync(
+  new URL("./utils/valuation-transfer-adjustment.ts", import.meta.url),
+  "utf8",
+);
 const transactionFormSource = readFileSync(
   new URL("../transactions/components/transaction-form.tsx", import.meta.url),
   "utf8",
@@ -115,7 +119,7 @@ test("reste compatible avec le fallback VAL-01 après suppression", () => {
 test("inclut le compte-titres valorisé dans le patrimoine sans modèle de positions", () => {
   assert.match(
     accountUtilsSource,
-    /activeAccounts\.reduce\(\(total, account\) => total \+ getCurrentAccountValue/,
+    /\.reduce\(\(total, account\) => total \+ getCurrentAccountValue/,
   );
   assert.doesNotMatch(
     accountUtilsSource,
@@ -123,16 +127,18 @@ test("inclut le compte-titres valorisé dans le patrimoine sans modèle de posit
   );
 });
 
-test("conserve l'ajustement net des virements postérieurs à la valorisation", () => {
+test("applique chaque virement postérieur directement à la valeur du placement", () => {
   assert.match(
-    accountUtilsSource,
-    /if \(placementLeg\.transaction_date <= baselineDate\) continue;/,
+    valuationTransferAdjustmentSource,
+    /transaction\.transaction_date <= baselineDate/,
   );
   assert.match(
-    accountUtilsSource,
-    /placementLeg\.transaction_type === "transfer_in" \? placementLeg\.amount : -placementLeg\.amount/,
+    valuationTransferAdjustmentSource,
+    /transaction\.transaction_type === "transfer_in"/,
   );
-  assert.match(accountUtilsSource, /return displayedValue \+ placementTransferAdjustment;/);
+  assert.match(valuationTransferAdjustmentSource, /transaction\.transaction_type === "transfer_out"/);
+  assert.match(accountUtilsSource, /current\.value \+ transferAdjustment/);
+  assert.doesNotMatch(accountUtilsSource, /placementTransferAdjustment|transferLegs/);
 });
 
 test("autorise le compte-titres comme source et destination d'un virement structuré", () => {

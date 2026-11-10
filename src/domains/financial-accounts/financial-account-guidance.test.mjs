@@ -75,11 +75,12 @@ test("la première valorisation décrit la valeur globale datée sans modèle de
   assert.match(detail, /person\.accessRole !== "read_only" && <details[^\n]+Ajouter une valorisation/);
 });
 
-test("le compte-titres reçoit la même aide et les calculs valorisés restent inchangés", () => {
+test("le compte-titres reçoit la même aide et le calcul valorisé applique les virements postérieurs", () => {
   assert.match(detail, /isValuationAccount\(account\.account_type\) && <section/);
   assert.match(accountUtils, /type === "life_insurance" \|\| type === "other_investment" \|\| type === "securities_account"/);
   assert.match(accountUtils, /getCurrentValuationValue\(account\.initial_balance, valuations\)/);
-  assert.match(accountUtils, /return displayedValue \+ placementTransferAdjustment/);
+  assert.match(accountUtils, /calculateValuationTransferAdjustment\(movements, baselineDate\)/);
+  assert.match(accountUtils, /current\.value \+ transferAdjustment/);
   assert.deepEqual(getCurrentValuationValue(1000, []), { value: 1000, valuation: null });
   assert.equal(getCurrentValuationValue(1000, [{ id: "v1", valuation_date: "2026-01-01", value: 1200 }]).value, 1200);
 });

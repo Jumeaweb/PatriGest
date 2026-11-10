@@ -1,6 +1,7 @@
 import type { AccountValuation, FinancialAccount, FinancialAccountType, Transaction } from "@/types/database";
 import { calculateClassicBalance } from "@/domains/transactions/utils/transaction-utils";
 import { getCurrentValuationValue } from "./account-valuation-utils";
+import { calculateValuationTransferAdjustment } from "./valuation-transfer-adjustment";
 
 export const financialAccountLabels: Record<FinancialAccountType, string> = {
   checking: "Compte courant", livret_a: "Livret A", ldds: "LDDS", csl: "CSL", lep: "LEP",
@@ -22,27 +23,16 @@ export function formatFinancialDate(value: string) {
 
 export function getCurrentAccountValue(account: FinancialAccount, valuations: AccountValuation[], transactions: Transaction[] = []) {
   const movements = (transactions.length ? transactions : (account as FinancialAccount & { transactions?: Transaction[] }).transactions ?? []).filter((transaction) => !transaction.cancelled_at);
-  if (!isValuationAccount(account.account_type)) return { value: calculateClassicBalance(account.initial_balance, movements), valuation: null };
-  return getCurrentValuationValue(account.initial_balance, valuations);
+  if (!isValuationAccount(account.account_type)) return { value: calculateClassicBalance(account.initial_balance, movements), valuation: null, transferAdjustment: 0 };
+  const current = getCurrentValuationValue(account.initial_balance, valuations);
+  const baselineDate = current.valuation?.valuation_date
+    ?? (account.opening_date && account.opening_date > account.initial_balance_date ? account.opening_date : account.initial_balance_date);
+  const transferAdjustment = calculateValuationTransferAdjustment(movements, baselineDate);
+  return { ...current, value: current.value + transferAdjustment, transferAdjustment };
 }
 
 export function getCurrentPatrimonyValue(accounts: Array<FinancialAccount & { valuations: AccountValuation[]; transactions: Transaction[] }>) {
-  const activeAccounts = accounts.filter((account) => account.status === "active");
-  const displayedValue = activeAccounts.reduce((total, account) => total + getCurrentAccountValue(account, account.valuations, account.transactions).value, 0);
-  const accountById = new Map(activeAccounts.map((account) => [account.id, account]));
-  const transferLegs = new Map<string, Transaction[]>();
-  for (const account of activeAccounts) for (const transaction of account.transactions) if (!transaction.cancelled_at && transaction.transfer_id) transferLegs.set(transaction.transfer_id, [...(transferLegs.get(transaction.transfer_id) ?? []), transaction]);
-  let placementTransferAdjustment = 0;
-  for (const legs of transferLegs.values()) {
-    if (legs.length !== 2) continue;
-    const placementLeg = legs.find((leg) => isValuationAccount(accountById.get(leg.financial_account_id)?.account_type ?? "checking"));
-    const classicLeg = legs.find((leg) => !isValuationAccount(accountById.get(leg.financial_account_id)?.account_type ?? "checking"));
-    if (!placementLeg || !classicLeg) continue;
-    const placement = accountById.get(placementLeg.financial_account_id)!;
-    const latestValuationDate = placement.valuations.reduce<string | null>((latest, valuation) => !latest || valuation.valuation_date > latest ? valuation.valuation_date : latest, null);
-    const baselineDate = latestValuationDate ?? placement.initial_balance_date;
-    if (placementLeg.transaction_date <= baselineDate) continue;
-    placementTransferAdjustment += placementLeg.transaction_type === "transfer_in" ? placementLeg.amount : -placementLeg.amount;
-  }
-  return displayedValue + placementTransferAdjustment;
+  return accounts
+    .filter((account) => account.status === "active")
+    .reduce((total, account) => total + getCurrentAccountValue(account, account.valuations, account.transactions).value, 0);
 }

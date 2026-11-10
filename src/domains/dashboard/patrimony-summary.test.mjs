@@ -158,6 +158,7 @@ test("la composante bancaire réutilise le calcul canonique, y compris la valori
   const canonicalBanking = readFileSync(new URL("../financial-accounts/utils/financial-account-utils.ts", import.meta.url), "utf8");
   assert.match(implementation, /getCurrentPatrimonyValue\(\[\.\.\.accounts\]\)/);
   assert.doesNotMatch(implementation, /calculateClassicBalance|transferLegs|transaction_type/);
-  assert.match(canonicalBanking, /accounts\.filter\(\(account\) => account\.status === "active"\)/);
-  assert.match(canonicalBanking, /placementTransferAdjustment/);
+  assert.match(canonicalBanking, /accounts\s*\.filter\(\(account\) => account\.status === "active"\)/);
+  assert.match(canonicalBanking, /calculateValuationTransferAdjustment\(movements, baselineDate\)/);
+  assert.doesNotMatch(canonicalBanking, /placementTransferAdjustment|transferLegs/);
 });
