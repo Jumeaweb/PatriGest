@@ -54,6 +54,16 @@ test("classification stable et précision obligatoire restent dans createTransac
   assert.match(component, /getEffectiveOfficialCategory\(categories, draft\.categoryId\)/);
 });
 
+test("le sélecteur conserve ses sections et affiche les rubriques officielles non sélectionnables", () => {
+  assert.match(component, /<option value="">Sans catégorie<\/option>/);
+  assert.match(component, /<optgroup label="Mes catégories personnelles">/);
+  assert.match(component, /<optgroup label="Rubriques officielles">/);
+  assert.match(component, /groupOfficialCategories\(usableCategories\)/);
+  assert.match(component, /<option value=\{`official-group:\$\{group\.label\}`\} disabled>/);
+  assert.match(component, /group\.label\.toLocaleUpperCase\("fr-FR"\)/);
+  assert.match(component, /group\.categories\.map\(\(category\) => <option key=\{category\.id\} value=\{category\.id\}>\{category\.name\}<\/option>\)/);
+});
+
 test("l'exercice clôturé reste protégé par le trigger et donne une erreur sûre", () => {
   assert.match(action, /isClosedPeriodError\(error\)/);
   assert.match(source("../../../supabase/migrations/20260809120000_create_financial_transactions.sql"), /create trigger transactions_protect_closed_period\s+before insert or update or delete/);

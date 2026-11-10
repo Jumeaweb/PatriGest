@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { Fragment, useActionState, useEffect, useRef, useState } from "react";
 import type { Category, FinancialAccount } from "@/types/database";
 import { FieldError } from "@/components/auth/form-controls";
 import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
+import { groupOfficialCategories } from "@/domains/categories/official-category-groups";
 import { formatCurrency, formatFinancialDate } from "@/domains/financial-accounts/utils/financial-account-utils";
 import { getEffectiveOfficialCategory, getPrecisionAfterCategoryChange } from "./transaction-classification-form";
 import { createSuccessiveTransactionAction } from "../successive-actions";
@@ -65,6 +66,7 @@ function EntryForm({ personId, accounts, categories, draft, onDraftChange, onCre
   const official = getEffectiveOfficialCategory(categories, draft.categoryId);
   const precisionRequired = official?.requires_precision === true;
   const usableCategories = categories.filter((category) => category.active && (category.usage === draft.transactionType || category.usage === "both"));
+  const officialGroups = groupOfficialCategories(usableCategories);
   const change = (patch: Partial<SuccessiveDraft>) => onDraftChange({ ...draft, ...patch });
   const cancel = () => {
     if (hasUnsavedSuccessiveDraft(draft, initialDraft.current)) setAbandonOpen(true);
@@ -81,7 +83,7 @@ function EntryForm({ personId, accounts, categories, draft, onDraftChange, onCre
       <div><label className="auth-label" htmlFor="transactionDate">Date *</label><input className="auth-input" id="transactionDate" name="transactionDate" type="date" value={draft.transactionDate} onChange={(event) => change({ transactionDate: event.target.value })} aria-describedby={field("transactionDate")} required /><span id="transactionDate-error"><FieldError messages={errors?.transactionDate} /></span></div>
       <div><label className="auth-label" htmlFor="label">Libellé *</label><input ref={labelRef} className="auth-input" id="label" name="label" value={draft.label} onChange={(event) => change({ label: event.target.value })} maxLength={160} aria-describedby={field("label")} required /><span id="label-error"><FieldError messages={errors?.label} /></span></div>
       <div><label className="auth-label" htmlFor="amount">Montant *</label><input className="auth-input" id="amount" name="amount" type="number" step="0.01" min="0.01" value={draft.amount} onChange={(event) => change({ amount: event.target.value })} aria-describedby={field("amount")} required /><span id="amount-error"><FieldError messages={errors?.amount} /></span></div>
-      <div><label className="auth-label" htmlFor="categoryId">Catégorie facultative</label><select className="auth-input" id="categoryId" name="categoryId" value={draft.categoryId} onChange={(event) => change({ categoryId: event.target.value, classificationPrecision: getPrecisionAfterCategoryChange(categories, event.target.value) })} aria-describedby={field("categoryId")}><option value="">Sans catégorie</option><optgroup label="Mes catégories personnelles">{usableCategories.filter((category) => !category.is_system).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</optgroup><optgroup label="Rubriques officielles">{usableCategories.filter((category) => category.is_system && category.official_code).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</optgroup></select><span id="categoryId-error"><FieldError messages={errors?.categoryId} /></span></div>
+      <div><label className="auth-label" htmlFor="categoryId">Catégorie facultative</label><select className="auth-input" id="categoryId" name="categoryId" value={draft.categoryId} onChange={(event) => change({ categoryId: event.target.value, classificationPrecision: getPrecisionAfterCategoryChange(categories, event.target.value) })} aria-describedby={field("categoryId")}><option value="">Sans catégorie</option><optgroup label="Mes catégories personnelles">{usableCategories.filter((category) => !category.is_system).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</optgroup><optgroup label="Rubriques officielles">{officialGroups.map((group) => <Fragment key={group.label}><option value={`official-group:${group.label}`} disabled>{group.label.toLocaleUpperCase("fr-FR")}</option>{group.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</Fragment>)}</optgroup></select><span id="categoryId-error"><FieldError messages={errors?.categoryId} /></span></div>
       {precisionRequired ? <div><label className="auth-label" htmlFor="classificationPrecision">Précision *</label><input className="auth-input" id="classificationPrecision" name="classificationPrecision" value={draft.classificationPrecision} onChange={(event) => change({ classificationPrecision: event.target.value })} maxLength={160} required aria-describedby={field("classificationPrecision")} /><span id="classificationPrecision-error"><FieldError messages={errors?.classificationPrecision} /></span></div> : <input type="hidden" name="classificationPrecision" value="" />}
       {selected && !official && <p className="sm:col-span-2 text-xs text-[#DC2626]">Cette catégorie ne peut pas être utilisée.</p>}
       {state.status === "error" && <p role="alert" className="sm:col-span-2 text-sm text-[#DC2626]">{state.message}</p>}
