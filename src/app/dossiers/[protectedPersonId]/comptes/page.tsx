@@ -11,6 +11,7 @@ import { getFinancialAccountEntryHref } from "@/domains/financial-accounts/finan
 import { DossierNavigation } from "@/domains/protected-persons/components/dossier-navigation";
 import { getProtectedPerson } from "@/domains/protected-persons/services/protected-person-service";
 import { getFinancialAccounts, type FinancialAccountWithValuations } from "@/domains/financial-accounts/services/financial-account-service";
+import { sortFinancialAccountsByName } from "@/domains/financial-accounts/utils/financial-account-sort";
 import { financialAccountLabels, formatCurrency, formatFinancialDate, getCurrentAccountValue, getCurrentPatrimonyValue, isValuationAccount } from "@/domains/financial-accounts/utils/financial-account-utils";
 
 export const metadata: Metadata = { title: "Comptes et patrimoine" };
@@ -22,8 +23,8 @@ export default async function FinancialAccountsPage({ params }: { params: Promis
   const person = await getProtectedPerson(protectedPersonId);
   if (!person) notFound();
   const accounts = await getFinancialAccounts(protectedPersonId);
-  const active = accounts.filter((account) => account.status === "active");
-  const closed = accounts.filter((account) => account.status === "closed");
+  const active = sortFinancialAccountsByName(accounts.filter((account) => account.status === "active"));
+  const closed = sortFinancialAccountsByName(accounts.filter((account) => account.status === "closed"));
   const total = getCurrentPatrimonyValue(accounts);
   const canManage = person.accessRole !== "read_only";
   return <PrivateShell current="dossiers" dossier={{ id: protectedPersonId, name: `${person.first_name} ${person.last_name}`, current: "accounts", accessRole: person.accessRole }}><AppBreadcrumb items={[{ label: "Dossiers", href: "/dossiers" }, { label: `${person.first_name} ${person.last_name}`, href: `/dossiers/${protectedPersonId}/comptes` }, { label: "Comptes et patrimoine" }]} /><div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-sm font-bold uppercase tracking-[0.14em] text-[#2563EB]">{person.first_name} {person.last_name}</p><h1 className="mt-2 text-3xl font-bold tracking-tight">Comptes et patrimoine</h1></div>{canManage && <Link href={`/dossiers/${protectedPersonId}/comptes/nouveau`} className="button button-primary gap-2"><Plus aria-hidden="true" size={18} />Ajouter un compte</Link>}</div><DossierNavigation protectedPersonId={protectedPersonId} current="accounts" /><PatrimonyNavigation protectedPersonId={protectedPersonId} current="accounts" /><FinancialNavigation protectedPersonId={protectedPersonId} current="accounts" />

@@ -8,6 +8,7 @@ import { AppBreadcrumb } from "@/components/ui/app-breadcrumb";
 import { PatrimonyNavigation } from "@/domains/assets-liabilities/components/patrimony-navigation";
 import { getDebts, getProperties } from "@/domains/assets-liabilities/services";
 import { getFinancialAccounts } from "@/domains/financial-accounts/services/financial-account-service";
+import { sortFinancialAccountsByName } from "@/domains/financial-accounts/utils/financial-account-sort";
 import { formatCurrency, getCurrentAccountValue, getCurrentPatrimonyValue } from "@/domains/financial-accounts/utils/financial-account-utils";
 import { DeleteProtectedPerson } from "@/domains/protected-persons/components/delete-protected-person";
 import { ProtectedPersonArchiveAction } from "@/domains/protected-persons/components/protected-person-archive-action";
@@ -90,7 +91,7 @@ export default async function ProtectedPersonDetailPage({
   const measureCompleteness = getProtectionMeasureRegulatoryCompleteness(activeMeasure);
   const propertyState = getDossierPropertyState(properties);
   const debtState = getDossierDebtState(debts);
-  const activeAccounts = accounts.filter((account) => account.status === "active");
+  const activeAccounts = sortFinancialAccountsByName(accounts.filter((account) => account.status === "active"));
   const closedAccountCount = accounts.filter((account) => account.status === "closed").length;
 
   return <PrivateShell current="dossiers" dossier={{ id: protectedPersonId, name: `${person.first_name} ${person.last_name}`, current: dossierSection, accessRole: person.accessRole }}>
