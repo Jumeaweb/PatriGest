@@ -257,6 +257,7 @@ export async function validateBankReconciliation(reconciliationId: string) {
     p_reconciliation_id: reconciliationId,
   });
   if (error) {
+    if (error.message?.includes("Seul un rapprochement en brouillon")) throw new BankReconciliationServiceError("Ce contrôle bancaire est déjà validé ou n’est plus modifiable.", 409);
     if (error.code === "55000" && error.message?.includes("écart simple")) throw new BankReconciliationServiceError("L’écart entre le relevé bancaire et PatriGest doit être nul avant la validation.", 409);
     if (error.code === "55000" && error.message?.includes("écart résiduel")) throw new BankReconciliationServiceError("L’écart résiduel doit être nul avant la validation.", 409);
     if (error.code === "55000" && error.message?.includes("impact bancaire")) throw new BankReconciliationServiceError("Reconnaissez et justifiez chaque impact bancaire avant la validation.", 409);

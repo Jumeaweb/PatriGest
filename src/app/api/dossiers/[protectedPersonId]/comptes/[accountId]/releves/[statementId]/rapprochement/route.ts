@@ -108,7 +108,7 @@ export async function PATCH(_request: Request, { params }: Params) {
       context.statement,
       validated,
     );
-    return NextResponse.json(control);
+    return NextResponse.json({ ...control, impacts: [] });
   } catch (error) {
     return failure(error);
   }

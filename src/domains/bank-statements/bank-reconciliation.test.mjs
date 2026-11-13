@@ -118,6 +118,23 @@ test("l'API expose GET POST PUT PATCH et réserve les écritures aux gestionnair
   assert.match(route, /validateBankReconciliation\(reconciliation\.id\)/);
 });
 
+test("la validation renvoie un contrôle complet avant le rafraîchissement de la page", () => {
+  const route = source("../../app/api/dossiers/[protectedPersonId]/comptes/[accountId]/releves/[statementId]/rapprochement/route.ts");
+  const component = source("./components/bank-reconciliation-manager.tsx");
+  const patchHandler = route.slice(route.indexOf("export async function PATCH"));
+  const genericRequest = component.slice(component.indexOf("async function request"), component.indexOf("async function acknowledgeImpact"));
+
+  assert.match(patchHandler, /NextResponse\.json\(\{ \.\.\.control, impacts: \[\] \}\)/);
+  assert.match(genericRequest, /setControl\(result\)/);
+  assert.match(genericRequest, /if \(result\.status === "validated"\) router\.refresh\(\)/);
+});
+
+test("une nouvelle tentative sur un rapprochement déjà validé reçoit une erreur métier explicite", () => {
+  const service = source("./reconciliation-service.ts");
+  assert.match(service, /error\.message\?\.includes\("Seul un rapprochement en brouillon"\)/);
+  assert.match(service, /Ce contrôle bancaire est déjà validé ou n’est plus modifiable\./);
+});
+
 test("le client ne transmet aucune valeur métier à la validation", () => {
   const component = source("./components/bank-reconciliation-manager.tsx");
   const genericRequest = component.slice(component.indexOf("async function request"), component.indexOf("async function acknowledgeImpact"));
