@@ -66,6 +66,18 @@ test("rejette explicitement une suppression à zéro ligne", async () => {
   );
 });
 
+test("explique la protection d'une valorisation déjà rapprochée", async () => {
+  const { client } = deletionClient({
+    data: null,
+    error: { code: "55000", message: "Cette valorisation est utilisée par un rapprochement validé" },
+  });
+
+  await assert.rejects(
+    deleteAccountValuationRow(client, "account-id", "protected-id"),
+    /rapprochement validé et ne peut plus être supprimée/,
+  );
+});
+
 test("la valorisation précédente devient naturellement la valeur courante", () => {
   const valuations = [
     { id: "old", valuation_date: "2025-12-31", value: 120 },

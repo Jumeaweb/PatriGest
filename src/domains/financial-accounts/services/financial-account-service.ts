@@ -159,6 +159,9 @@ export async function updateAccountValuation(accountId: string, valuationId: str
     .single();
 
   if (error?.code === "23505") throw new Error("Une valorisation existe déjà à cette date.");
+  if (error?.code === "55000" && error.message?.includes("rapprochement validé")) {
+    throw new Error("Cette valorisation est utilisée par un rapprochement validé et ne peut plus être modifiée.");
+  }
   if (error) throw new Error("Impossible de modifier la valorisation.");
   return data;
 }

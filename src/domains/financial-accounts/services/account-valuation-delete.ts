@@ -15,6 +15,9 @@ export async function deleteAccountValuationRow(
     .single();
 
   if (error || !data) {
+    if (error?.code === "55000" && error.message?.includes("rapprochement validé")) {
+      throw new Error("Cette valorisation est utilisée par un rapprochement validé et ne peut plus être supprimée.");
+    }
     throw new Error("Impossible de supprimer la valorisation.");
   }
 }

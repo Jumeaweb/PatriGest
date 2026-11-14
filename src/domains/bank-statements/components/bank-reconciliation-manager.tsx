@@ -3,7 +3,10 @@
 import { useState } from "react";
 import { AlertTriangle, RefreshCw, Scale } from "lucide-react";
 import { useRouter } from "next/navigation";
-import type { BankStatement, FinancialAccount } from "@/types/database";
+import Link from "next/link";
+import type { AccountValuation, BankStatement, FinancialAccount } from "@/types/database";
+import { getAccountValuationAtDate } from "@/domains/financial-accounts/utils/account-valuation-utils";
+import { isValuationAccount } from "@/domains/financial-accounts/utils/financial-account-utils";
 import {
   getReconciliationUnavailableReason,
   type BankReconciliationAttentionSummary,
@@ -21,7 +24,7 @@ const date = (value: string) => new Intl.DateTimeFormat("fr-FR").format(new Date
 const dateTime = (value: string) => new Intl.DateTimeFormat("fr-FR").format(new Date(value));
 const euro = (value: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
 
-type AccountDates = Pick<FinancialAccount, "closing_date" | "initial_balance_date" | "opening_date">;
+type AccountDates = Pick<FinancialAccount, "account_type" | "closing_date" | "initial_balance_date" | "opening_date">;
 type ManagerProps = {
   personId: string;
   accountId: string;
@@ -30,6 +33,7 @@ type ManagerProps = {
   attentionSummary: BankReconciliationAttentionSummary;
   reconciliations: BankReconciliationListState[];
   accountDates: AccountDates;
+  accountValuations: AccountValuation[];
   canManage: boolean;
 };
 type ControlProps = Omit<ManagerProps, "items" | "totalCount" | "attentionSummary" | "reconciliations"> & {
@@ -46,6 +50,7 @@ export function BankReconciliationManager({
   attentionSummary,
   reconciliations,
   accountDates,
+  accountValuations,
   canManage,
 }: ManagerProps) {
   const byStatement = new Map(reconciliations.map((item) => [item.bank_statement_id, item]));
@@ -98,6 +103,7 @@ export function BankReconciliationManager({
                   item={item}
                   reconciliation={reconciliation}
                   accountDates={accountDates}
+                  accountValuations={accountValuations}
                   canManage={canManage}
                 />
               </div>
@@ -153,6 +159,11 @@ function initialValidatedControl(
     reconciliationId: reconciliation.id,
     status: "validated",
     reconciliationMode: reconciliation.reconciliation_mode,
+    controlBasis: reconciliation.control_basis ?? "legacy",
+    referenceDate: reconciliation.reference_date,
+    referenceValue: reconciliation.reference_value,
+    sourceValuationId: reconciliation.source_valuation_id,
+    missingExactValuation: false,
     unavailableReason: null,
     statementEndDate: item.statement_end_date,
     statementBalance: item.statement_balance,
@@ -190,12 +201,46 @@ export function ReconciliationControl({
   item,
   reconciliation,
   accountDates,
+  accountValuations,
   canManage,
 }: ControlProps) {
   const router = useRouter();
-  const [control, setControl] = useState<ControlWithImpacts | null>(
-    () => initialValidatedControl(item, reconciliation),
-  );
+  const valuationAccount = isValuationAccount(accountDates.account_type);
+  const exactValuation = valuationAccount
+    ? getAccountValuationAtDate(accountValuations, item.statement_end_date)
+    : null;
+  const [control, setControl] = useState<ControlWithImpacts | null>(() => {
+    const validated = initialValidatedControl(item, reconciliation);
+    if (validated) return validated;
+    if (!valuationAccount) return null;
+    const differenceInCents = exactValuation && item.statement_balance !== null
+      ? Math.round(item.statement_balance * 100) - Math.round(exactValuation.value * 100)
+      : null;
+    return {
+      reconciliationId: reconciliation?.id ?? null,
+      status: reconciliation?.status ?? "none",
+      reconciliationMode: "simple",
+      controlBasis: "valuation",
+      referenceDate: item.statement_end_date,
+      referenceValue: exactValuation?.value ?? null,
+      sourceValuationId: exactValuation?.id ?? null,
+      missingExactValuation: !exactValuation,
+      unavailableReason: null,
+      statementEndDate: item.statement_end_date,
+      statementBalance: item.statement_balance,
+      calculatedBalance: exactValuation?.value ?? null,
+      calculatedBalanceInCents: exactValuation ? Math.round(exactValuation.value * 100) : null,
+      difference: differenceInCents === null ? null : differenceInCents / 100,
+      differenceInCents,
+      validatedAt: null,
+      outstandingDebits: null,
+      outstandingCredits: null,
+      explainedBankBalance: null,
+      residualDifference: null,
+      outstandingCount: null,
+      impacts: [],
+    };
+  });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [pointingOpen, setPointingOpen] = useState(false);
@@ -260,8 +305,14 @@ export function ReconciliationControl({
   if (unavailableReason && status !== "validated") {
     return <div><p className="text-xs font-semibold text-[#64748B]">Contrôle indisponible</p><p className="mt-0.5 text-xs text-[#64748B]">{unavailableMessage(unavailableReason)}</p></div>;
   }
+  if (control?.missingExactValuation && status !== "validated") {
+    return <div><p className="text-xs font-bold">Contrôle de valorisation — Relevé du {date(item.statement_end_date)}</p><p className="mt-1 text-xs font-semibold text-amber-800">Aucune valorisation n&apos;est enregistrée au {date(item.statement_end_date)}. Ajoutez une valorisation à cette date pour contrôler ce relevé.</p><Link className="mt-2 inline-flex text-xs font-bold text-[#2563EB] underline" href={`/dossiers/${personId}/comptes/${accountId}`}>Gérer les valorisations</Link></div>;
+  }
   if (status === "none") {
-    return <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-bold">Contrôle non commencé</p><p className="text-[11px] text-[#64748B]">Comparez le relevé au solde calculé par PatriGest.</p></div>{canManage && <button className="button button-secondary min-h-8 gap-1.5 px-2.5 text-xs" disabled={busy} onClick={() => request("POST")}><Scale size={13} />{busy ? "Calcul…" : "Contrôler le solde"}</button>}{message && <p role="alert" className="w-full text-xs text-red-700">{message}</p>}</div>;
+    const initialValuationDifference = exactValuation && item.statement_balance !== null
+      ? item.statement_balance - exactValuation.value
+      : null;
+    return <div><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-bold">{valuationAccount ? `Contrôle de valorisation — Relevé du ${date(item.statement_end_date)}` : "Contrôle non commencé"}</p><p className="text-[11px] text-[#64748B]">{valuationAccount ? "Comparez le relevé à la valorisation enregistrée exactement à la même date." : "Comparez le relevé au solde calculé par PatriGest."}</p></div>{canManage && <button className="button button-secondary min-h-8 gap-1.5 px-2.5 text-xs" disabled={busy} onClick={() => request("POST")}><Scale size={13} />{busy ? "Calcul…" : valuationAccount ? "Contrôler la valorisation" : "Contrôler le solde"}</button>}</div>{valuationAccount && exactValuation && item.statement_balance !== null && initialValuationDifference !== null && <div className="mt-3 grid gap-2 sm:grid-cols-3"><Value label="Valeur du relevé" value={item.statement_balance} /><Value label={`Valorisation PatriGest au ${date(item.statement_end_date)}`} value={exactValuation.value} /><DifferenceValue label="Écart" value={initialValuationDifference} zero={Math.round(initialValuationDifference * 100) === 0} /></div>}{message && <p role="alert" className="mt-2 w-full text-xs text-red-700">{message}</p>}</div>;
   }
   if (status === "draft" && !control) {
     return <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold">Brouillon — contrôle {reconciliation?.reconciliation_mode === "complete" ? "détaillé" : "simple"}</p><button className="button button-secondary min-h-8 px-2.5 text-xs" disabled={busy} onClick={() => request("GET")}>{busy ? "Calcul…" : "Afficher le contrôle"}</button>{message && <p role="alert" className="w-full text-xs text-red-700">{message}</p>}</div>;
@@ -272,13 +323,16 @@ export function ReconciliationControl({
 
   const pendingImpacts = control.impacts.filter((impact) => impact.acknowledgementState === "pending");
   const validationBlockedByImpacts = pendingImpacts.length > 0;
-  const validationDifference = control.reconciliationMode === "simple" ? control.difference : control.residualDifference;
+  const validationDifference = control.controlBasis === "valuation" || control.reconciliationMode === "simple" ? control.difference : control.residualDifference;
   const validationBlockedByDifference = validationDifference !== null && Math.round(validationDifference * 100) !== 0;
   const validationBlocked = validationBlockedByImpacts || validationBlockedByDifference;
   const validationHelpId = `reconciliation-validation-help-${control.reconciliationId}`;
   const differenceHelpId = `${validationHelpId}-difference`;
   const impactsHelpId = `${validationHelpId}-impacts`;
   const validationHelpIds = [validationBlockedByDifference ? differenceHelpId : null, validationBlockedByImpacts ? impactsHelpId : null].filter(Boolean).join(" ") || undefined;
+  if (control.controlBasis === "valuation") {
+    return <div><p className="mb-2 text-xs font-bold">Contrôle de valorisation — Relevé du {date(control.statementEndDate)}</p><div className="grid gap-2 sm:grid-cols-3"><Value label="Valeur du relevé" value={control.statementBalance} /><Value label={`Valorisation PatriGest au ${date(control.statementEndDate)}`} value={control.calculatedBalance} /><DifferenceValue label="Écart" value={control.difference} zero={control.differenceInCents === 0} /></div><div className="mt-3 flex flex-wrap items-center justify-between gap-2"><p className="text-[11px] font-semibold text-[#64748B]">{control.status === "validated" && control.validatedAt ? `Validé le ${dateTime(control.validatedAt)} — valorisation et montants figés` : "Brouillon — valorisation recalculée à l’affichage"}</p>{control.status === "draft" && canManage && <div className="flex flex-wrap gap-1.5"><button className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" disabled={busy} onClick={() => request("GET")}><RefreshCw size={13} />Recalculer</button><button className={`button min-h-8 px-2.5 text-xs ${validationBlockedByDifference ? "cursor-not-allowed bg-slate-200 text-slate-500 shadow-none" : "button-primary"}`} disabled={busy || validationBlockedByDifference} aria-describedby={validationBlockedByDifference ? differenceHelpId : undefined} onClick={() => request("PATCH")}>Valider le contrôle</button></div>}{validationBlockedByDifference && validationDifference !== null && <p id={differenceHelpId} className="w-full text-xs font-semibold text-amber-800">Un écart de {euro(Math.abs(validationDifference))} subsiste entre la valeur du relevé et la valorisation PatriGest enregistrée à la même date.</p>}{message && <p role="alert" className="w-full text-xs text-red-700">{message}</p>}</div></div>;
+  }
   return <div><div className="grid gap-2 sm:grid-cols-3"><Value label="Solde du relevé" value={control.statementBalance} /><Value label={`Solde PatriGest au ${date(control.statementEndDate)}`} value={control.calculatedBalance} /><DifferenceValue label={control.reconciliationMode === "complete" ? "Écart simple" : "Écart"} value={control.difference} zero={control.differenceInCents === 0} /></div>{control.reconciliationMode === "complete" && <div className="mt-3 grid gap-2 rounded-lg bg-[#F8FAFC] p-3 sm:grid-cols-2 lg:grid-cols-4"><Value label="+ Débits en circulation" value={control.outstandingDebits} /><Value label="− Crédits en circulation" value={control.outstandingCredits} /><Value label="Solde bancaire expliqué" value={control.explainedBankBalance} /><DifferenceValue label="Écart résiduel" value={control.residualDifference} zero={control.residualDifference === 0} residual /></div>}{control.status === "draft" && control.impacts.length > 0 && <section className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3" aria-labelledby={`impacts-${control.reconciliationId}`}><h3 id={`impacts-${control.reconciliationId}`} className="text-sm font-bold text-amber-950">Impacts bancaires à vérifier</h3><p className="mt-1 text-xs text-amber-900">Ces corrections ou annulations sont postérieures à un rapprochement validé. Chaque impact doit être reconnu et justifié avant validation.</p><ul className="mt-3 space-y-2">{control.impacts.map((impact) => <li key={impact.impactId} className="rounded-lg bg-white p-3 text-xs"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-bold">{impact.transactionLabel}</p><p className="text-[#64748B]">Opération du {date(impact.transactionDate)} · rapprochement historique au {date(impact.historicalStatementEndDate)}</p></div><span className={`rounded-full px-2 py-1 font-semibold ${impact.acknowledgementState === "acknowledged" ? "bg-emerald-50 text-emerald-800" : "bg-amber-100 text-amber-900"}`}>{impact.acknowledgementState === "acknowledged" ? "Reconnu" : "À reconnaître"}</span></div><p className="mt-2">{impact.impactKind === "reverse_previous" ? "Annulation de l’effet bancaire précédent" : "Application de la valeur corrigée"} : <strong>{euro(impact.signedAmount)}</strong></p>{impact.acknowledgementState === "acknowledged" ? <p className="mt-2 rounded-md bg-slate-50 px-2 py-1.5"><span className="font-semibold">Justification :</span> {impact.justification}</p> : canManage ? <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end"><label className="min-w-0 flex-1"><span className="font-semibold">Justification *</span><textarea className="auth-input mt-1 min-h-16 py-2" value={impactReasons[impact.impactId] ?? ""} onChange={(event) => setImpactReasons((current) => ({ ...current, [impact.impactId]: event.target.value }))} minLength={3} maxLength={1000} /></label><button type="button" className="button button-secondary shrink-0" disabled={busy || (impactReasons[impact.impactId] ?? "").trim().length < 3} onClick={() => acknowledgeImpact(impact.impactId)}>Reconnaître l’impact</button></div> : <p className="mt-2 text-[#64748B]">Un gestionnaire doit reconnaître cet impact avant la validation.</p>}</li>)}</ul></section>}<div className="mt-3 flex flex-wrap items-center justify-between gap-2"><p className="text-[11px] font-semibold text-[#64748B]">{control.status === "validated" && control.validatedAt ? `Validé le ${dateTime(control.validatedAt)} — contrôle ${control.reconciliationMode === "complete" ? "détaillé" : "simple"} — montants figés` : control.reconciliationMode === "complete" ? "Brouillon détaillé — recalculé à l’affichage" : "Brouillon simple — recalculé à l’affichage"}</p><div className="flex flex-wrap gap-1.5">{control.reconciliationMode === "complete" && <button className="button button-secondary min-h-8 px-2.5 text-xs" disabled={busy} onClick={() => openPointing(false)}>Opérations en circulation</button>}{control.status === "draft" && canManage && <>{control.reconciliationMode === "simple" && <button className="button button-secondary min-h-8 px-2.5 text-xs" disabled={busy} onClick={() => openPointing(true)}>Rapprochement détaillé</button>}<button className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" disabled={busy} onClick={() => request("GET")}><RefreshCw size={13} />Recalculer</button><button className={`button min-h-8 px-2.5 text-xs ${validationBlocked ? "cursor-not-allowed bg-slate-200 text-slate-500 shadow-none" : "button-primary"}`} disabled={busy || validationBlocked} aria-describedby={validationHelpIds} onClick={() => request("PATCH")}>Valider le contrôle</button></>}</div>{validationBlockedByDifference && validationDifference !== null && <p id={differenceHelpId} className="w-full text-xs font-semibold text-amber-800">{control.reconciliationMode === "simple" ? <>Un écart de {euro(Math.abs(validationDifference))} subsiste entre le relevé bancaire et PatriGest. Vérifiez les opérations ou utilisez le rapprochement détaillé pour identifier les opérations en circulation.</> : <>Un écart résiduel de {euro(Math.abs(validationDifference))} subsiste. Identifiez correctement les opérations en circulation avant de valider le rapprochement.</>}</p>}{validationBlockedByImpacts && <p id={impactsHelpId} className="w-full text-xs font-semibold text-amber-800">Reconnaissez et justifiez tous les impacts bancaires avant de valider le rapprochement.</p>}{message && <p role="alert" className="w-full text-xs text-red-700">{message}</p>}</div>{pointingOpen && <OutstandingTransactionsDialog endpoint={pointingEndpoint} open canManage={canManage && control.status === "draft"} initialPage={pointingPage} onClose={() => setPointingOpen(false)} onChange={(page) => { setPointingPage(page); setControl((current) => current ? { ...current, ...page.summary } : current); }} />}</div>;
 }
 

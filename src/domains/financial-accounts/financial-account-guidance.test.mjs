@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { getCurrentValuationValue } from "./utils/account-valuation-utils.ts";
+import { getAccountValuationAtDate, getCurrentValuationValue } from "./utils/account-valuation-utils.ts";
 import { financialAccountSchema, financialAccountTypes } from "./schemas/financial-account-schema.ts";
 
 const form = readFileSync(new URL("./components/financial-account-form.tsx", import.meta.url), "utf8");
@@ -83,4 +83,13 @@ test("le compte-titres reçoit la même aide et le calcul valorisé applique les
   assert.match(accountUtils, /current\.value \+ transferAdjustment/);
   assert.deepEqual(getCurrentValuationValue(1000, []), { value: 1000, valuation: null });
   assert.equal(getCurrentValuationValue(1000, [{ id: "v1", valuation_date: "2026-01-01", value: 1200 }]).value, 1200);
+});
+
+test("la recherche d'une valorisation de contrôle exige la date exacte", () => {
+  const valuations = [
+    { id: "v1", valuation_date: "2016-12-31", value: 230.4 },
+    { id: "v2", valuation_date: "2017-12-31", value: 232.71 },
+  ];
+  assert.equal(getAccountValuationAtDate(valuations, "2017-12-31")?.id, "v2");
+  assert.equal(getAccountValuationAtDate(valuations, "2017-06-30"), null);
 });

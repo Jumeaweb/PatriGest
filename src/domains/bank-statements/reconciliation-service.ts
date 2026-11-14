@@ -1,5 +1,7 @@
-import type { BankReconciliation, BankStatement, FinancialAccount } from "@/types/database";
+import type { AccountValuation, BankReconciliation, BankStatement, FinancialAccount } from "@/types/database";
 import { getAccountBalanceAtDate } from "@/domains/financial-accounts/services/financial-account-service";
+import { getAccountValuationAtDate } from "@/domains/financial-accounts/utils/account-valuation-utils";
+import { isValuationAccount } from "@/domains/financial-accounts/utils/financial-account-utils";
 import { getAuthenticatedUser } from "@/domains/protected-persons/services/authenticated-user";
 import {
   calculateReconciliationDifference,
@@ -13,13 +15,19 @@ export const OUTSTANDING_TRANSACTION_PAGE_SIZE = 50;
 export type BankReconciliationListState = Pick<
   BankReconciliation,
   "id" | "bank_statement_id" | "status" | "reconciliation_mode" | "calculated_balance" | "difference" |
-  "outstanding_debits" | "outstanding_credits" | "explained_bank_balance" | "residual_difference" | "validated_at"
+  "outstanding_debits" | "outstanding_credits" | "explained_bank_balance" | "residual_difference" | "validated_at" |
+  "control_basis" | "reference_date" | "reference_value" | "source_valuation_id"
 >;
 
 export type BankReconciliationControl = {
   reconciliationId: string | null;
   status: "none" | "draft" | "validated";
   reconciliationMode: "simple" | "complete";
+  controlBasis: "transactions" | "valuation" | "legacy";
+  referenceDate: string | null;
+  referenceValue: number | null;
+  sourceValuationId: string | null;
+  missingExactValuation: boolean;
   unavailableReason: ReconciliationUnavailableReason | null;
   statementEndDate: string;
   statementBalance: number | null;
@@ -81,7 +89,7 @@ export async function getBankReconciliationListStates(statementIds: string[]) {
     const batch = statementIds.slice(index, index + RECONCILIATION_QUERY_BATCH_SIZE);
     const { data, error } = await supabase
       .from("bank_reconciliations")
-      .select("id, bank_statement_id, status, reconciliation_mode, calculated_balance, difference, outstanding_debits, outstanding_credits, explained_bank_balance, residual_difference, validated_at")
+      .select("id, bank_statement_id, status, reconciliation_mode, control_basis, reference_date, reference_value, source_valuation_id, calculated_balance, difference, outstanding_debits, outstanding_credits, explained_bank_balance, residual_difference, validated_at")
       .in("bank_statement_id", batch);
     if (error) throw new Error("Impossible de charger les contrôles bancaires.");
     states.push(...data);
@@ -117,15 +125,21 @@ export async function getBankReconciliation(statementId: string) {
 
 export async function buildBankReconciliationControl(
   protectedPersonId: string,
-  account: FinancialAccount,
+  account: FinancialAccount & { valuations?: AccountValuation[] },
   statement: BankStatement,
   reconciliation: BankReconciliation | null,
 ): Promise<BankReconciliationControl> {
   if (reconciliation?.status === "validated") {
+    const controlBasis = reconciliation.control_basis ?? "legacy";
     return {
       reconciliationId: reconciliation.id,
       status: "validated",
       reconciliationMode: reconciliation.reconciliation_mode,
+      controlBasis,
+      referenceDate: reconciliation.reference_date,
+      referenceValue: reconciliation.reference_value,
+      sourceValuationId: reconciliation.source_valuation_id,
+      missingExactValuation: false,
       unavailableReason: null,
       statementEndDate: statement.statement_end_date,
       statementBalance: statement.statement_balance,
@@ -148,6 +162,11 @@ export async function buildBankReconciliationControl(
       reconciliationId: reconciliation?.id ?? null,
       status: reconciliation?.status ?? "none",
       reconciliationMode: reconciliation?.reconciliation_mode ?? "simple",
+      controlBasis: isValuationAccount(account.account_type) ? "valuation" : "transactions",
+      referenceDate: statement.statement_end_date,
+      referenceValue: null,
+      sourceValuationId: null,
+      missingExactValuation: false,
       unavailableReason,
       statementEndDate: statement.statement_end_date,
       statementBalance: statement.statement_balance,
@@ -164,11 +183,46 @@ export async function buildBankReconciliationControl(
     };
   }
 
+  if (isValuationAccount(account.account_type)) {
+    const valuation = getAccountValuationAtDate(account.valuations ?? [], statement.statement_end_date);
+    const difference = valuation && statement.statement_balance !== null
+      ? calculateReconciliationDifference(statement.statement_balance, Math.round(valuation.value * 100))
+      : null;
+    return {
+      reconciliationId: reconciliation?.id ?? null,
+      status: reconciliation?.status ?? "none",
+      reconciliationMode: "simple",
+      controlBasis: "valuation",
+      referenceDate: statement.statement_end_date,
+      referenceValue: valuation?.value ?? null,
+      sourceValuationId: valuation?.id ?? null,
+      missingExactValuation: !valuation,
+      unavailableReason: null,
+      statementEndDate: statement.statement_end_date,
+      statementBalance: statement.statement_balance,
+      calculatedBalance: valuation?.value ?? null,
+      calculatedBalanceInCents: valuation ? Math.round(valuation.value * 100) : null,
+      difference: difference?.difference ?? null,
+      differenceInCents: difference?.differenceInCents ?? null,
+      validatedAt: null,
+      outstandingDebits: null,
+      outstandingCredits: null,
+      explainedBankBalance: null,
+      residualDifference: null,
+      outstandingCount: null,
+    };
+  }
+
   if (!reconciliation) {
     return {
       reconciliationId: null,
       status: "none",
       reconciliationMode: "simple",
+      controlBasis: "transactions",
+      referenceDate: statement.statement_end_date,
+      referenceValue: null,
+      sourceValuationId: null,
+      missingExactValuation: false,
       unavailableReason: null,
       statementEndDate: statement.statement_end_date,
       statementBalance: statement.statement_balance,
@@ -192,6 +246,11 @@ export async function buildBankReconciliationControl(
       reconciliationId: reconciliation.id,
       status: "draft",
       reconciliationMode: "complete",
+      controlBasis: "transactions",
+      referenceDate: statement.statement_end_date,
+      referenceValue: summary.calculated_balance,
+      sourceValuationId: null,
+      missingExactValuation: false,
       unavailableReason: null,
       statementEndDate: statement.statement_end_date,
       statementBalance: statement.statement_balance,
@@ -214,6 +273,11 @@ export async function buildBankReconciliationControl(
     reconciliationId: reconciliation.id,
     status: "draft",
     reconciliationMode: "simple",
+    controlBasis: "transactions",
+    referenceDate: statement.statement_end_date,
+    referenceValue: calculated.balance,
+    sourceValuationId: null,
+    missingExactValuation: false,
     unavailableReason: null,
     statementEndDate: statement.statement_end_date,
     statementBalance: difference.statementBalance,
@@ -230,9 +294,12 @@ export async function buildBankReconciliationControl(
   };
 }
 
-export async function createBankReconciliationDraft(statement: BankStatement, account: FinancialAccount) {
+export async function createBankReconciliationDraft(statement: BankStatement, account: FinancialAccount & { valuations?: AccountValuation[] }) {
   const unavailableReason = getReconciliationUnavailableReason(statement, account);
   if (unavailableReason) throw new BankReconciliationServiceError("Ce relevé ne peut pas être contrôlé.", 409);
+  if (isValuationAccount(account.account_type) && !getAccountValuationAtDate(account.valuations ?? [], statement.statement_end_date)) {
+    throw new BankReconciliationServiceError(`Aucune valorisation n'est enregistrée au ${statement.statement_end_date}.`, 409);
+  }
 
   const existing = await getBankReconciliation(statement.id);
   if (existing) return existing;
@@ -259,8 +326,10 @@ export async function validateBankReconciliation(reconciliationId: string) {
   if (error) {
     if (error.message?.includes("Seul un rapprochement en brouillon")) throw new BankReconciliationServiceError("Ce contrôle bancaire est déjà validé ou n’est plus modifiable.", 409);
     if (error.code === "55000" && error.message?.includes("écart simple")) throw new BankReconciliationServiceError("L’écart entre le relevé bancaire et PatriGest doit être nul avant la validation.", 409);
+    if (error.code === "55000" && error.message?.includes("écart de valorisation")) throw new BankReconciliationServiceError("L’écart entre la valeur du relevé et la valorisation PatriGest doit être nul avant la validation.", 409);
     if (error.code === "55000" && error.message?.includes("écart résiduel")) throw new BankReconciliationServiceError("L’écart résiduel doit être nul avant la validation.", 409);
     if (error.code === "55000" && error.message?.includes("impact bancaire")) throw new BankReconciliationServiceError("Reconnaissez et justifiez chaque impact bancaire avant la validation.", 409);
+    if (error.code === "55000" && error.message?.includes("Aucune valorisation")) throw new BankReconciliationServiceError(error.message, 409);
     if (error.code === "55000" && error.message?.includes("brouillon")) throw new BankReconciliationServiceError("Le brouillon contient une opération annulée. Révisez-le avant la validation.", 409);
     throw new BankReconciliationServiceError("Impossible de valider le contrôle bancaire.", 409);
   }

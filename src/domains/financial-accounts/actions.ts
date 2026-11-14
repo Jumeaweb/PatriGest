@@ -107,10 +107,10 @@ export async function deleteAccountValuationAction(
 
   try {
     await deleteAccountValuation(accountId, valuationId);
-  } catch {
+  } catch (error) {
     return {
       status: "error",
-      message: "Impossible de supprimer la valorisation. Veuillez réessayer.",
+      message: error instanceof Error ? error.message : "Impossible de supprimer la valorisation. Veuillez réessayer.",
     };
   }
 

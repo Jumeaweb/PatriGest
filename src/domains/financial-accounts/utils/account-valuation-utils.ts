@@ -13,3 +13,10 @@ export function getCurrentValuationValue(
   )[0];
   return { value: valuation.value, valuation };
 }
+
+export function getAccountValuationAtDate(
+  valuations: readonly AccountValuation[],
+  valuationDate: string,
+) {
+  return valuations.find((valuation) => valuation.valuation_date === valuationDate) ?? null;
+}

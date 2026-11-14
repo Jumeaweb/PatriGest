@@ -18,6 +18,7 @@ import { getFinancialAccountEntryHref } from "@/domains/financial-accounts/finan
 import { getFinancialAccount } from "@/domains/financial-accounts/services/financial-account-service";
 import { calculateAccountBalanceAtDate } from "@/domains/financial-accounts/services/account-balance-at-date";
 import { isValuationAccount } from "@/domains/financial-accounts/utils/financial-account-utils";
+import { getAccountValuationAtDate } from "@/domains/financial-accounts/utils/account-valuation-utils";
 import { DossierNavigation } from "@/domains/protected-persons/components/dossier-navigation";
 import { getProtectedPerson } from "@/domains/protected-persons/services/protected-person-service";
 
@@ -59,11 +60,17 @@ export default async function AccountReconciliationsPage({
       if (getReconciliationUnavailableReason(statement, account) || statement.statement_balance === null) {
         return null;
       }
-      const calculated = calculateAccountBalanceAtDate(
-        account.initial_balance,
-        account.transactions,
-        statement.statement_end_date,
-      );
+      const exactValuation = isValuationAccount(account.account_type)
+        ? getAccountValuationAtDate(account.valuations, statement.statement_end_date)
+        : null;
+      if (isValuationAccount(account.account_type) && !exactValuation) return null;
+      const calculated = exactValuation
+        ? { balanceInCents: Math.round(exactValuation.value * 100) }
+        : calculateAccountBalanceAtDate(
+            account.initial_balance,
+            account.transactions,
+            statement.statement_end_date,
+          );
       return calculateReconciliationDifference(
         statement.statement_balance,
         calculated.balanceInCents,
@@ -119,10 +126,12 @@ export default async function AccountReconciliationsPage({
         attentionSummary={attentionSummary}
         reconciliations={reconciliations}
         accountDates={{
+          account_type: account.account_type,
           initial_balance_date: account.initial_balance_date,
           opening_date: account.opening_date,
           closing_date: account.closing_date,
         }}
+        accountValuations={account.valuations}
         canManage={person.accessRole !== "read_only" && !person.archived_at}
       />
       <BankStatementPagination
