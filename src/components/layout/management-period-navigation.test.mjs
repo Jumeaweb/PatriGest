@@ -36,7 +36,7 @@ test("les deux pages partagent les onglets comptes puis exercices avec un état 
 test("le listing conserve l'aide et Légifrance sans bouton redondant", () => {
   assert.doesNotMatch(reportList, />\s*Gérer les exercices\s*<\/Link>/);
   assert.match(reportList, /Aucun exercice de gestion n&apos;est actuellement disponible/);
-  assert.match(reportList, /Les dates du formulaire reprennent un exercice de gestion/);
+  assert.match(reportList, /Sélectionnez l’exercice à couvrir/);
   assert.match(reportList, /Consulter le modèle officiel sur Légifrance/);
   assert.doesNotMatch(exercises, /Légifrance/);
 });

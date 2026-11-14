@@ -26,12 +26,9 @@ export async function createManagementReportAction(
   void previousState;
   const parsed = managementReportCreateSchema.safeParse({
     managementPeriodId: formData.get("managementPeriodId"),
-    periodStart: formData.get("periodStart"),
-    periodEnd: formData.get("periodEnd"),
-    reportYear: formData.get("reportYear"),
   });
   if (!parsed.success)
-    return { status: "error", message: "Vérifiez les dates et l’année du compte de gestion." };
+    return { status: "error", message: "Sélectionnez un exercice de gestion disponible." };
   try {
     const report = await createManagementReport(personId, parsed.data);
     revalidatePath(`/dossiers/${personId}/comptes-de-gestion`);

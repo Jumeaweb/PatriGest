@@ -46,6 +46,12 @@ test("permission RLS refusée devient un message sûr", () => {
   assert.match(source("../../../supabase/migrations/20260809180000_create_multi_user_access.sql"), /management_periods_insert_manage[\s\S]*?can_manage_protected_person/);
 });
 
+test("un exercice rattaché à un CRG présente un verrou explicite", () => {
+  const failure = classifyManagementPeriodWriteFailure({ code: "P4R02" });
+  assert.equal(failure.reason, "linked_report");
+  assert.match(managementPeriodUserMessage(failure, "update"), /dates.*verrouillées.*compte de gestion/);
+});
+
 test("erreur technique n'expose ni SQL ni code Supabase", () => {
   for (const operation of ["create", "update"]) {
     const safe = managementPeriodUserMessage(classifyManagementPeriodWriteFailure({ code: "XX999", message: "raw SQL and token" }), operation);

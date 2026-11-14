@@ -9,7 +9,7 @@ import { getManagementReports } from "@/domains/management-reports/services";
 import { ManagementReportCreateForm } from "@/domains/management-reports/management-report-create-form";
 import { ManagementReportNavigation } from "@/domains/management-reports/management-report-navigation";
 import { getManagementReportStatusPresentation } from "@/domains/management-reports/management-report-status";
-import { getReportPreparationGuidance } from "@/domains/management-reports/report-preparation-guidance";
+import { getManagementReportPeriodOptions } from "@/domains/management-reports/report-preparation-guidance";
 import { formatFinancialDate } from "@/domains/financial-accounts/utils/financial-account-utils";
 export const dynamic = "force-dynamic";
 export default async function Page({
@@ -25,10 +25,11 @@ export default async function Page({
   ]);
   if (!person) notFound();
   const canManage = person.accessRole !== "read_only";
-  const { suggested, state: preparationState } = getReportPreparationGuidance(
+  const periodOptions = getManagementReportPeriodOptions(
     person.managementPeriods,
     reports,
   );
+  const availablePeriodCount = periodOptions.filter((period) => !period.covered).length;
   return (
     <PrivateShell
       current="dossiers"
@@ -75,28 +76,26 @@ export default async function Page({
       />
       <div className="mt-4 rounded-xl border border-[#E2E8F0] bg-white p-4">
         <div className="text-sm text-[#475569]">
-          {preparationState === "no_period" ? (
+          {periodOptions.length === 0 ? (
             <>
               <p className="font-semibold">Aucun exercice de gestion n&apos;est actuellement disponible.</p>
               <p className="mt-1">
                 {canManage
-                  ? "Vous pouvez utiliser l’onglet Exercices de gestion pour définir une période, ou continuer en renseignant les dates manuellement ci-dessous."
+                  ? "Utilisez l’onglet Exercices de gestion pour définir une période avant de préparer un compte de gestion."
                   : "Les comptes de gestion déjà préparés restent consultables ci-dessous."}
               </p>
             </>
-          ) : preparationState === "manual" ? (
+          ) : availablePeriodCount === 0 ? (
             <>
-              <p className="font-semibold">Aucun exercice ne peut préremplir la période d&apos;un nouveau compte de gestion.</p>
+              <p className="font-semibold">Tous les exercices sont déjà couverts par un compte de gestion.</p>
               <p className="mt-1">
-                {canManage
-                  ? "Vous pouvez consulter l’onglet Exercices de gestion ou renseigner les dates manuellement ci-dessous."
-                  : "Les comptes de gestion déjà préparés restent consultables ci-dessous."}
+                Les comptes de gestion préparés restent consultables ci-dessous.
               </p>
             </>
           ) : (
             <p>
               {canManage
-                ? "Les dates du formulaire reprennent un exercice de gestion. Vérifiez-les avant de préparer le compte de gestion."
+                ? "Sélectionnez l’exercice à couvrir. Ses dates réelles et son année seront reprises automatiquement."
                 : "Un exercice de gestion est disponible. Les comptes de gestion préparés restent consultables ci-dessous."}
             </p>
           )}
@@ -105,7 +104,7 @@ export default async function Page({
       {canManage && (
         <ManagementReportCreateForm
           personId={protectedPersonId}
-          suggested={suggested ?? null}
+          periods={periodOptions}
         />
       )}
       <div className="mt-4 space-y-2">

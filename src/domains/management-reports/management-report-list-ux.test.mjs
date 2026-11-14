@@ -34,5 +34,5 @@ test("les statuts associent le texte à une présentation sémantique sans modif
 test("la préparation et les droits existants restent inchangés", () => {
   assert.match(page, /const canManage = person\.accessRole !== "read_only"/);
   assert.match(page, /\{canManage && \(\s*<ManagementReportCreateForm/);
-  assert.match(page, /getReportPreparationGuidance/);
+  assert.match(page, /getManagementReportPeriodOptions/);
 });

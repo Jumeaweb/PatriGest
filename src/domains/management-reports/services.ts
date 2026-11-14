@@ -57,34 +57,29 @@ export async function getManagementReportDocument(
 }
 export async function createManagementReport(
   personId: string,
-  input: {
-    managementPeriodId: string | null;
-    reportYear: number;
-    periodStart: string;
-    periodEnd: string;
-  },
+  input: { managementPeriodId: string },
 ) {
   const { supabase, userId } = await getAuthenticatedUser();
 
-  if (input.managementPeriodId) {
-    const { data: period, error: periodError } = await supabase
-      .from("management_periods")
-      .select("start_date,end_date")
-      .eq("id", input.managementPeriodId)
-      .eq("protected_person_id", personId)
-      .maybeSingle();
-    if (periodError || !period)
-      throw new Error("L’exercice de gestion sélectionné est introuvable.");
-    if (period.start_date !== input.periodStart || period.end_date !== input.periodEnd)
-      throw new Error("Les dates doivent correspondre exactement à l’exercice de gestion sélectionné.");
-  }
+  const { data: period, error: periodError } = await supabase
+    .from("management_periods")
+    .select("start_date,end_date")
+    .eq("id", input.managementPeriodId)
+    .eq("protected_person_id", personId)
+    .maybeSingle();
+  if (periodError || !period)
+    throw new Error("L’exercice de gestion sélectionné est introuvable dans ce dossier.");
+
+  const periodStart = period.start_date;
+  const periodEnd = period.end_date;
+  const reportYear = Number(periodEnd.slice(0, 4));
 
   const { data: overlappingReports, error: overlapError } = await supabase
     .from("management_reports")
     .select("id")
     .eq("protected_person_id", personId)
-    .lte("period_start", input.periodEnd)
-    .gte("period_end", input.periodStart)
+    .lte("period_start", periodEnd)
+    .gte("period_end", periodStart)
     .limit(1);
   if (overlapError) throw new Error("Impossible de vérifier la période du compte de gestion.");
   if (overlappingReports.length)
@@ -95,9 +90,9 @@ export async function createManagementReport(
     .insert({
       protected_person_id: personId,
       management_period_id: input.managementPeriodId,
-      report_year: input.reportYear,
-      period_start: input.periodStart,
-      period_end: input.periodEnd,
+      report_year: reportYear,
+      period_start: periodStart,
+      period_end: periodEnd,
       created_by: userId,
     })
     .select("id")

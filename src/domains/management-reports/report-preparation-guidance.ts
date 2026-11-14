@@ -1,23 +1,31 @@
-type Period = { start_date: string; end_date: string };
+type Period = {
+  id: string;
+  start_date: string;
+  end_date: string;
+  status: "open" | "closed";
+};
 type Report = { period_start: string; period_end: string };
 
-export function getReportPreparationGuidance<T extends Period>(
+export type ManagementReportPeriodOption<T extends Period = Period> = T & {
+  covered: boolean;
+};
+
+export function getManagementReportPeriodOptions<T extends Period>(
   periods: readonly T[],
   reports: readonly Report[],
-) {
-  const suggested = periods.find(
-    (period) =>
-      period.start_date.slice(0, 4) === period.end_date.slice(0, 4) &&
-      period.end_date.endsWith("-12-31") &&
-      !reports.some(
+) : ManagementReportPeriodOption<T>[] {
+  return [...periods]
+    .sort((left, right) =>
+      right.start_date.localeCompare(left.start_date) ||
+      right.end_date.localeCompare(left.end_date) ||
+      right.id.localeCompare(left.id),
+    )
+    .map((period) => ({
+      ...period,
+      covered: reports.some(
         (report) =>
-          report.period_start === period.start_date &&
-          report.period_end === period.end_date,
+          report.period_start <= period.end_date &&
+          report.period_end >= period.start_date,
       ),
-  ) ?? null;
-
-  return {
-    suggested,
-    state: periods.length === 0 ? "no_period" : suggested ? "suggested" : "manual",
-  } as const;
+    }));
 }
