@@ -297,8 +297,8 @@ select extensions.throws_ok(
     )
   $$,
   'P0001',
-  'Un compte autonome ne peut pas devenir collaborateur.',
-  'LOT 0A still prevents an autonomous account from becoming a collaborator'
+  'Le propriétaire ne peut pas être ajouté comme collaborateur.',
+  'the dossier owner cannot be duplicated as a collaborator on their own dossier'
 );
 
 select extensions.is(

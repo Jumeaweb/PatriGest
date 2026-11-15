@@ -20,12 +20,19 @@ function isEmailReservationError(error: { message?: string } | null) {
   return error?.message?.includes("Cette adresse e-mail est déjà utilisée ou réservée dans PatriGest.") ?? false;
 }
 
+function isOwnerSelfInvitationError(error: { code?: string } | null) {
+  return error?.code === "P4I01";
+}
+
 function invitationCreationErrorMessage(
   error: { code?: string; message?: string } | null,
   fallback = "Impossible de créer cette invitation.",
 ) {
   if (isEmailReservationError(error)) {
     return "Cette adresse e-mail est déjà utilisée ou réservée dans PatriGest.";
+  }
+  if (isOwnerSelfInvitationError(error)) {
+    return "Vous ne pouvez pas vous inviter vous-même à accéder à votre propre dossier de personne protégée.";
   }
   if (isAutonomousAccountInvitationError(error)) {
     return "Cette adresse correspond à un compte autonome et ne peut pas recevoir d’accès collaborateur.";

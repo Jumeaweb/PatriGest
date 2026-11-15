@@ -55,6 +55,18 @@ export async function getManagementReportDocument(
   if (error) throw new Error("Impossible de charger le document du compte de gestion.");
   return data;
 }
+
+export async function getManagementReportBankStatementDocumentVersions(
+  managementReportDocumentId: string,
+) {
+  const { supabase } = await getAuthenticatedUser();
+  const { data, error } = await supabase
+    .from("management_report_bank_statement_document_versions")
+    .select("bank_statement_id,document_version_id")
+    .eq("management_report_document_id", managementReportDocumentId);
+  if (error) throw new Error("Impossible de charger les versions documentaires du compte de gestion.");
+  return new Map((data ?? []).map((item) => [item.bank_statement_id, item.document_version_id]));
+}
 export async function createManagementReport(
   personId: string,
   input: { managementPeriodId: string },

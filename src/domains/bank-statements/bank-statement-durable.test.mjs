@@ -137,7 +137,7 @@ test("création, ajout, remplacement et suppression du PDF utilisent le moteur c
 
 test("le parcours HTTP et l’interface conservent les lectures et séparent les suppressions", () => {
   assert.match(itemRoute, /export async function GET/);
-  assert.match(itemRoute, /createSignedUrl/);
+  assert.match(itemRoute, /downloadBankStatementDocument/);
   assert.match(itemRoute, /searchParams\.get\("document"\) === "1"/);
   assert.match(itemRoute, /deleteBankStatementDocument/);
   assert.match(writeService, /Supprimez d’abord le PDF du relevé/);

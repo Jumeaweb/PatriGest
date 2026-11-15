@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Download, ExternalLink, FilePenLine, FilePlus2, FileX2, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Download, ExternalLink, FileClock, FilePenLine, FilePlus2, FileX2, History, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
 import type { BankStatement } from "@/types/database";
@@ -57,8 +57,58 @@ function ReconciliationStatus({ reconciliation }: { reconciliation: BankReconcil
 }
 
 function StatementActions({ personId, accountId, item, canManage, durableOperationsEnabled, isValidated }: StatementProps & { isValidated: boolean }) {
-  const [editing, setEditing] = useState(false), [deleting, setDeleting] = useState(false), [deletingDocument, setDeletingDocument] = useState(false); const endpoint = `/api/dossiers/${personId}/comptes/${accountId}/releves/${item.id}`; const hasDocument = item.original_file_name !== null && item.mime_type !== null && item.file_size !== null;
-  return <><div className="flex flex-wrap gap-1.5">{hasDocument ? <><a className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" href={endpoint} target="_blank" rel="noreferrer"><ExternalLink size={13} />Voir</a><a className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" href={`${endpoint}?download=1`}><Download size={13} />Télécharger</a></> : <span className="self-center text-xs text-[#64748B]">Aucun PDF</span>}{canManage && !isValidated && <><button className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" onClick={() => setEditing(true)}><FilePenLine size={13} />Modifier</button>{hasDocument && durableOperationsEnabled && <button className="button button-secondary min-h-8 gap-1 px-2.5 text-xs text-red-700" onClick={() => setDeletingDocument(true)}><FileX2 size={13} />Supprimer le PDF</button>}{(!hasDocument || !durableOperationsEnabled) && <button className="button button-secondary min-h-8 gap-1 px-2.5 text-xs text-red-700" onClick={() => setDeleting(true)}><Trash2 size={13} />Supprimer</button>}</>}</div><StatementDialog personId={personId} accountId={accountId} item={item} open={editing} close={() => setEditing(false)} /><DocumentDeleteDialog endpoint={endpoint} item={item} open={deletingDocument} close={() => setDeletingDocument(false)} /><DeleteDialog endpoint={endpoint} item={item} open={deleting} close={() => setDeleting(false)} /></>;
+  const [editing, setEditing] = useState(false), [correcting, setCorrecting] = useState(false), [history, setHistory] = useState(false), [deleting, setDeleting] = useState(false), [deletingDocument, setDeletingDocument] = useState(false); const endpoint = `/api/dossiers/${personId}/comptes/${accountId}/releves/${item.id}`; const hasDocument = item.original_file_name !== null && item.mime_type !== null && item.file_size !== null;
+  return <><div className="flex flex-wrap gap-1.5">{hasDocument ? <><a className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" href={endpoint} target="_blank" rel="noreferrer"><ExternalLink size={13} />Voir</a><a className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" href={`${endpoint}?download=1`}><Download size={13} />Télécharger</a><button className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" onClick={() => setHistory(true)}><History size={13} />Historique</button></> : <span className="self-center text-xs text-[#64748B]">Aucun PDF</span>}{canManage && isValidated && hasDocument && <button className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" onClick={() => setCorrecting(true)}><FileClock size={13} />Corriger le document</button>}{canManage && !isValidated && <><button className="button button-secondary min-h-8 gap-1 px-2.5 text-xs" onClick={() => setEditing(true)}><FilePenLine size={13} />Modifier</button>{hasDocument && durableOperationsEnabled && <button className="button button-secondary min-h-8 gap-1 px-2.5 text-xs text-red-700" onClick={() => setDeletingDocument(true)}><FileX2 size={13} />Supprimer le PDF</button>}{(!hasDocument || !durableOperationsEnabled) && <button className="button button-secondary min-h-8 gap-1 px-2.5 text-xs text-red-700" onClick={() => setDeleting(true)}><Trash2 size={13} />Supprimer</button>}</>}</div><StatementDialog personId={personId} accountId={accountId} item={item} open={editing} close={() => setEditing(false)} />{correcting && <DocumentCorrectionDialog endpoint={endpoint} item={item} open close={() => setCorrecting(false)} />}{history && <DocumentHistoryDialog endpoint={endpoint} open close={() => setHistory(false)} />}<DocumentDeleteDialog endpoint={endpoint} item={item} open={deletingDocument} close={() => setDeletingDocument(false)} /><DeleteDialog endpoint={endpoint} item={item} open={deleting} close={() => setDeleting(false)} /></>;
+}
+
+type DocumentVersion = { versionId: string; versionNumber: number; originalFileName: string; fileSize: number; sha256: string | null; integrityStatus: "pending_hash" | "verified"; correctionReason: string | null; createdAt: string; isActive: boolean; activeRevision: number };
+
+function DocumentCorrectionDialog({ endpoint, item, open, close }: { endpoint: string; item: BankStatement; open: boolean; close: () => void }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false), [loading, setLoading] = useState(true), [message, setMessage] = useState(""), [success, setSuccess] = useState(false), [revision, setRevision] = useState<number | null>(null), [confirmed, setConfirmed] = useState(false);
+  const requestId = useRef(crypto.randomUUID());
+  const fileInput = useRef<HTMLInputElement>(null);
+  const formId = `statement-correction-${item.id}`;
+  useEffect(() => {
+    if (!open) return;
+    fetch(`${endpoint}/versions`, { cache: "no-store" }).then(async (response) => {
+      const result = await response.json() as { versions?: DocumentVersion[]; message?: string };
+      if (!response.ok) throw new Error(result.message || "Impossible de préparer la correction.");
+      const active = result.versions?.find((version) => version.isActive);
+      if (!active) throw new Error("Aucune version active n’est disponible.");
+      setRevision(active.activeRevision);
+    }).catch((error) => setMessage(error instanceof Error ? error.message : "Impossible de préparer la correction.")).finally(() => setLoading(false));
+  }, [endpoint, open]);
+  function intentChanged() { requestId.current = crypto.randomUUID(); setConfirmed(false); setSuccess(false); }
+  async function submit(form: FormData) {
+    if (revision === null || !confirmed) return;
+    setBusy(true); setMessage("");
+    form.set("clientRequestId", requestId.current); form.set("expectedActiveRevision", String(revision));
+    try {
+      const response = await fetch(`${endpoint}/versions`, { method: "POST", body: form });
+      const result = await response.json() as { message?: string };
+      if (!response.ok) throw new Error(result.message || "Impossible de corriger le document.");
+      if (fileInput.current) fileInput.current.value = "";
+      requestId.current = crypto.randomUUID(); setSuccess(true); setMessage(result.message || "Le document a été corrigé."); router.refresh();
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Impossible de corriger le document."); }
+    finally { setBusy(false); }
+  }
+  return <AppConfirmDialog open={open} onClose={busy ? () => undefined : close} title="Corriger le document du relevé" description="Le rapprochement, ses soldes et ses opérations resteront inchangés. Le PDF actuel sera conservé dans l’historique." subject={date(item.statement_end_date)} requireExplicitClose={busy} actions={success ? <button className="button button-primary" type="button" onClick={close}>Fermer</button> : <button className="button button-primary" type="submit" form={formId} disabled={busy || loading || revision === null || !confirmed}>{busy ? "Correction…" : "Confirmer la correction"}</button>}><form id={formId} action={submit} className="space-y-3"><label><span className="auth-label">Nouveau PDF</span><input ref={fileInput} name="file" type="file" accept="application/pdf" required onChange={intentChanged} disabled={success} className="block max-w-full text-xs file:mr-2 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:font-semibold" /></label><label><span className="auth-label">Motif de la correction</span><textarea name="reason" required minLength={3} maxLength={1000} onChange={intentChanged} disabled={success} className="auth-input min-h-24" /></label><label className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-900"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} disabled={success} className="mt-0.5" /><span>Je confirme que seul le PDF doit être corrigé et que l’ancienne version doit rester consultable.</span></label>{loading && <p role="status" className="text-xs text-[#64748B]">Préparation de la correction…</p>}{message && <p role={success ? "status" : "alert"} className={`rounded-lg px-3 py-2 text-xs ${success ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>{message}</p>}</form></AppConfirmDialog>;
+}
+
+function DocumentHistoryDialog({ endpoint, open, close }: { endpoint: string; open: boolean; close: () => void }) {
+  const [versions, setVersions] = useState<DocumentVersion[]>([]), [loading, setLoading] = useState(true), [message, setMessage] = useState("");
+  useEffect(() => {
+    if (!open) return;
+    fetch(`${endpoint}/versions`, { cache: "no-store" }).then(async (response) => {
+      const result = await response.json() as { versions?: DocumentVersion[]; message?: string };
+      if (!response.ok) throw new Error(result.message || "Impossible de charger l’historique.");
+      setVersions(result.versions ?? []);
+    }).catch((error) => setMessage(error instanceof Error ? error.message : "Impossible de charger l’historique.")).finally(() => setLoading(false));
+  }, [endpoint, open]);
+  return <AppConfirmDialog open={open} onClose={close} title="Historique du document" description="Chaque version est conservée et protégée par les droits du dossier." size="wide" actions={<span />}>
+    {loading ? <p role="status" className="text-sm text-[#64748B]">Chargement…</p> : message ? <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{message}</p> : <ol className="space-y-2">{versions.map((version) => { const versionEndpoint = `${endpoint}/versions/${version.versionId}`; return <li key={version.versionId} className="rounded-lg border border-[#E2E8F0] p-3 text-xs"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-bold">Version {version.versionNumber}{version.isActive ? " · Active" : ""}</p><p className="text-[#64748B]">{version.originalFileName} · {(version.fileSize / 1024).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} Ko</p><p className="text-[#64748B]">Enregistrée le {new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(version.createdAt))}</p></div><span className="flex gap-1.5"><a className="button button-secondary min-h-8 px-2.5 text-xs" href={versionEndpoint} target="_blank" rel="noreferrer">Voir</a><a className="button button-secondary min-h-8 px-2.5 text-xs" href={`${versionEndpoint}?download=1`}>Télécharger</a></span></div>{version.correctionReason && <p className="mt-2 rounded bg-slate-50 px-2 py-1.5"><strong>Motif :</strong> {version.correctionReason}</p>}<p className="mt-2 text-[11px] text-[#64748B]">Intégrité : {version.integrityStatus === "verified" ? "empreinte vérifiée" : "empreinte calculée à la première consultation"}</p></li>; })}</ol>}
+  </AppConfirmDialog>;
 }
 
 function StatementDialog({ personId, accountId, item, open, close }: { personId: string; accountId: string; item?: BankStatement; open: boolean; close: () => void }) {

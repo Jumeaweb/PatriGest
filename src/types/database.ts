@@ -364,6 +364,37 @@ export type Database = {
         Update: { statement_start_date?: string | null; statement_end_date?: string; statement_balance?: number | null; original_file_name?: string | null; mime_type?: string | null; file_size?: number | null; note?: string | null; updated_at?: string };
         Relationships: [];
       };
+      bank_statement_document_versions: {
+        Row: { id: string; bank_statement_id: string; version_number: number; storage_path: string; path_kind: "legacy" | "versioned"; original_file_name: string; mime_type: string; file_size: number; sha256: string | null; integrity_status: "pending_hash" | "verified"; verified_at: string | null; previous_version_id: string | null; correction_reason: string | null; created_by: string | null; created_at: string; verified_by: string | null };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      bank_statement_active_document_versions: {
+        Row: { bank_statement_id: string; version_id: string; revision: number; updated_by: string | null; updated_at: string };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      bank_statement_document_corrections: {
+        Row: { id: string; bank_statement_id: string; previous_version_id: string; proposed_version_id: string; expected_active_revision: number; client_request_id: string; requested_by: string; reason: string; proposed_storage_path: string; proposed_file_name: string; proposed_mime_type: string; proposed_file_size: number; proposed_sha256: string; state: "reserved" | "completed" | "cancelled" | "attention_required"; storage_object_id: string | null; storage_object_version: string | null; row_revision: number; created_at: string; last_activity_at: string; completed_at: string | null; safe_error_code: string | null };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          { foreignKeyName: "bank_statement_document_corrections_bank_statement_id_fkey"; columns: ["bank_statement_id"]; isOneToOne: false; referencedRelation: "bank_statements"; referencedColumns: ["id"] },
+          { foreignKeyName: "bank_statement_document_corrections_previous_fk"; columns: ["previous_version_id", "bank_statement_id"]; isOneToOne: false; referencedRelation: "bank_statement_document_versions"; referencedColumns: ["id", "bank_statement_id"] },
+        ];
+      };
+      management_report_bank_statement_document_versions: {
+        Row: { management_report_document_id: string; bank_statement_id: string; document_version_id: string; pinned_at: string };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          { foreignKeyName: "management_report_bank_statem_management_report_document_i_fkey"; columns: ["management_report_document_id"]; isOneToOne: false; referencedRelation: "management_report_documents"; referencedColumns: ["id"] },
+          { foreignKeyName: "management_report_bank_statement_documen_bank_statement_id_fkey"; columns: ["bank_statement_id"]; isOneToOne: false; referencedRelation: "bank_statements"; referencedColumns: ["id"] },
+          { foreignKeyName: "management_report_bank_statement_version_fk"; columns: ["document_version_id", "bank_statement_id"]; isOneToOne: false; referencedRelation: "bank_statement_document_versions"; referencedColumns: ["id", "bank_statement_id"] },
+        ];
+      };
       release_notifications: {
         Row: { id: string; version: string; user_id: string; email_snapshot: string; delivery_kind: ReleaseNotificationDeliveryKind; status: ReleaseNotificationStatus; provider_message_id: string | null; attempt_count: number; last_error_safe: string | null; requested_by: string | null; created_at: string; sent_at: string | null; updated_at: string };
         Insert: { id?: string; version: string; user_id: string; email_snapshot: string; delivery_kind: ReleaseNotificationDeliveryKind; status?: ReleaseNotificationStatus; provider_message_id?: string | null; attempt_count?: number; last_error_safe?: string | null; requested_by?: string | null; created_at?: string; sent_at?: string | null; updated_at?: string };
@@ -485,6 +516,11 @@ export type Database = {
       get_bank_reconciliation_detailed_summary: { Args: { p_reconciliation_id: string }; Returns: Array<{ calculated_balance: number; outstanding_debits: number; outstanding_credits: number; explained_bank_balance: number; residual_difference: number; outstanding_count: number }> };
       list_transaction_banking_impacts_for_reconciliation: { Args: { p_reconciliation_id: string }; Returns: Array<{ impact_id: string; transaction_id: string | null; impact_kind: "reverse_previous" | "apply_current"; signed_amount: number; effective_date: string; impact_created_at: string; historical_reconciliation_id: string; historical_statement_end_date: string; acknowledgement_state: "pending" | "acknowledged"; acknowledgement_id: string | null; justification: string | null; acknowledged_at: string | null }> };
       acknowledge_transaction_banking_impact: { Args: { p_reconciliation_id: string; p_impact_id: string; p_justification: string }; Returns: Json };
+      begin_bank_statement_document_correction: { Args: { p_protected_person_id: string; p_financial_account_id: string; p_statement_id: string; p_expected_active_revision: number; p_client_request_id: string; p_reason: string; p_file_name: string; p_file_size: number; p_sha256: string }; Returns: Json };
+      finalize_bank_statement_document_correction: { Args: { p_operation_id: string; p_expected_operation_revision: number; p_storage_object_id: string; p_storage_object_version: string }; Returns: Json };
+      cancel_bank_statement_document_correction: { Args: { p_operation_id: string; p_expected_operation_revision: number }; Returns: undefined };
+      verify_bank_statement_document_version_integrity: { Args: { p_version_id: string; p_storage_object_id: string; p_storage_object_version: string; p_sha256: string }; Returns: undefined };
+      get_bank_statement_document_history: { Args: { p_statement_id: string }; Returns: Array<{ version_id: string; version_number: number; storage_path: string; original_file_name: string; mime_type: string; file_size: number; sha256: string | null; integrity_status: "pending_hash" | "verified"; previous_version_id: string | null; correction_reason: string | null; created_by: string | null; created_at: string; is_active: boolean; active_revision: number }> };
       review_application_user_registration: { Args: { p_user_id: string; p_decision: "active" | "rejected" }; Returns: "active" | "rejected" };
       is_protected_person_owner: { Args: { person_id: string }; Returns: boolean };
       can_read_protected_person: { Args: { person_id: string }; Returns: boolean };

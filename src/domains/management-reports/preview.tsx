@@ -17,8 +17,10 @@ const address = (parts: Array<string | null | undefined>) =>
 
 export function ManagementReportPreviewView({
   preview,
+  pinnedStatementVersions = new Map<string, string>(),
 }: {
   preview: ManagementReportPreview;
+  pinnedStatementVersions?: ReadonlyMap<string, string>;
 }) {
   const { report, person, measure } = preview;
   return (
@@ -107,7 +109,7 @@ export function ManagementReportPreviewView({
       </PreviewSection>
 
       <PreviewSection title="VII — Relevés et pièces">
-        <div className="space-y-2">{preview.statements.map((statement) => <div key={statement.accountId} className="flex flex-wrap items-center justify-between gap-2 border-t pt-2 text-xs"><span><strong>{statement.accountName}</strong> — {statement.endDate ? `relevé au ${date(statement.endDate)}` : "relevé indisponible"}{statement.startDate && statement.endDate ? ` (${date(statement.startDate)} → ${date(statement.endDate)})` : ""} · {statement.hasDocument ? "PDF présent" : "PDF absent"}</span>{statement.statementId && <span className="flex gap-2"><Link className="text-blue-600" target="_blank" href={`/api/dossiers/${report.protected_person_id}/comptes/${statement.accountId}/releves/${statement.statementId}`}>Voir</Link><Link className="text-blue-600" href={`/api/dossiers/${report.protected_person_id}/comptes/${statement.accountId}/releves/${statement.statementId}?download=1`}>Télécharger</Link></span>}</div>)}</div>
+        <div className="space-y-2">{preview.statements.map((statement) => { const pinnedVersion = statement.statementId ? pinnedStatementVersions.get(statement.statementId) : null; const endpoint = statement.statementId ? `/api/dossiers/${report.protected_person_id}/comptes/${statement.accountId}/releves/${statement.statementId}${pinnedVersion ? `/versions/${pinnedVersion}` : ""}` : null; return <div key={statement.accountId} className="flex flex-wrap items-center justify-between gap-2 border-t pt-2 text-xs"><span><strong>{statement.accountName}</strong> — {statement.endDate ? `relevé au ${date(statement.endDate)}` : "relevé indisponible"}{statement.startDate && statement.endDate ? ` (${date(statement.startDate)} → ${date(statement.endDate)})` : ""} · {statement.hasDocument ? "PDF présent" : "PDF absent"}</span>{endpoint && <span className="flex gap-2"><Link className="text-blue-600" target="_blank" href={endpoint}>Voir</Link><Link className="text-blue-600" href={`${endpoint}?download=1`}>Télécharger</Link></span>}</div>; })}</div>
       </PreviewSection>
 
       <PreviewSection title="VIII — Patrimoine immobilier et actes de gestion">

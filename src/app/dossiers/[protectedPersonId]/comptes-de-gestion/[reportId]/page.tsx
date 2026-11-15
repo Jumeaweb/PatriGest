@@ -11,6 +11,7 @@ import { ReportOutcome } from "@/domains/management-reports/report-outcome";
 import { ReportTransmission } from "@/domains/management-reports/report-transmission";
 import {
   getManagementReportDocument,
+  getManagementReportBankStatementDocumentVersions,
   getManagementReportPreviewState,
   getManagementReportOutcome,
   getManagementReportSnapshot,
@@ -48,6 +49,9 @@ export default async function Page({
   const document = documentType
     ? await getManagementReportDocument(protectedPersonId, reportId, documentType)
     : null;
+  const pinnedStatementVersions = document?.document_type === "management_report"
+    ? await getManagementReportBankStatementDocumentVersions(document.id)
+    : new Map<string, string>();
   const transmission = ["finalized", "transmitted", "approved", "difficulty"].includes(report.status)
     ? await getManagementReportTransmission(reportId)
     : null;
@@ -120,7 +124,7 @@ export default async function Page({
           canManage={person.accessRole !== "read_only"}
         />
       ) : state.availability === "available" ? (
-        <ManagementReportPreviewView preview={state.preview} />
+        <ManagementReportPreviewView preview={state.preview} pinnedStatementVersions={pinnedStatementVersions} />
       ) : (
         <section className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
           <h2 className="font-bold text-amber-900">Données détaillées indisponibles</h2>

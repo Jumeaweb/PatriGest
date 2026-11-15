@@ -33,6 +33,11 @@ test("les conflits de mode utilisent l'autorité DB et un message applicatif sû
   assert.match(actions, /Ce compte autonome ne peut pas accepter une invitation collaborateur\./);
 });
 
+test("l’auto-invitation est identifiée par son code SQL et reçoit un message métier", () => {
+  assert.match(actions, /error\?\.code === "P4I01"/);
+  assert.match(actions, /Vous ne pouvez pas vous inviter vous-même à accéder à votre propre dossier de personne protégée\./);
+});
+
 test("la reprise ne charge que les invitations exactes encore valides", () => {
   assert.match(services, /\.eq\("email", identity\.email\)/);
   assert.match(services, /\.is\("accepted_at", null\)/);

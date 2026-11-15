@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select extensions.plan(31);
+select extensions.plan(33);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -102,9 +102,9 @@ select extensions.throws_ok(
       '60000000-0000-4000-8000-000000000001'
     )
   $$,
-  'P0001',
-  'Un compte autonome ne peut pas être invité comme collaborateur.',
-  'an autonomous account cannot be invited'
+  'P4I01',
+  'Le propriétaire du dossier ne peut pas être invité comme collaborateur.',
+  'a dossier owner cannot invite themselves as a collaborator'
 );
 
 select extensions.throws_ok(
@@ -120,9 +120,9 @@ select extensions.throws_ok(
       '60000000-0000-4000-8000-000000000001'
     )
   $$,
-  'P0001',
-  'Un compte autonome ne peut pas être invité comme collaborateur.',
-  'autonomous detection uses normalized email comparison'
+  'P4I01',
+  'Le propriétaire du dossier ne peut pas être invité comme collaborateur.',
+  'owner self-invitation detection normalizes email case and spaces'
 );
 
 set local role authenticated;
@@ -136,19 +136,16 @@ select set_config(
   true
 );
 
-select extensions.throws_ok(
+select extensions.lives_ok(
   $$ select public.accept_protected_person_invitation(repeat('a', 64)) $$,
-  'P0001',
-  'Un compte autonome ne peut pas devenir collaborateur.',
-  'an autonomous account cannot accept an older invitation'
+  'an autonomous owner can accept an invitation to another dossier'
 );
 
 reset role;
 
-select extensions.is(
-  (select accepted_at from public.protected_person_invitations where id = '60000000-0000-4000-8000-000000000201'),
-  null::timestamptz,
-  'failed acceptance leaves the invitation unconsumed'
+select extensions.ok(
+  (select accepted_at is not null from public.protected_person_invitations where id = '60000000-0000-4000-8000-000000000201'),
+  'successful cross-dossier acceptance consumes the invitation'
 );
 
 insert into public.protected_person_invitations (
@@ -333,16 +330,11 @@ select extensions.is(
   (
     select count(*)::integer
     from public.application_user_authorizations user_authorization
-    where (
-      user_authorization.account_mode = 'autonomous'
-      and exists (select 1 from public.protected_person_access access where access.user_id = user_authorization.user_id)
-    ) or (
-      user_authorization.account_mode = 'collaborator'
+    where user_authorization.account_mode = 'collaborator'
       and exists (select 1 from public.protected_persons persons where persons.owner_id = user_authorization.user_id)
-    )
   ),
   0,
-  'no mixed autonomous and collaborator state is possible'
+  'a collaborator-only account still cannot own a dossier'
 );
 
 select extensions.throws_ok(
@@ -362,16 +354,34 @@ select extensions.is(
   'failed collaborator ownership creates no dossier'
 );
 
-select extensions.is(
-  (select count(*)::integer from public.protected_person_access where user_id = '60000000-0000-4000-8000-000000000003'),
-  0,
-  'failed autonomous invitation acceptance creates no access'
+select extensions.ok(
+  (select count(*) = 1 from public.protected_person_access where user_id = '60000000-0000-4000-8000-000000000003')
+  and (select account_mode = 'autonomous' from public.application_user_authorizations where user_id = '60000000-0000-4000-8000-000000000003'),
+  'cross-dossier acceptance creates one shared access and preserves autonomous mode'
 );
 
 select extensions.is(
   (select account_mode from public.application_user_authorizations where user_id = '60000000-0000-4000-8000-000000000005'),
   'collaborator',
   'a direct collaborator cannot later drift to autonomous mode'
+);
+
+select extensions.throws_ok(
+  $$
+    update public.protected_person_invitations
+    set email = ' MODE-OWNER@EXAMPLE.TEST '
+    where id = '60000000-0000-4000-8000-000000000201'
+  $$,
+  'P4I01',
+  'Le propriétaire du dossier ne peut pas être invité comme collaborateur.',
+  'an invitation cannot be changed to target the dossier owner'
+);
+
+select extensions.ok(
+  not has_function_privilege('anon', 'public.prevent_protected_person_owner_self_invitation()', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.prevent_protected_person_owner_self_invitation()', 'EXECUTE')
+  and not has_function_privilege('service_role', 'public.prevent_protected_person_owner_self_invitation()', 'EXECUTE'),
+  'the trigger function is not directly executable by API roles'
 );
 
 select * from extensions.finish();

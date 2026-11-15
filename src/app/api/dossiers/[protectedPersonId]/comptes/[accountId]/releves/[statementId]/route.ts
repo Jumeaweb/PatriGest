@@ -17,6 +17,7 @@ import {
   readPdf,
 } from "@/domains/bank-statements/server";
 import { getBankStatement } from "@/domains/bank-statements/services";
+import { downloadBankStatementDocument } from "@/domains/bank-statements/bank-statement-document-versioning";
 import { getAuthenticatedUser } from "@/domains/protected-persons/services/authenticated-user";
 
 type Params = {
@@ -42,12 +43,7 @@ async function context(params: Params["params"]) {
 
 export async function GET(request: Request, { params }: Params) {
   const value = await context(params);
-  if (
-    !value
-    || !value.statement.original_file_name
-    || !value.statement.mime_type
-    || value.statement.file_size === null
-  ) {
+  if (!value) {
     return NextResponse.json({ message: "Aucun PDF n’est associé à ce relevé." }, { status: 404 });
   }
 
@@ -58,28 +54,27 @@ export async function GET(request: Request, { params }: Params) {
     value.account.institution_name,
     value.account.account_reference,
   );
-  if (download) {
-    const { data, error } = await supabase.storage.from("bank-statements")
-      .download(value.statement.storage_path);
-    if (error || !data) {
-      return NextResponse.json({ message: "Impossible de télécharger le relevé." }, { status: 500 });
+  try {
+    const document = await downloadBankStatementDocument({
+      client: supabase,
+      statementId: value.statement.id,
+    });
+    if (!document) {
+      return NextResponse.json({ message: "Aucun PDF n’est associé à ce relevé." }, { status: 404 });
     }
-    return new Response(await data.arrayBuffer(), {
+    return new Response(document.bytes, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": bankStatementContentDisposition(name),
-        "Content-Length": String(data.size),
+        "Content-Disposition": download
+          ? bankStatementContentDisposition(name)
+          : `inline; filename*=UTF-8''${encodeURIComponent(name)}`,
+        "Content-Length": String(document.bytes.byteLength),
         "Cache-Control": "private, no-store",
       },
     });
+  } catch {
+    return NextResponse.json({ message: download ? "Impossible de télécharger le relevé." : "Impossible d’ouvrir le relevé." }, { status: 500 });
   }
-
-  const { data, error } = await supabase.storage.from("bank-statements")
-    .createSignedUrl(value.statement.storage_path, 60);
-  if (error || !data) {
-    return NextResponse.json({ message: "Impossible d’ouvrir le relevé." }, { status: 500 });
-  }
-  return NextResponse.redirect(data.signedUrl);
 }
 
 export async function POST(request: Request, { params }: Params) {
