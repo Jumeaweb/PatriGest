@@ -84,11 +84,20 @@ function buildOfficialSections(
 }
 
 export function buildManagementReportPreview(snapshot: Snapshot) {
-  const { accessRole: _accessRole, protectionMeasures: _protectionMeasures, managementPeriods: _managementPeriods, ...person } = snapshot.person;
+  const {
+    accessRole: _accessRole,
+    protectionMeasures: _protectionMeasures,
+    managementPeriods: _managementPeriods,
+    managementReports: _managementReports,
+    archive_revision: _archiveRevision,
+    ...person
+  } = snapshot.person;
   const { refresh_required_at: _refreshRequiredAt, ...report } = snapshot.report;
   void _accessRole;
   void _protectionMeasures;
   void _managementPeriods;
+  void _managementReports;
+  void _archiveRevision;
   void _refreshRequiredAt;
   const resources = buildOfficialSections(snapshot, "RES-");
   const expenses = buildOfficialSections(snapshot, "DEP-");

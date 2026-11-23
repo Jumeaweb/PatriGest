@@ -10,6 +10,7 @@ const printButton = source("./print-preview-button.tsx");
 const dashboard = source("./components.tsx");
 const updateForm = source("./management-report-update-form.tsx");
 const statusActions = source("./report-status-actions.tsx");
+const previewModel = source("./preview-model.ts");
 
 test("le brouillon expose un aperçu vivant sans changer son statut", () => {
   assert.match(
@@ -37,4 +38,11 @@ test("l’aperçu provisoire peut être imprimé sans action métier", () => {
   assert.match(printButton, /type="button"/);
   assert.match(printButton, /onClick=\{\(\) => window\.print\(\)\}/);
   assert.doesNotMatch(printButton, /action=|formAction|fetch\(|rpc\(/);
+});
+
+test("le snapshot PDF exclut les champs techniques du dossier", () => {
+  assert.match(previewModel, /managementReports: _managementReports/);
+  assert.match(previewModel, /archive_revision: _archiveRevision/);
+  assert.match(previewModel, /void _managementReports/);
+  assert.match(previewModel, /void _archiveRevision/);
 });
