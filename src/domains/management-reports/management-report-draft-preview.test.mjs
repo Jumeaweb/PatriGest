@@ -54,3 +54,9 @@ test("la génération distingue un contexte absent d’un snapshot invalide", ()
   assert.match(documentRoute, /CRG-CTX-01/);
   assert.match(documentRoute, /CRG-SNAPSHOT/);
 });
+
+test("la génération conserve la projection nettoyée du rapport", () => {
+  assert.match(documentRoute, /const preview = buildManagementReportPreview\(snapshot\)/);
+  assert.match(documentRoute, /report: \{ \.\.\.preview\.report, status: targetStatus \}/);
+  assert.doesNotMatch(documentRoute, /report: \{ \.\.\.snapshot\.report, status: targetStatus \}/);
+});

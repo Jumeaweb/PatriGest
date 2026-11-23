@@ -23,7 +23,8 @@ async function restoreFile(supabase: Supabase, path: string, bytes: ArrayBuffer)
 async function livePreview(personId: string, reportId: string, targetStatus: "generated" | "finalized") {
   const snapshot = await getManagementReportSnapshot(personId, reportId);
   if (!snapshot) return { success: false as const, reason: "context_unavailable" as const, issuePaths: [] };
-  const parsed = parseManagementReportSnapshot(toJsonValue({ ...buildManagementReportPreview(snapshot), report: { ...snapshot.report, status: targetStatus } }));
+  const preview = buildManagementReportPreview(snapshot);
+  const parsed = parseManagementReportSnapshot(toJsonValue({ ...preview, report: { ...preview.report, status: targetStatus } }));
   if (!parsed.success) {
     return {
       success: false as const,
