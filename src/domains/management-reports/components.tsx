@@ -9,6 +9,7 @@ import { AccountSelectionManager } from "./account-selection-manager";
 import { ManagementReportUpdateForm } from "./management-report-update-form";
 import type { getManagementReportSnapshot } from "./services";
 import { getClassificationIssueActions } from "./classification-issue-actions";
+import { isPropertyHeldAtPeriodEnd } from "./property-period";
 type Snapshot = NonNullable<
   Awaited<ReturnType<typeof getManagementReportSnapshot>>
 >;
@@ -153,9 +154,7 @@ export function ManagementReportDashboard({
               <strong>
                 {snapshot.properties.some(
                   (property) =>
-                    property.status === "active" &&
-                    (!property.entry_date ||
-                      property.entry_date <= report.period_end),
+                    isPropertyHeldAtPeriodEnd(property, report.period_end),
                 )
                   ? "Oui"
                   : "Non"}
