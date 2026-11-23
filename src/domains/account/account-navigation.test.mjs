@@ -67,9 +67,13 @@ test("conserve les réglages existants dans Profil et une navigation horizontale
 
 test("les futurs services restent informatifs et réutilisent la tarification centrale", () => {
   const views = readFileSync(new URL("./components/account-service-views.tsx", import.meta.url), "utf8");
-  assert.match(views, /import \{ DOSSIER_CAPACITIES, PRICING_PLANS \} from "@\/lib\/pricing"/);
+  assert.match(views, /import \{ PRICING_PLANS \} from "@\/lib\/pricing"/);
   assert.match(views, /Les abonnements PatriGest ne sont pas encore disponibles/);
   assert.match(views, /aucun forfait attribué/);
+  assert.match(views, /plan\.subscriptionAvailability === "planned"/);
+  assert.match(views, /unavailable \? "Indisponible" : "Disponible"/);
+  assert.match(views, /Cette formule sera proposée ultérieurement/);
+  assert.doesNotMatch(views, /Capacités supplémentaires prévues|DOSSIER_CAPACITIES/);
   assert.match(views, /href="\/tarifs"/);
   assert.match(views, /Aucune facture n’est disponible/);
   assert.match(views, /Aucune action de résiliation n’est nécessaire ou possible actuellement/);
