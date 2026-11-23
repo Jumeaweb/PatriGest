@@ -9,11 +9,13 @@ export function ManagementReportUpdateForm({
   personId,
   reportId,
   editable,
+  actions,
   children,
 }: {
   personId: string;
   reportId: string;
   editable: boolean;
+  actions?: ReactNode;
   children: ReactNode;
 }) {
   const [state, action, pending] = useActionState(
@@ -28,12 +30,19 @@ export function ManagementReportUpdateForm({
         className="space-y-3 disabled:opacity-80"
       >
         {children}
-        {editable && (
+        {(editable || actions) && (
           <div className="flex flex-wrap items-center gap-2">
-            <button className="button button-primary" disabled={pending}>
-              {pending ? "Enregistrement…" : "Enregistrer"}
-            </button>
-            <FormMessage state={state} />
+            {editable && (
+              <button className="button button-primary" disabled={pending}>
+                {pending ? "Enregistrement…" : "Enregistrer"}
+              </button>
+            )}
+            {actions}
+            {editable && (
+              <div className="basis-full">
+                <FormMessage state={state} />
+              </div>
+            )}
           </div>
         )}
       </fieldset>

@@ -103,12 +103,12 @@ export default async function Page({
         {formatFinancialDate(report.period_end)} ·{" "}
         {statusLabel}
       </p>
-      {["draft", "ready", "generated", "finalized", "transmitted", "approved", "difficulty"].includes(report.status) && (
+      {["ready", "generated", "finalized", "transmitted", "approved", "difficulty"].includes(report.status) && (
         <Link
           className="button button-secondary mt-3"
           href={`/dossiers/${protectedPersonId}/comptes-de-gestion/${reportId}/apercu`}
         >
-          {report.status === "draft" ? "Aperçu provisoire" : "Voir l’aperçu"}
+          Voir l’aperçu
         </Link>
       )}
       <DossierNavigation

@@ -14,11 +14,13 @@ export function ReportStatusActions({
   reportId,
   status,
   complete,
+  withinForm = false,
 }: {
   personId: string;
   reportId: string;
   status: ManagementReportStatus;
   complete: boolean;
+  withinForm?: boolean;
 }) {
   const [readyOpen, setReadyOpen] = useState(false);
   const [resumeOpen, setResumeOpen] = useState(false);
@@ -38,6 +40,7 @@ export function ReportStatusActions({
           <ReadyDialog
             personId={personId}
             reportId={reportId}
+            withinForm={withinForm}
             onClose={() => setReadyOpen(false)}
           />
         )}
@@ -70,10 +73,12 @@ export function ReportStatusActions({
 function ReadyDialog({
   personId,
   reportId,
+  withinForm,
   onClose,
 }: {
   personId: string;
   reportId: string;
+  withinForm: boolean;
   onClose: () => void;
 }) {
   const [state, action, pending] = useActionState(
@@ -87,11 +92,21 @@ function ReadyDialog({
       title="Marquer le compte de gestion comme prêt ?"
       description="Toutes les informations obligatoires sont complètes. Le compte de gestion sera verrouillé pour modification jusqu’à une éventuelle reprise de la préparation."
       actions={
-        <form action={action}>
-          <button className="button button-primary" disabled={pending}>
+        withinForm ? (
+          <button
+            className="button button-primary"
+            disabled={pending}
+            formAction={action}
+          >
             {pending ? "Vérification…" : "Marquer comme prêt"}
           </button>
-        </form>
+        ) : (
+          <form action={action}>
+            <button className="button button-primary" disabled={pending}>
+              {pending ? "Vérification…" : "Marquer comme prêt"}
+            </button>
+          </form>
+        )
       }
     >
       <ActionMessage state={state} />

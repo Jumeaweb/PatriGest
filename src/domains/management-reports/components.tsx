@@ -121,6 +121,25 @@ export function ManagementReportDashboard({
         personId={report.protected_person_id}
         reportId={report.id}
         editable={canManage && report.status === "draft"}
+        actions={report.status === "draft" ? (
+          <>
+            <Link
+              className="button button-secondary"
+              href={`/dossiers/${report.protected_person_id}/comptes-de-gestion/${report.id}/apercu`}
+            >
+              Aperçu provisoire
+            </Link>
+            {canManage && (
+              <ReportStatusActions
+                personId={report.protected_person_id}
+                reportId={report.id}
+                status={report.status}
+                complete={completeness.complete}
+                withinForm
+              />
+            )}
+          </>
+        ) : undefined}
       >
           <section id="person" className="rounded-xl border bg-white p-4">
             <h2 className="font-bold">I. Personne protégée</h2>
@@ -336,7 +355,7 @@ export function ManagementReportDashboard({
             />
           </section>
       </ManagementReportUpdateForm>
-      {canManage && (
+      {canManage && report.status !== "draft" && (
         <div className="mt-3">
           <ReportStatusActions
             personId={report.protected_person_id}

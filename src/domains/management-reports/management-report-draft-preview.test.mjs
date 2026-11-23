@@ -7,15 +7,29 @@ const service = source("./services.ts");
 const reportPage = source("../../app/dossiers/[protectedPersonId]/comptes-de-gestion/[reportId]/page.tsx");
 const previewPage = source("../../app/dossiers/[protectedPersonId]/comptes-de-gestion/[reportId]/apercu/page.tsx");
 const printButton = source("./print-preview-button.tsx");
+const dashboard = source("./components.tsx");
+const updateForm = source("./management-report-update-form.tsx");
+const statusActions = source("./report-status-actions.tsx");
 
 test("le brouillon expose un aperçu vivant sans changer son statut", () => {
   assert.match(
     service,
     /if \(report\.status === "draft"\)[\s\S]*?getManagementReportSnapshot\(personId, reportId\)[\s\S]*?buildManagementReportPreview\(liveSnapshot\)/,
   );
-  assert.match(reportPage, /\["draft", "ready"\]\.includes\(report\.status\)/);
-  assert.match(reportPage, /report\.status === "draft" \? "Aperçu provisoire" : "Voir l’aperçu"/);
+  assert.doesNotMatch(reportPage, /report\.status === "draft" \? "Aperçu provisoire"/);
   assert.match(previewPage, /Aperçu provisoire · données recalculées depuis la préparation/);
+});
+
+test("les trois actions du brouillon sont regroupées en bas dans l’ordre attendu", () => {
+  assert.match(
+    dashboard,
+    /actions=\{report\.status === "draft"[\s\S]*?Aperçu provisoire[\s\S]*?<ReportStatusActions[\s\S]*?withinForm/,
+  );
+  assert.match(
+    updateForm,
+    /Enregistrer[\s\S]*?\{actions\}/,
+  );
+  assert.match(statusActions, /formAction=\{action\}/);
 });
 
 test("l’aperçu provisoire peut être imprimé sans action métier", () => {
