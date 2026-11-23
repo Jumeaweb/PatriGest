@@ -22,9 +22,16 @@ async function identifiers(params: Params["params"]) { const value = await param
 async function restoreFile(supabase: Supabase, path: string, bytes: ArrayBuffer) { return supabase.storage.from(MANAGEMENT_REPORT_BUCKET).upload(path, new Uint8Array(bytes), { contentType: "application/pdf", upsert: false }); }
 async function livePreview(personId: string, reportId: string, targetStatus: "generated" | "finalized") {
   const snapshot = await getManagementReportSnapshot(personId, reportId);
-  if (!snapshot) return null;
+  if (!snapshot) return { success: false as const, reason: "context_unavailable" as const, issuePaths: [] };
   const parsed = parseManagementReportSnapshot(toJsonValue({ ...buildManagementReportPreview(snapshot), report: { ...snapshot.report, status: targetStatus } }));
-  return parsed.success ? { preview: parsed.data, accessRole: snapshot.person.accessRole, currentStatus: snapshot.report.status, refreshRequiredAt: snapshot.report.refresh_required_at } : null;
+  if (!parsed.success) {
+    return {
+      success: false as const,
+      reason: "invalid_snapshot" as const,
+      issuePaths: [...new Set(parsed.error.issues.map((issue) => issue.path.join(".")).filter(Boolean))],
+    };
+  }
+  return { success: true as const, preview: parsed.data, accessRole: snapshot.person.accessRole, currentStatus: snapshot.report.status, refreshRequiredAt: snapshot.report.refresh_required_at };
 }
 
 export async function POST(request: Request, { params }: Params) {
@@ -32,7 +39,20 @@ export async function POST(request: Request, { params }: Params) {
   if (!ids) return NextResponse.json({ message: "Compte de gestion introuvable." }, { status: 404 });
   try {
     const generated = await livePreview(ids.protectedPersonId, ids.reportId, "generated");
-    if (!generated) return NextResponse.json({ message: "Compte de gestion introuvable." }, { status: 404 });
+    if (!generated.success) {
+      console.error("MANAGEMENT_REPORT_PROJECT_CONTEXT_FAILURE", {
+        reason: generated.reason,
+        issuePaths: generated.issuePaths,
+      });
+      return NextResponse.json(
+        {
+          message: generated.reason === "invalid_snapshot"
+            ? `L’instantané du compte de gestion est invalide (CRG-SNAPSHOT${generated.issuePaths.length ? ` : ${generated.issuePaths.join(", ")}` : ""}).`
+            : "Le contexte du compte de gestion est indisponible (CRG-CTX-01).",
+        },
+        { status: 409 },
+      );
+    }
     const { preview, accessRole, currentStatus } = generated;
     if (accessRole === "read_only") return NextResponse.json({ message: "Vous ne pouvez pas générer ce projet." }, { status: 403 });
     if (currentStatus !== "ready") return NextResponse.json({ message: "Le compte de gestion doit être prêt avant la génération du projet." }, { status: 409 });

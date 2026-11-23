@@ -11,6 +11,7 @@ const dashboard = source("./components.tsx");
 const updateForm = source("./management-report-update-form.tsx");
 const statusActions = source("./report-status-actions.tsx");
 const previewModel = source("./preview-model.ts");
+const documentRoute = source("../../app/api/dossiers/[protectedPersonId]/comptes-de-gestion/[reportId]/document/route.ts");
 
 test("le brouillon expose un aperçu vivant sans changer son statut", () => {
   assert.match(
@@ -45,4 +46,11 @@ test("le snapshot PDF exclut les champs techniques du dossier", () => {
   assert.match(previewModel, /archive_revision: _archiveRevision/);
   assert.match(previewModel, /void _managementReports/);
   assert.match(previewModel, /void _archiveRevision/);
+});
+
+test("la génération distingue un contexte absent d’un snapshot invalide", () => {
+  assert.match(documentRoute, /context_unavailable/);
+  assert.match(documentRoute, /invalid_snapshot/);
+  assert.match(documentRoute, /CRG-CTX-01/);
+  assert.match(documentRoute, /CRG-SNAPSHOT/);
 });
