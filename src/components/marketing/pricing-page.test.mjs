@@ -16,10 +16,11 @@ test("la page Tarifs réutilise l’enveloppe publique et expose les sections at
   for (const text of [
     "Des tarifs simples et accessibles",
     "Prix par utilisateur",
-    "Ajoutez les dossiers dont vous avez besoin",
+    "Commencez avec Essentiel",
     "Une résiliation claire et prévisible",
     "Questions fréquentes",
   ]) assert.match(page + selector, new RegExp(text));
+  assert.doesNotMatch(page, /Capacité du compte|Ajoutez les dossiers dont vous avez besoin|DOSSIER_CAPACITIES/);
   assert.doesNotMatch(page + selector, /S’abonner|S'abonner|Stripe|paiement/);
 });
 
@@ -37,15 +38,12 @@ test("les six prix et les économies annuelles proviennent de la configuration u
   assert.match(selector, /cycle === "monthly" \? plan\.monthlyPrice : plan\.annualPrice/);
 });
 
-test("les capacités sont totales, accessibles à chaque forfait et non cumulables", () => {
-  for (const values of [
-    ["2 dossiers", "Inclus", "Inclus"],
-    ["Jusqu’à 5 dossiers", "+2 €/mois", "+20 €/an"],
-    ["Jusqu’à 10 dossiers", "+4 €/mois", "+40 €/an"],
-    ["Plus de 10 dossiers", "Sur devis", "Sur devis"],
-  ]) for (const value of values) assert.match(pricing, new RegExp(value.replace(/[+]/g, "\\+")));
-  assert.match(page, /accessibles avec chaque forfait/);
-  assert.match(page, /ne se cumulent pas/);
+test("Essentiel reste disponible tandis que Confort et Premium sont grisés", () => {
+  assert.match(pricing, /id: "essential"[\s\S]*?subscriptionAvailability: "available"/);
+  assert.match(pricing, /id: "comfort"[\s\S]*?subscriptionAvailability: "planned"/);
+  assert.match(pricing, /id: "premium"[\s\S]*?subscriptionAvailability: "planned"/);
+  assert.match(selector, />Indisponible<\/p>/);
+  assert.match(selector, /Cette formule sera proposée ultérieurement/);
 });
 
 test("les fonctionnalités futures sont distinctes des fonctions disponibles", () => {

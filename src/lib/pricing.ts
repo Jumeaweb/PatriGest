@@ -9,6 +9,7 @@ export type PricingPlan = {
   id: "essential" | "comfort" | "premium";
   name: string;
   description: string;
+  subscriptionAvailability: "available" | "planned";
   monthlyPrice: number;
   annualPrice: number;
   annualSavings: number;
@@ -22,6 +23,7 @@ export const PRICING_PLANS: readonly PricingPlan[] = [
     id: "essential",
     name: "Essentiel",
     description: "Les outils indispensables pour tenir les dossiers à jour.",
+    subscriptionAvailability: "available",
     monthlyPrice: 3,
     annualPrice: 30,
     annualSavings: 6,
@@ -39,6 +41,7 @@ export const PRICING_PLANS: readonly PricingPlan[] = [
     id: "comfort",
     name: "Confort",
     description: "Pour préparer plus rapidement la gestion courante.",
+    subscriptionAvailability: "planned",
     monthlyPrice: 5,
     annualPrice: 50,
     annualSavings: 10,
@@ -53,6 +56,7 @@ export const PRICING_PLANS: readonly PricingPlan[] = [
     id: "premium",
     name: "Premium",
     description: "Une offre enrichie pour organiser aussi les documents.",
+    subscriptionAvailability: "planned",
     monthlyPrice: 6,
     annualPrice: 60,
     annualSavings: 12,

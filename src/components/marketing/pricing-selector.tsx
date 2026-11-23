@@ -12,7 +12,7 @@ export function PricingSelector() {
       <CycleButton active={cycle === "monthly"} onClick={() => setCycle("monthly")}>Mensuel</CycleButton>
       <CycleButton active={cycle === "annual"} onClick={() => setCycle("annual")}>Annuel <span className="ml-1 text-[10px] font-bold">−17 %</span></CycleButton>
     </div>
-    <p className="mt-3 text-center text-xs text-[#64748B]">Prix par utilisateur. Les trois forfaits comprennent 2 dossiers actifs. La remise annuelle réelle de 16,67 % est arrondie à 17 %.</p>
+    <p className="mt-3 text-center text-xs text-[#64748B]">Prix par utilisateur. La formule Essentiel comprend 2 dossiers actifs. La remise annuelle réelle de 16,67 % est arrondie à 17 %.</p>
 
     <div className="mt-8 grid items-stretch gap-5 lg:grid-cols-3">
       {PRICING_PLANS.map((plan) => <PricingCard key={plan.id} plan={plan} cycle={cycle} />)}
@@ -32,9 +32,11 @@ function CycleButton({ active, onClick, children }: { active: boolean; onClick: 
 function PricingCard({ plan, cycle }: { plan: PricingPlan; cycle: BillingCycle }) {
   const price = cycle === "monthly" ? plan.monthlyPrice : plan.annualPrice;
   const period = cycle === "monthly" ? "/mois" : "/an";
+  const unavailable = plan.subscriptionAvailability === "planned";
 
-  return <article className={`relative flex h-full flex-col rounded-2xl border bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.06)] ${plan.highlighted ? "border-brand-accent ring-2 ring-brand-accent/15" : "border-[#E2E8F0]"}`}>
-    {plan.highlighted && <p className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full bg-brand-background px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-brand-accent"><Sparkles aria-hidden="true" size={12} />Intermédiaire</p>}
+  return <article className={`relative flex h-full flex-col rounded-2xl border p-6 ${unavailable ? "border-slate-200 bg-slate-100/80 text-slate-500 shadow-none grayscale" : "border-[#E2E8F0] bg-white shadow-[0_12px_32px_rgba(15,23,42,0.06)]"}`}>
+    {unavailable && <p className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full bg-slate-200 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600"><Clock3 aria-hidden="true" size={12} />Indisponible</p>}
+    {!unavailable && <p className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700"><Sparkles aria-hidden="true" size={12} />Disponible</p>}
     <h2 className="pr-24 text-xl font-bold">{plan.name}</h2>
     <p className="mt-2 min-h-12 text-sm leading-6 text-[#64748B]">{plan.description}</p>
     <div className="mt-5 border-y border-[#E2E8F0] py-5" aria-live="polite">
@@ -50,5 +52,6 @@ function PricingCard({ plan, cycle }: { plan: PricingPlan; cycle: BillingCycle }
         <span><span className="font-medium">{feature.label}</span>{feature.availability === "upcoming" && <span className="ml-2 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">À venir</span>}</span>
       </li>)}
     </ul>
+    {unavailable && <p className="mt-auto border-t border-slate-200 pt-5 text-xs font-semibold text-slate-600">Cette formule sera proposée ultérieurement.</p>}
   </article>;
 }
