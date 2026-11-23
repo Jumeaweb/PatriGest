@@ -5,6 +5,7 @@ import {
   propertyTypeLabels,
   safePropertyText,
 } from "@/domains/assets-liabilities/property-format";
+import { getPropertyPresentationAtPeriodEnd } from "./property-period";
 
 type Snapshot = NonNullable<
   Awaited<ReturnType<typeof getManagementReportSnapshot>>
@@ -159,22 +160,28 @@ export function buildManagementReportPreview(snapshot: Snapshot) {
         (!property.entry_date || property.entry_date <= snapshot.report.period_end) &&
         (!property.disposal_date || property.disposal_date >= snapshot.report.period_start),
     )
-    .map((property) => ({
-      id: property.id,
-      designation: property.designation,
-      type: propertyTypeLabels[property.property_type],
-      status: property.status === "active" ? "Actif" : "Cédé",
-      address: address([
-        safePropertyText(property.address_line1),
-        safePropertyText(property.address_line2),
-        safePropertyText(property.postal_code),
-        safePropertyText(property.city),
-        safePropertyText(property.country),
-      ]),
-      estimatedValue: property.estimated_value,
-      valuationDate: property.valuation_date,
-      disposalDate: property.disposal_date,
-    }));
+    .map((property) => {
+      const periodPresentation = getPropertyPresentationAtPeriodEnd(
+        property,
+        snapshot.report.period_end,
+      );
+      return {
+        id: property.id,
+        designation: property.designation,
+        type: propertyTypeLabels[property.property_type],
+        status: periodPresentation.status,
+        address: address([
+          safePropertyText(property.address_line1),
+          safePropertyText(property.address_line2),
+          safePropertyText(property.postal_code),
+          safePropertyText(property.city),
+          safePropertyText(property.country),
+        ]),
+        estimatedValue: property.estimated_value,
+        valuationDate: property.valuation_date,
+        disposalDate: periodPresentation.disposalDate,
+      };
+    });
   const propertyEvents = snapshot.propertyEvents.map(({ property, event }) => ({
     id: event.id,
     property: property.designation,

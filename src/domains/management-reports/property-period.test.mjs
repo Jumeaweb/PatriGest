@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { isPropertyHeldAtPeriodEnd } from "./property-period.ts";
+import {
+  getPropertyPresentationAtPeriodEnd,
+  isPropertyHeldAtPeriodEnd,
+} from "./property-period.ts";
 
 test("un bien vendu après l’exercice reste détenu à la clôture historique", () => {
   assert.equal(
@@ -61,5 +64,25 @@ test("un bien sans date de cession reste détenu à la fin de la période", () =
       "2023-12-31",
     ),
     true,
+  );
+});
+
+test("la présentation historique masque une cession postérieure à l’exercice", () => {
+  assert.deepEqual(
+    getPropertyPresentationAtPeriodEnd(
+      { entry_date: "2012-07-04", disposal_date: "2024-09-25" },
+      "2023-12-31",
+    ),
+    { status: "Actif", disposalDate: null },
+  );
+});
+
+test("la présentation affiche la cession à partir de l’exercice concerné", () => {
+  assert.deepEqual(
+    getPropertyPresentationAtPeriodEnd(
+      { entry_date: "2012-07-04", disposal_date: "2024-09-25" },
+      "2024-12-31",
+    ),
+    { status: "Cédé", disposalDate: "2024-09-25" },
   );
 });
