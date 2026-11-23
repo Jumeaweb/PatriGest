@@ -14,7 +14,6 @@ import {
   getManagementReportBankStatementDocumentVersions,
   getManagementReportPreviewState,
   getManagementReportOutcome,
-  getManagementReportSnapshot,
   getManagementReportTransmission,
 } from "@/domains/management-reports/services";
 import { formatFinancialDate } from "@/domains/financial-accounts/utils/financial-account-utils";
@@ -35,11 +34,9 @@ export default async function Page({
   );
   if (!result) notFound();
   const { person, report, state } = result;
-  const preparationSnapshot = report.status === "draft"
-    ? await getManagementReportSnapshot(protectedPersonId, reportId)
-    : report.status === "ready"
-      ? state.liveSnapshot
-      : null;
+  const preparationSnapshot = ["draft", "ready"].includes(report.status) && state.availability === "available"
+    ? state.liveSnapshot
+    : null;
   if (["draft", "ready"].includes(report.status) && !preparationSnapshot) notFound();
   const documentType = report.status === "generated"
     ? "management_report_draft" as const
@@ -106,12 +103,12 @@ export default async function Page({
         {formatFinancialDate(report.period_end)} ·{" "}
         {statusLabel}
       </p>
-      {["ready", "generated", "finalized", "transmitted", "approved", "difficulty"].includes(report.status) && (
+      {["draft", "ready", "generated", "finalized", "transmitted", "approved", "difficulty"].includes(report.status) && (
         <Link
           className="button button-secondary mt-3"
           href={`/dossiers/${protectedPersonId}/comptes-de-gestion/${reportId}/apercu`}
         >
-          Voir l’aperçu
+          {report.status === "draft" ? "Aperçu provisoire" : "Voir l’aperçu"}
         </Link>
       )}
       <DossierNavigation

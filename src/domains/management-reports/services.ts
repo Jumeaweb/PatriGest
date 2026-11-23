@@ -461,7 +461,7 @@ export type ManagementReportPreviewState =
       liveSnapshot: NonNullable<Awaited<ReturnType<typeof getManagementReportSnapshot>>> | null;
     }
   | {
-      availability: "draft" | "missing_snapshot" | "unsupported_version" | "invalid_snapshot";
+      availability: "missing_snapshot" | "unsupported_version" | "invalid_snapshot";
       preview: null;
       liveSnapshot: null;
     };
@@ -476,7 +476,18 @@ export async function getManagementReportPreviewState(personId: string, reportId
   const report = reportResult.data;
 
   if (report.status === "draft") {
-    return { report, person, state: { availability: "draft", preview: null, liveSnapshot: null } satisfies ManagementReportPreviewState };
+    const liveSnapshot = await getManagementReportSnapshot(personId, reportId);
+    return liveSnapshot
+      ? {
+          report,
+          person,
+          state: {
+            availability: "available",
+            preview: buildManagementReportPreview(liveSnapshot),
+            liveSnapshot,
+          } satisfies ManagementReportPreviewState,
+        }
+      : null;
   }
   if (report.status === "ready") {
     const liveSnapshot = await getManagementReportSnapshot(personId, reportId);
