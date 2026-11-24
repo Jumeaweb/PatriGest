@@ -99,6 +99,9 @@ export async function reviewApplicationRegistration(userId: string, decision: "a
       throw new Error("Cette inscription a déjà été traitée.");
     }
     if (error.code === "P4T07") throw new Error("Les conditions de l’essai gratuit doivent être acceptées avant l’activation du compte.");
+    if (error.code === "P4M03") {
+      throw new Error("Ce compte ne peut pas être activé en mode autonome tant qu’une invitation collaborateur est active pour cette adresse. Utilisez une adresse électronique distincte ou refusez l’invitation.");
+    }
     throw new Error("Impossible de traiter cette inscription.");
   }
 

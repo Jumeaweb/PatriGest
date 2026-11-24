@@ -20,6 +20,14 @@ insert into public.platform_administrators (user_id) values ('32000000-0000-4000
 insert into public.protected_persons (id, owner_id, first_name, last_name) values
   ('32000000-0000-4000-8000-000000000101', '32000000-0000-4000-8000-000000000001', 'Dossier', 'RAPP6'),
   ('32000000-0000-4000-8000-000000000102', '32000000-0000-4000-8000-000000000004', 'Autre', 'Dossier');
+update public.application_user_authorizations
+set registration_intent = 'collaborator',
+    account_mode = 'collaborator'
+where user_id in (
+  '32000000-0000-4000-8000-000000000002',
+  '32000000-0000-4000-8000-000000000003'
+);
+
 insert into public.protected_person_access (id, protected_person_id, user_id, role, invited_by) values
   ('32000000-0000-4000-8000-000000000201', '32000000-0000-4000-8000-000000000101', '32000000-0000-4000-8000-000000000002', 'manager', '32000000-0000-4000-8000-000000000001'),
   ('32000000-0000-4000-8000-000000000202', '32000000-0000-4000-8000-000000000101', '32000000-0000-4000-8000-000000000003', 'read_only', '32000000-0000-4000-8000-000000000001');

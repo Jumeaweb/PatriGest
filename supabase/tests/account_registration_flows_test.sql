@@ -147,15 +147,20 @@ select extensions.ok(
 );
 reset role;
 
--- Un titulaire autonome peut aussi recevoir un acces partage sans perdre son mode.
+-- Un titulaire autonome ne peut pas recevoir un acces partage.
 insert into public.protected_persons(id, owner_id, first_name, last_name, status)
 values ('98320000-0000-4000-8000-000000000002', '98300000-0000-4000-8000-000000000002', 'Compte', 'Partage', 'active');
-insert into public.protected_person_access(protected_person_id, user_id, role, invited_by)
-values ('98320000-0000-4000-8000-000000000002', '98300000-0000-4000-8000-000000000004', 'read_only', '98300000-0000-4000-8000-000000000002');
+select extensions.throws_ok(
+  $$insert into public.protected_person_access(protected_person_id, user_id, role, invited_by)
+    values ('98320000-0000-4000-8000-000000000002', '98300000-0000-4000-8000-000000000004', 'read_only', '98300000-0000-4000-8000-000000000002')$$,
+  'P4M01',
+  'Un compte autonome ne peut pas devenir collaborateur. Utilisez une adresse électronique distincte pour les accès partagés.',
+  'un titulaire autonome ne peut pas recevoir un acces collaborateur'
+);
 select extensions.is(
-  (select account_mode from public.application_user_authorizations where user_id = '98300000-0000-4000-8000-000000000004'),
-  'autonomous',
-  'un titulaire conserve son mode autonome lorsqu il devient aussi collaborateur'
+  (select count(*) from public.protected_person_access where user_id = '98300000-0000-4000-8000-000000000004'),
+  0::bigint,
+  'le refus ne cree aucun acces partage'
 );
 
 select extensions.is(

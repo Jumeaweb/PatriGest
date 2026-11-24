@@ -87,6 +87,13 @@ where id='9b000000-0000-4000-8000-000000000001';
 
 insert into public.protected_persons(id,owner_id,first_name,last_name) values
 ('9b000000-0000-4000-8100-000000000001','9b000000-0000-4000-8000-000000000001','Dossier','Relevés');
+update public.application_user_authorizations
+set registration_intent = 'collaborator',
+    account_mode = 'collaborator'
+where user_id in (
+  '9b000000-0000-4000-8000-000000000002'
+);
+
 insert into public.protected_person_access(id,protected_person_id,user_id,role,invited_by) values
 ('9b000000-0000-4000-8200-000000000001','9b000000-0000-4000-8100-000000000001',
  '9b000000-0000-4000-8000-000000000002','read_only','9b000000-0000-4000-8000-000000000001');

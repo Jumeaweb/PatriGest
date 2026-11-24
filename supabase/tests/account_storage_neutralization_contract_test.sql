@@ -193,6 +193,13 @@ values (
   '99300000-0000-4000-8000-000000000001',
   'Neutralisation', 'Documentaire'
 );
+update public.application_user_authorizations
+set registration_intent = 'collaborator',
+    account_mode = 'collaborator'
+where user_id in (
+  '99300000-0000-4000-8000-000000000002'
+);
+
 insert into public.protected_person_access(
   id, protected_person_id, user_id, role, invited_by
 ) values (

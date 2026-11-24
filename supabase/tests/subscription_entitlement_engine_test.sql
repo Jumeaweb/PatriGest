@@ -81,11 +81,11 @@ insert into auth.users (
   ('00000000-0000-0000-0000-000000000000','95000000-0000-4000-8000-000000000003','authenticated','authenticated','premium-owner@example.test','test',now(),'{}','{}',now(),now()),
   ('00000000-0000-0000-0000-000000000000','95000000-0000-4000-8000-000000000004','authenticated','authenticated','development-owner@example.test','test',now(),'{}','{}',now(),now()),
   ('00000000-0000-0000-0000-000000000000','95000000-0000-4000-8000-000000000005','authenticated','authenticated','missing-owner@example.test','test',now(),'{}','{}',now(),now()),
-  ('00000000-0000-0000-0000-000000000000','95000000-0000-4000-8000-000000000006','authenticated','authenticated','premium-manager@example.test','test',now(),'{}','{}',now(),now()),
-  ('00000000-0000-0000-0000-000000000000','95000000-0000-4000-8000-000000000007','authenticated','authenticated','premium-reader@example.test','test',now(),'{}','{}',now(),now()),
-  ('00000000-0000-0000-0000-000000000000','95000000-0000-4000-8000-000000000008','authenticated','authenticated','essential-manager@example.test','test',now(),'{}','{}',now(),now()),
+  ('00000000-0000-0000-0000-000000000000','95000000-0000-4000-8000-000000000006','authenticated','authenticated','premium-manager@example.test','test',now(),'{}','{"patrigest_registration_intent":"collaborator"}',now(),now()),
+  ('00000000-0000-0000-0000-000000000000','95000000-0000-4000-8000-000000000007','authenticated','authenticated','premium-reader@example.test','test',now(),'{}','{"patrigest_registration_intent":"collaborator"}',now(),now()),
+  ('00000000-0000-0000-0000-000000000000','95000000-0000-4000-8000-000000000008','authenticated','authenticated','essential-manager@example.test','test',now(),'{}','{"patrigest_registration_intent":"collaborator"}',now(),now()),
   ('00000000-0000-0000-0000-000000000000','95000000-0000-4000-8000-000000000009','authenticated','authenticated','foreign-user@example.test','test',now(),'{}','{}',now(),now()),
-  ('00000000-0000-0000-0000-000000000000','95000000-0000-4000-8000-000000000010','authenticated','authenticated','inactive-manager@example.test','test',now(),'{}','{}',now(),now()),
+  ('00000000-0000-0000-0000-000000000000','95000000-0000-4000-8000-000000000010','authenticated','authenticated','inactive-manager@example.test','test',now(),'{}','{"patrigest_registration_intent":"collaborator"}',now(),now()),
   ('00000000-0000-0000-0000-000000000000','95000000-0000-4000-8000-000000000011','authenticated','authenticated','platform-admin@example.test','test',now(),'{}','{}',now(),now());
 
 update public.application_user_authorizations

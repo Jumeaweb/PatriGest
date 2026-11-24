@@ -30,6 +30,14 @@ values
   ('10000000-0000-4000-8000-000000000101', '10000000-0000-4000-8000-000000000001', 'Dossier', 'Principal'),
   ('10000000-0000-4000-8000-000000000102', '10000000-0000-4000-8000-000000000005', 'Dossier', 'Autre');
 
+update public.application_user_authorizations
+set registration_intent = 'collaborator',
+    account_mode = 'collaborator'
+where user_id in (
+  '10000000-0000-4000-8000-000000000002',
+  '10000000-0000-4000-8000-000000000003'
+);
+
 insert into public.protected_person_access (
   id, protected_person_id, user_id, role, invited_by
 )

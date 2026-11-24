@@ -116,7 +116,11 @@ select
   'test-hash',
   now(),
   '{"provider":"email","providers":["email"]}'::jsonb,
-  '{}'::jsonb,
+  case
+    when user_number not in (1, 2, 7)
+      then '{"patrigest_registration_intent":"collaborator"}'::jsonb
+    else '{}'::jsonb
+  end,
   now(),
   now()
 from generate_series(1, 35) user_number;

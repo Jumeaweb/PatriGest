@@ -68,6 +68,13 @@ insert into public.protected_persons (
   ('99400000-0000-4000-8100-000000000001', '99400000-0000-4000-8000-000000000001', 'Dossier', 'CRG', 'active', null),
   ('99400000-0000-4000-8100-000000000002', '99400000-0000-4000-8000-000000000001', 'Dossier', 'Archivé', 'active', null);
 
+update public.application_user_authorizations
+set registration_intent = 'collaborator',
+    account_mode = 'collaborator'
+where user_id in (
+  '99400000-0000-4000-8000-000000000002'
+);
+
 insert into public.protected_person_access (
   protected_person_id, user_id, role, invited_by
 ) values (

@@ -46,6 +46,7 @@ from generate_series(1, 7) n;
 
 update public.application_user_authorizations
 set status = 'active',
+    registration_intent = case when user_id = '99200000-0000-4000-8000-000000000004' then 'collaborator' else 'autonomous' end,
     account_mode = case when user_id = '99200000-0000-4000-8000-000000000004' then 'collaborator' else 'autonomous' end,
     status_changed_at = statement_timestamp()
 where user_id::text like '99200000-0000-4000-8000-%';

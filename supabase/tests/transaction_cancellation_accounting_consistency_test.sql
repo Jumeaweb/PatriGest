@@ -10,6 +10,13 @@ update public.application_user_authorizations set status='active',status_changed
 where user_id in ('99700000-0000-4000-8000-000000000001','99700000-0000-4000-8000-000000000002','99700000-0000-4000-8000-000000000003');
 insert into public.protected_persons(id,owner_id,first_name,last_name) values
 ('99700000-0000-4000-8100-000000000001','99700000-0000-4000-8000-000000000001','Cohérence','Transactions');
+update public.application_user_authorizations
+set registration_intent = 'collaborator',
+    account_mode = 'collaborator'
+where user_id in (
+  '99700000-0000-4000-8000-000000000002'
+);
+
 insert into public.protected_person_access(id,protected_person_id,user_id,role,invited_by) values
 ('99700000-0000-4000-8900-000000000001','99700000-0000-4000-8100-000000000001','99700000-0000-4000-8000-000000000002','read_only','99700000-0000-4000-8000-000000000001');
 insert into public.financial_accounts(id,protected_person_id,account_type,institution_name,account_name,initial_balance,initial_balance_date) values

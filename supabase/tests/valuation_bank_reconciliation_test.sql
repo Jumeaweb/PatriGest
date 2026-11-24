@@ -15,6 +15,13 @@ where user_id in ('99700000-0000-4000-8000-000000000001','99700000-0000-4000-800
 
 insert into public.protected_persons (id, owner_id, first_name, last_name)
 values ('99700000-0000-4000-8100-000000000001','99700000-0000-4000-8000-000000000001','Dossier','Valorisation');
+update public.application_user_authorizations
+set registration_intent = 'collaborator',
+    account_mode = 'collaborator'
+where user_id in (
+  '99700000-0000-4000-8000-000000000002'
+);
+
 insert into public.protected_person_access (protected_person_id,user_id,role,invited_by)
 values ('99700000-0000-4000-8100-000000000001','99700000-0000-4000-8000-000000000002','read_only','99700000-0000-4000-8000-000000000001');
 

@@ -44,14 +44,15 @@ insert into auth.users(
   '00000000-0000-0000-0000-000000000000'::uuid,
   ('99000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
   'authenticated', 'authenticated', 'trial-' || n || '@example.test', 'test',
-  clock_timestamp(), '{}', '{}', clock_timestamp(), clock_timestamp()
+  clock_timestamp(), '{}',
+  case when n = 2 then '{"patrigest_registration_intent":"collaborator"}'::jsonb else '{}'::jsonb end,
+  clock_timestamp(), clock_timestamp()
 from generate_series(1, 7) n;
 
 insert into public.account_trials(
   user_id, terms_version, terms_accepted_at, started_at, ends_at, deletion_eligible_at
 ) values
   ('99000000-0000-4000-8000-000000000001', 'trial-30-plus-30-v1', statement_timestamp() - interval '29 days', statement_timestamp() - interval '29 days', statement_timestamp() + interval '1 day', statement_timestamp() + interval '31 days'),
-  ('99000000-0000-4000-8000-000000000002', 'trial-30-plus-30-v1', statement_timestamp() - interval '30 days', statement_timestamp() - interval '30 days', statement_timestamp(), statement_timestamp() + interval '30 days'),
   ('99000000-0000-4000-8000-000000000003', 'trial-30-plus-30-v1', statement_timestamp() - interval '60 days', statement_timestamp() - interval '60 days', statement_timestamp() - interval '30 days', statement_timestamp()),
   ('99000000-0000-4000-8000-000000000004', 'trial-30-plus-30-v1', statement_timestamp() - interval '31 days', statement_timestamp() - interval '31 days', statement_timestamp() - interval '1 day', statement_timestamp() + interval '29 days'),
   ('99000000-0000-4000-8000-000000000005', 'trial-30-plus-30-v1', statement_timestamp() - interval '1 day', statement_timestamp() - interval '1 day', statement_timestamp() + interval '29 days', statement_timestamp() + interval '59 days');
@@ -64,6 +65,14 @@ set status = 'active',
     end,
     status_changed_at = clock_timestamp()
 where user_id::text like '99000000-0000-4000-8000-%';
+
+select extensions.throws_ok(
+  $$insert into public.account_trials(user_id, terms_version, terms_accepted_at)
+    values ('99000000-0000-4000-8000-000000000002', 'trial-30-plus-30-v1', statement_timestamp())$$,
+  'P4M05',
+  'Un compte collaborateur ne peut pas posséder d essai gratuit ni d abonnement.',
+  'un collaborateur ne peut pas recevoir un essai gratuit'
+);
 
 insert into public.account_subscriptions(
   owner_id, plan_key, dossier_capacity_key, status, started_at,
@@ -126,7 +135,10 @@ select set_config('request.jwt.claims', json_build_object(
   'sub', '99000000-0000-4000-8000-000000000002', 'role', 'authenticated'
 )::text, true);
 set local role authenticated;
-select extensions.ok(not public.is_application_user_active(), 'un compte a J30 ne peut plus appeler les RPC metier');
+select extensions.ok(
+  public.is_application_user_active(),
+  'un collaborateur actif conserve ses acces partages sans abonnement propre'
+);
 reset role;
 
 insert into public.protected_persons(id, owner_id, first_name, last_name, status)
@@ -139,12 +151,12 @@ select set_config('request.jwt.claims', json_build_object(
 )::text, true);
 set local role authenticated;
 select extensions.ok(
-  not public.can_read_protected_person('99010000-0000-4000-8000-000000000001'),
-  'un partage ne contourne pas la suspension du gestionnaire'
+  public.can_read_protected_person('99010000-0000-4000-8000-000000000001'),
+  'un collaborateur actif conserve la lecture explicitement partagee'
 );
 select extensions.ok(
-  not public.can_manage_protected_person('99010000-0000-4000-8000-000000000001'),
-  'les mutations partagees restent bloquees pour le compte suspendu'
+  public.can_manage_protected_person('99010000-0000-4000-8000-000000000001'),
+  'un gestionnaire actif conserve la gestion explicitement partagee'
 );
 reset role;
 

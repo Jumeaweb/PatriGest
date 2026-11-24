@@ -29,6 +29,14 @@ values
   ('81000000-0000-4000-8000-000000000101', '81000000-0000-4000-8000-000000000001', 'Dossier', 'Principal'),
   ('81000000-0000-4000-8000-000000000102', '81000000-0000-4000-8000-000000000005', 'Dossier', 'Étranger');
 
+update public.application_user_authorizations
+set registration_intent = 'collaborator',
+    account_mode = 'collaborator'
+where user_id in (
+  '81000000-0000-4000-8000-000000000002',
+  '81000000-0000-4000-8000-000000000003'
+);
+
 insert into public.protected_person_access (id, protected_person_id, user_id, role, invited_by)
 values
   ('81000000-0000-4000-8000-000000000201', '81000000-0000-4000-8000-000000000101', '81000000-0000-4000-8000-000000000002', 'manager', '81000000-0000-4000-8000-000000000001'),

@@ -123,7 +123,7 @@ insert into auth.users (
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at
 ) values
   ('00000000-0000-0000-0000-000000000000','94000000-0000-4000-8000-000000000001','authenticated','authenticated','subscription-owner@example.test','test',now(),'{}','{}',now(),now()),
-  ('00000000-0000-0000-0000-000000000000','94000000-0000-4000-8000-000000000002','authenticated','authenticated','subscription-manager@example.test','test',now(),'{}','{}',now(),now()),
+  ('00000000-0000-0000-0000-000000000000','94000000-0000-4000-8000-000000000002','authenticated','authenticated','subscription-manager@example.test','test',now(),'{}','{"patrigest_registration_intent":"collaborator"}',now(),now()),
   ('00000000-0000-0000-0000-000000000000','94000000-0000-4000-8000-000000000003','authenticated','authenticated','subscription-outsider@example.test','test',now(),'{}','{}',now(),now()),
   ('00000000-0000-0000-0000-000000000000','94000000-0000-4000-8000-000000000004','authenticated','authenticated','subscription-admin@example.test','test',now(),'{}','{}',now(),now()),
   ('00000000-0000-0000-0000-000000000000','94000000-0000-4000-8000-000000000005','authenticated','authenticated','subscription-custom-owner@example.test','test',now(),'{}','{}',now(),now());
@@ -322,9 +322,10 @@ select set_config('request.jwt.claim.sub','94000000-0000-4000-8000-000000000004'
 select set_config('request.jwt.claims','{"sub":"94000000-0000-4000-8000-000000000004","role":"authenticated"}',true);
 
 select extensions.is(
-  (select count(*) from public.account_subscriptions),
+  (select count(*) from public.account_subscriptions
+   where owner_id::text like '94000000-0000-4000-8000-%'),
   5::bigint,
-  'un administrateur de plateforme peut auditer les abonnements'
+  'un administrateur de plateforme peut auditer les abonnements des fixtures'
 );
 
 reset role;

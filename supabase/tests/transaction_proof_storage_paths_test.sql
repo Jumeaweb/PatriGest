@@ -34,13 +34,15 @@ insert into auth.users (
   ('00000000-0000-0000-0000-000000000000', '99500000-0000-4000-8000-000000000004', 'authenticated', 'authenticated', 'proof-outsider@example.test', 'test', now(), '{}', '{}', now(), now());
 
 update public.application_user_authorizations
-set status = 'active', status_changed_at = now(), account_mode = 'autonomous'
+set status = 'active', status_changed_at = now(),
+    registration_intent = 'autonomous', account_mode = 'autonomous'
 where user_id in (
   '99500000-0000-4000-8000-000000000001',
   '99500000-0000-4000-8000-000000000004'
 );
 update public.application_user_authorizations
-set status = 'active', status_changed_at = now(), account_mode = 'collaborator'
+set status = 'active', status_changed_at = now(),
+    registration_intent = 'collaborator', account_mode = 'collaborator'
 where user_id in (
   '99500000-0000-4000-8000-000000000002',
   '99500000-0000-4000-8000-000000000003'

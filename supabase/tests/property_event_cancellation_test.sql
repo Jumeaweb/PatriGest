@@ -39,6 +39,14 @@ update public.profiles set first_name='Marc',last_name='Gestionnaire' where id='
 insert into public.protected_persons(id,owner_id,first_name,last_name) values
   ('86000000-0000-4000-8000-000000000101','86000000-0000-4000-8000-000000000001','Dossier','Principal'),
   ('86000000-0000-4000-8000-000000000102','86000000-0000-4000-8000-000000000004','Dossier','Étranger');
+update public.application_user_authorizations
+set registration_intent = 'collaborator',
+    account_mode = 'collaborator'
+where user_id in (
+  '86000000-0000-4000-8000-000000000002',
+  '86000000-0000-4000-8000-000000000003'
+);
+
 insert into public.protected_person_access(id,protected_person_id,user_id,role,invited_by) values
   ('86000000-0000-4000-8000-000000000201','86000000-0000-4000-8000-000000000101','86000000-0000-4000-8000-000000000002','manager','86000000-0000-4000-8000-000000000001'),
   ('86000000-0000-4000-8000-000000000202','86000000-0000-4000-8000-000000000101','86000000-0000-4000-8000-000000000003','read_only','86000000-0000-4000-8000-000000000001');

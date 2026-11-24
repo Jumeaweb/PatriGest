@@ -38,6 +38,8 @@ test("la reprise du consentement reste authentifiee et ne cree pas de second com
 test("la file administrative suit le statut autonome distinct", () => {
   assert.match(administrationService, /\.eq\("registration_intent", "autonomous"\)/);
   assert.match(administrationService, /\.eq\("autonomous_registration_status", "pending"\)/);
+  assert.match(administrationService, /error\.code === "P4M03"/);
+  assert.match(administrationService, /invitation collaborateur est active/);
 });
 
 test("les textes annoncent deux dossiers et les exports pendant l'essai", () => {

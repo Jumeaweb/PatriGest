@@ -12,8 +12,9 @@ import { getDossierInvitationDisplayContext, getInvitationPreview, getRecoverabl
 import { getSafeShareErrorMessage } from "./share-limits";
 import type { AccessActionState } from "./state";
 
-function isAutonomousAccountInvitationError(error: { message?: string } | null) {
-  return error?.message?.includes("Un compte autonome ne peut pas être invité comme collaborateur.") ?? false;
+function isAutonomousAccountInvitationError(error: { code?: string; message?: string } | null) {
+  return error?.code === "P4M01"
+    || (error?.message?.includes("Un compte autonome ne peut pas être invité comme collaborateur.") ?? false);
 }
 
 function isEmailReservationError(error: { message?: string } | null) {
@@ -35,14 +36,14 @@ function invitationCreationErrorMessage(
     return "Vous ne pouvez pas vous inviter vous-même à accéder à votre propre dossier de personne protégée.";
   }
   if (isAutonomousAccountInvitationError(error)) {
-    return "Cette adresse correspond à un compte autonome et ne peut pas recevoir d’accès collaborateur.";
+    return "Cette adresse correspond à un compte autonome et ne peut pas recevoir d’accès collaborateur. Utilisez une autre adresse électronique.";
   }
   return getSafeShareErrorMessage(error, fallback);
 }
 
-function invitationAcceptanceErrorMessage(error: { message?: string } | null) {
-  return error?.message?.includes("Un compte autonome ne peut pas devenir collaborateur.")
-    ? "Ce compte autonome ne peut pas accepter une invitation collaborateur."
+function invitationAcceptanceErrorMessage(error: { code?: string; message?: string } | null) {
+  return error?.code === "P4M01" || error?.message?.includes("Un compte autonome ne peut pas devenir collaborateur.")
+    ? "Ce compte autonome ne peut pas accepter une invitation collaborateur. Connectez-vous avec une adresse électronique distincte."
     : "Invitation invalide ou expirée.";
 }
 

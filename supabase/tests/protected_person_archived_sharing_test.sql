@@ -62,6 +62,13 @@ update public.application_user_authorizations
 set account_mode = 'autonomous'
 where user_id = '9a000000-0000-4000-8000-000000000001';
 
+update public.application_user_authorizations
+set registration_intent = 'collaborator'
+where user_id in (
+  '9a000000-0000-4000-8000-000000000004',
+  '9a000000-0000-4000-8000-000000000005'
+);
+
 insert into public.account_subscriptions(
   owner_id, plan_key, dossier_capacity_key, status, started_at
 ) values (
@@ -73,6 +80,16 @@ insert into public.protected_persons(id, owner_id, first_name, last_name)
 values
   ('9a000000-0000-4000-8100-000000000001','9a000000-0000-4000-8000-000000000001','Partage','Archivé'),
   ('9a000000-0000-4000-8100-000000000002','9a000000-0000-4000-8000-000000000001','Partage','Actif');
+
+update public.application_user_authorizations
+set registration_intent = 'collaborator',
+    account_mode = 'collaborator'
+where user_id in (
+  '9a000000-0000-4000-8000-000000000002',
+  '9a000000-0000-4000-8000-000000000003',
+  '9a000000-0000-4000-8000-000000000009',
+  '9a000000-0000-4000-8000-000000000008'
+);
 
 insert into public.protected_person_access(
   id, protected_person_id, user_id, role, invited_by

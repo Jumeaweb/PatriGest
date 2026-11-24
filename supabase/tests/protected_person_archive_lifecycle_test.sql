@@ -103,6 +103,14 @@ insert into public.protected_persons(
   ('97000000-0000-4000-8106-000000000101','97000000-0000-4000-8000-000000000006','Autre','Propriétaire','active',null),
   ('97000000-0000-4000-8107-000000000101','97000000-0000-4000-8000-000000000007','Lecture','Partagée','active',null);
 
+update public.application_user_authorizations
+set registration_intent = 'collaborator',
+    account_mode = 'collaborator'
+where user_id in (
+  '97000000-0000-4000-8000-000000000002',
+  '97000000-0000-4000-8000-000000000003'
+);
+
 insert into public.protected_person_access(
   id, protected_person_id, user_id, role, invited_by
 ) values

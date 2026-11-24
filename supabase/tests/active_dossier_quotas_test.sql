@@ -161,6 +161,14 @@ values
   ('96000000-0000-4000-8010-000000000103','96000000-0000-4000-8000-000000000010','Dépassement','Trois','active',null);
 
 -- Le compte 12 devient Gestionnaire, le compte 13 Lecteur.
+update public.application_user_authorizations
+set registration_intent = 'collaborator',
+    account_mode = 'collaborator'
+where user_id in (
+  '96000000-0000-4000-8000-000000000012',
+  '96000000-0000-4000-8000-000000000013'
+);
+
 insert into public.protected_person_access(
   id, protected_person_id, user_id, role, invited_by
 ) values
@@ -324,7 +332,7 @@ select extensions.throws_ok(
 select extensions.throws_ok(
   $$insert into public.protected_persons(id,owner_id,first_name,last_name)
     values('96000000-0000-4000-8112-000000000101','96000000-0000-4000-8000-000000000012','Gestionnaire','Interdit')$$,
-  'P0001', 'Un compte collaborateur ne peut pas créer ou posséder de dossier.',
+  'P4M02', 'Un compte collaborateur ne peut pas créer ou posséder de dossier. Utilisez une adresse électronique distincte pour le compte autonome.',
   'un gestionnaire ne peut pas créer de dossier'
 );
 select set_config('request.jwt.claim.sub','96000000-0000-4000-8000-000000000013',true);
@@ -336,7 +344,7 @@ select extensions.throws_ok(
 select extensions.throws_ok(
   $$insert into public.protected_persons(id,owner_id,first_name,last_name)
     values('96000000-0000-4000-8113-000000000101','96000000-0000-4000-8000-000000000013','Lecteur','Interdit')$$,
-  'P0001', 'Un compte collaborateur ne peut pas créer ou posséder de dossier.',
+  'P4M02', 'Un compte collaborateur ne peut pas créer ou posséder de dossier. Utilisez une adresse électronique distincte pour le compte autonome.',
   'un lecteur ne peut pas créer de dossier'
 );
 

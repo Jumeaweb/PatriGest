@@ -74,6 +74,14 @@ values
     'Inès', 'Inactive'
   );
 
+update public.application_user_authorizations
+set registration_intent = 'collaborator',
+    account_mode = 'collaborator'
+where user_id in (
+  '00000000-0000-0000-0000-000000000102',
+  '00000000-0000-0000-0000-000000000103'
+);
+
 insert into public.protected_person_access (
   id, protected_person_id, user_id, role, invited_by
 )

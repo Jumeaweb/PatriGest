@@ -35,6 +35,8 @@ insert into auth.users(instance_id,id,aud,role,email,encrypted_password,email_co
 ('00000000-0000-0000-0000-000000000000','99600000-0000-4000-8000-000000000004','authenticated','authenticated','engine-outsider@example.test','test',now(),'{}','{}',now(),now());
 
 update public.application_user_authorizations set status='active',status_changed_at=now(),
+  registration_intent=case when user_id in ('99600000-0000-4000-8000-000000000001','99600000-0000-4000-8000-000000000004')
+    then 'autonomous' else 'collaborator' end,
   account_mode=case when user_id in ('99600000-0000-4000-8000-000000000001','99600000-0000-4000-8000-000000000004')
     then 'autonomous' else 'collaborator' end
 where user_id::text like '99600000-0000-4000-8000-00000000000%';

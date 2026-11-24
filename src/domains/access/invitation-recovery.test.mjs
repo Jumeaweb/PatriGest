@@ -29,8 +29,9 @@ test("un compte non confirmé, rejeté ou administrateur ne contourne pas l'acti
 test("les conflits de mode utilisent l'autorité DB et un message applicatif sûr", () => {
   assert.match(actions, /rpc\("issue_protected_person_invitation"/);
   assert.match(actions, /isAutonomousAccountInvitationError/);
-  assert.match(actions, /Cette adresse correspond à un compte autonome et ne peut pas recevoir d’accès collaborateur\./);
-  assert.match(actions, /Ce compte autonome ne peut pas accepter une invitation collaborateur\./);
+  assert.match(actions, /error\?\.code === "P4M01"/);
+  assert.match(actions, /Cette adresse correspond à un compte autonome et ne peut pas recevoir d’accès collaborateur\. Utilisez une autre adresse électronique\./);
+  assert.match(actions, /Ce compte autonome ne peut pas accepter une invitation collaborateur\. Connectez-vous avec une adresse électronique distincte\./);
 });
 
 test("l’auto-invitation est identifiée par son code SQL et reçoit un message métier", () => {
