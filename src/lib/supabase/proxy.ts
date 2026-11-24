@@ -1,6 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseConfig } from "./config";
+import {
+  isProtectedApplicationRoute,
+  requiresApplicationAccess,
+} from "./proxy-route-policy";
 import type { Database } from "@/types/database";
 
 export async function updateSession(request: NextRequest) {
@@ -32,9 +36,7 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const pathname = request.nextUrl.pathname;
   const isAccessWaitingRoute = pathname.startsWith("/acces-en-attente");
-  const isProtectedRoute = ["/tableau-de-bord", "/dossiers", "/administration", "/parametres", "/mon-compte", "/historique-versions", "/invitations", "/api"].some((path) =>
-    pathname.startsWith(path),
-  );
+  const isProtectedRoute = isProtectedApplicationRoute(pathname);
 
   if (isProtectedRoute && !data?.claims) {
     const loginUrl = request.nextUrl.clone();
@@ -45,6 +47,7 @@ export async function updateSession(request: NextRequest) {
 
   if (data?.claims) {
     const userId = data.claims.sub;
+    const requiresAuthorizedAccess = requiresApplicationAccess(pathname, true);
     const [{ data: administrator }, { data: authorization }, trialStateResult] = await Promise.all([
       supabase.from("platform_administrators").select("user_id").eq("user_id", userId).maybeSingle(),
       supabase.from("application_user_authorizations").select("status").eq("user_id", userId).maybeSingle(),
@@ -52,7 +55,7 @@ export async function updateSession(request: NextRequest) {
     ]);
     const hasApplicationAccess = Boolean(administrator) || authorization?.status === "active";
 
-    if (isProtectedRoute && !hasApplicationAccess) {
+    if (requiresAuthorizedAccess && !hasApplicationAccess) {
       const waitingUrl = request.nextUrl.clone();
       waitingUrl.pathname = "/acces-en-attente";
       waitingUrl.search = "";
@@ -63,7 +66,7 @@ export async function updateSession(request: NextRequest) {
     const trialRestricted = !administrator
       && trialState?.enforcement_enabled === true
       && (trialState.state === "suspended" || trialState.state === "deletion_due");
-    if (isProtectedRoute && trialRestricted) {
+    if (requiresAuthorizedAccess && trialRestricted) {
       if (pathname.startsWith("/api")) {
         return NextResponse.json(
           { error: "L’accès métier est suspendu. Consultez votre abonnement." },
