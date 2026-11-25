@@ -312,7 +312,9 @@ export async function generateManagementReportPdf(
   section(doc, "E - DETTES EN COURS");
   if (!preview.debts.length) paragraph(doc, "Aucune dette pertinente pour la période.");
   for (const debt of preview.debts) {
-    field(doc, debt.designation, `${debt.creditor} - ${debt.type} - ${debt.status}\nDette contractée le : ${date(debt.startDate)} - Durée initiale : ${debt.initialDurationMonths === null ? "Non renseignée" : `${debt.initialDurationMonths} mois`}\nMontant initial : ${money(debt.initialAmount)} - Mensualité : ${money(debt.monthlyPayment)}\nSituation au ${date(debt.balanceDate)} - Solde restant : ${money(debt.remainingBalance)}${debt.remainingDurationMonths !== null ? ` - ${debt.remainingDurationMonths} mois restants` : ""}`);
+    const status = debt.settlementDate ? `${debt.status} - Clôturée le ${date(debt.settlementDate)}` : debt.status;
+    field(doc, debt.designation, `${debt.creditor} - ${debt.type} - ${status}\nDette contractée le : ${date(debt.startDate)} - Durée initiale : ${debt.initialDurationMonths === null ? "Non renseignée" : `${debt.initialDurationMonths} mois`}\nMontant initial : ${money(debt.initialAmount)} - Mensualité : ${money(debt.monthlyPayment)}\nSituation au ${date(debt.balanceDate)} - Solde restant : ${money(debt.remainingBalance)}${debt.remainingDurationMonths !== null ? ` - ${debt.remainingDurationMonths} mois restants` : ""}`);
+    for (const warning of debt.warnings ?? []) paragraph(doc, warning);
   }
 
   section(doc, "IV - OBSERVATIONS DE LA PERSONNE EN CHARGE DE LA MESURE");

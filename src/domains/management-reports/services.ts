@@ -22,6 +22,7 @@ import { buildManagementReportPreview } from "./preview-model";
 import { MANAGEMENT_REPORT_SNAPSHOT_SCHEMA_VERSION, parseManagementReportSnapshot } from "./snapshot";
 import { getManagementReportAccountSelection } from "./account-selection";
 import { loadCompleteTransactionHistory } from "@/domains/transactions/services/transaction-history";
+import { getDebtForReportPeriod } from "./debt-period";
 export async function getManagementReports(personId: string) {
   const { supabase } = await getAuthenticatedUser();
   const { data, error } = await supabase
@@ -322,19 +323,10 @@ export async function getManagementReportSnapshot(
       account.account_type === "other_investment" ||
       account.account_type === "securities_account",
   );
-  const relevantDebts = debts
-    .filter(
-      (debt) =>
-        (!debt.start_date || debt.start_date <= report.period_end) &&
-        (!debt.settled_at || debt.settled_at >= report.period_start),
-    )
-    .map((debt) => ({
-      debt,
-      balance:
-        debt.balances.find(
-          (balance) => !balance.cancelled_at && balance.balance_date <= report.period_end,
-        ) ?? null,
-    }));
+  const relevantDebts = debts.flatMap((debt) => {
+    const history = getDebtForReportPeriod(debt, report.period_start, report.period_end);
+    return history ? [{ debt, ...history }] : [];
+  });
   const sections: ReportSectionCompleteness[] = [
     {
       key: "person",

@@ -99,6 +99,7 @@ export const managementReportPreviewSchema = z.object({
     startDate: nullableString, initialAmount: nullableNumber, initialDurationMonths: nullableNumber,
     monthlyPayment: nullableNumber, status: z.string(), balanceDate: nullableString,
     remainingBalance: nullableNumber, remainingDurationMonths: nullableNumber,
+    settlementDate: z.iso.date().optional(), warnings: z.array(z.string()).optional(),
   }).strict()),
   confirmations: z.object({
     residenceChanged: nullableBoolean, representativeAddressChanged: nullableBoolean,

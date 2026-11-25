@@ -314,18 +314,20 @@ export function ManagementReportDashboard({
           <section id="debts" className="rounded-xl border bg-white p-4">
             <h2 className="font-bold">Dettes</h2>
             {snapshot.relevantDebts.length ? (
-              snapshot.relevantDebts.map(({ debt, balance }) => (
-                <p key={debt.id} className="mt-2 border-t pt-2 text-xs">
-                  <strong>{debt.creditor}</strong> — {debt.designation} ·
-                  Mensualité{" "}
-                  {debt.monthly_payment === null
-                    ? "—"
-                    : formatCurrency(debt.monthly_payment)}{" "}
-                  · Situation{" "}
-                  {balance
-                    ? `${formatFinancialDate(balance.balance_date)} · ${formatCurrency(balance.remaining_balance)} · ${balance.remaining_duration_months ?? "—"} mois`
-                    : "manquante"}
-                </p>
+              snapshot.relevantDebts.map(({ debt, balance, presentation }) => (
+                <div key={debt.id} className="mt-2 border-t pt-2 text-xs">
+                  <p><strong>{debt.creditor}</strong> — {debt.designation} · {presentation.status}
+                    {presentation.settlementDate && <> · Clôturée le {formatFinancialDate(presentation.settlementDate)}</>}
+                  </p>
+                  <p>
+                    Mensualité {debt.monthly_payment === null ? "—" : formatCurrency(debt.monthly_payment)}
+                    {" · Situation "}
+                    {balance
+                      ? `${formatFinancialDate(balance.balance_date)} · ${formatCurrency(balance.remaining_balance)} · ${balance.remaining_duration_months ?? "—"} mois`
+                      : "manquante"}
+                  </p>
+                  {presentation.warnings?.map((warning) => <p key={warning} className="mt-1 text-amber-900">{warning}</p>)}
+                </div>
               ))
             ) : (
               <p className="mt-2 text-xs text-[#64748B]">

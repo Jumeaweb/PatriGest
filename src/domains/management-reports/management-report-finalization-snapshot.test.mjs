@@ -4,8 +4,10 @@ import test from "node:test";
 import {
   finalizeManagementReportProjectSnapshot,
   MANAGEMENT_REPORT_SNAPSHOT_SCHEMA_VERSION,
+  parseManagementReportSnapshot,
 } from "./snapshot.ts";
 import { generateManagementReportPdf } from "./pdf.ts";
+import PDFDocument from "pdfkit";
 
 const projectSnapshot = {
   complete: true,
@@ -88,7 +90,21 @@ const projectSnapshot = {
   statements: [],
   properties: [],
   propertyEvents: [],
-  debts: [],
+  debts: [{
+    id: "10000000-0000-4000-8000-000000000005",
+    creditor: "Banque",
+    type: "Prêt bancaire",
+    designation: "Emprunt test",
+    startDate: "2024-01-01",
+    initialAmount: 2000,
+    initialDurationMonths: 36,
+    monthlyPayment: 100,
+    status: "Soldée",
+    balanceDate: "2026-09-25",
+    remainingBalance: 0,
+    remainingDurationMonths: null,
+    settlementDate: "2026-09-25",
+  }],
   confirmations: {
     residenceChanged: false,
     representativeAddressChanged: false,
@@ -122,6 +138,43 @@ test("le snapshot définitif ne diffère du projet que par son statut", () => {
     report: { ...projectSnapshot.report, status: "finalized" },
   });
   assert.equal(result.preview.report.status, "finalized");
+});
+
+test("un ancien instantané de dette reste lisible avec le statut et le CRD archivés", () => {
+  const legacy = structuredClone(projectSnapshot);
+  delete legacy.debts[0].settlementDate;
+  legacy.debts[0].balanceDate = "2026-06-30";
+  legacy.debts[0].remainingBalance = 150;
+  const finalized = finalizeManagementReportProjectSnapshot(legacy, 1);
+  assert.equal(finalized.success, true);
+  assert.deepEqual(finalized.snapshot.debts, legacy.debts);
+
+  const archived = { ...legacy, report: { ...legacy.report, status: "finalized" } };
+  const parsed = parseManagementReportSnapshot(archived);
+  assert.equal(parsed.success, true);
+  assert.deepEqual(parsed.data.debts, legacy.debts);
+  assert.equal(Object.hasOwn(parsed.data.debts[0], "settlementDate"), false);
+});
+
+test("les PDF projet et définitif reprennent la date, le CRD et les avertissements figés", async (t) => {
+  const entries = [];
+  const renderText = PDFDocument.prototype.text;
+  t.mock.method(PDFDocument.prototype, "text", function (value, ...args) {
+    entries.push(String(value));
+    return renderText.call(this, value, ...args);
+  });
+  const project = structuredClone(projectSnapshot);
+  project.debts[0].warnings = ["Situation antérieure au début de la dette ignorée."];
+  const finalized = finalizeManagementReportProjectSnapshot(project, 1);
+  assert.equal(finalized.success, true);
+  for (const [mode, preview] of [["draft", project], ["final", finalized.preview]]) {
+    entries.length = 0;
+    const pdf = await generateManagementReportPdf(preview, { mode });
+    assert.match(pdf.toString("ascii", 0, 5), /^%PDF-/);
+    assert.match(entries.join("\n"), /Soldée - Clôturée le 25\/09\/2026/);
+    assert.match(entries.join("\n"), /Solde restant : 0,00 €/);
+    assert.ok(entries.includes(project.debts[0].warnings[0]));
+  }
 });
 
 test("ignore une transaction modifiée après la génération du projet", () => {

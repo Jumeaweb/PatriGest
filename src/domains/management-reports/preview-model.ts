@@ -190,7 +190,7 @@ export function buildManagementReportPreview(snapshot: Snapshot) {
     amount: event.amount,
     description: safePropertyText(event.description),
   }));
-  const debts = snapshot.relevantDebts.map(({ debt, balance }) => ({
+  const debts = snapshot.relevantDebts.map(({ debt, balance, presentation }) => ({
     id: debt.id,
     creditor: debt.creditor,
     type: debtTypeLabels[debt.debt_type],
@@ -199,7 +199,7 @@ export function buildManagementReportPreview(snapshot: Snapshot) {
     initialAmount: debt.initial_amount,
     initialDurationMonths: debt.initial_duration_months,
     monthlyPayment: debt.monthly_payment,
-    status: debt.status === "active" ? "Active" : "Soldée",
+    ...presentation,
     balanceDate: balance?.balance_date ?? null,
     remainingBalance: balance?.remaining_balance ?? null,
     remainingDurationMonths: balance?.remaining_duration_months ?? null,

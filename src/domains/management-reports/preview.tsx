@@ -119,7 +119,21 @@ export function ManagementReportPreviewView({
       </PreviewSection>
 
       <PreviewSection title="IX — Dettes et emprunts">
-        {preview.debts.length ? <div className="grid gap-3 md:grid-cols-2">{preview.debts.map((debt) => <article key={debt.id} className="rounded-lg bg-slate-50 p-3 text-xs"><h3 className="text-sm font-bold">{debt.designation}</h3><p>{debt.creditor} · {debt.type} · {debt.status}</p><p className="mt-2">Montant initial : <strong>{money(debt.initialAmount)}</strong> · Mensualité : <strong>{money(debt.monthlyPayment)}</strong></p><p>Situation retenue : <strong>{date(debt.balanceDate)}</strong> · Solde restant : <strong>{money(debt.remainingBalance)}</strong>{debt.remainingDurationMonths !== null ? ` · ${debt.remainingDurationMonths} mois` : ""}</p></article>)}</div> : <Empty text="Aucune dette pertinente." />}
+        {preview.debts.length ? (
+          <div className="grid gap-3 md:grid-cols-2">
+            {preview.debts.map((debt) => (
+              <article key={debt.id} className="rounded-lg bg-slate-50 p-3 text-xs">
+                <h3 className="text-sm font-bold">{debt.designation}</h3>
+                <p>{debt.creditor} · {debt.type} · {debt.status}
+                  {debt.settlementDate && <> · Clôturée le {date(debt.settlementDate)}</>}
+                </p>
+                <p className="mt-2">Montant initial : <strong>{money(debt.initialAmount)}</strong> · Mensualité : <strong>{money(debt.monthlyPayment)}</strong></p>
+                <p>Situation retenue : <strong>{date(debt.balanceDate)}</strong> · Solde restant : <strong>{money(debt.remainingBalance)}</strong>{debt.remainingDurationMonths !== null ? ` · ${debt.remainingDurationMonths} mois` : ""}</p>
+                {debt.warnings?.map((warning) => <p key={warning} className="mt-1 text-amber-900">{warning}</p>)}
+              </article>
+            ))}
+          </div>
+        ) : <Empty text="Aucune dette pertinente." />}
       </PreviewSection>
 
       <PreviewSection title="X — Observations">
