@@ -947,6 +947,7 @@ reset role;
 
 -- Le gel administratif agit sur la cible et non sur les autres utilisateurs.
 grant select, insert, update, delete on storage.objects to authenticated;
+insert into storage.buckets(id,name,public) values ('pgtap-freeze-probe','pgtap-freeze-probe',false);
 create policy administrative_deletion_freeze_test_select
 on storage.objects for select to authenticated using (true);
 create policy administrative_deletion_freeze_test_insert
@@ -1039,7 +1040,7 @@ select extensions.is(
 select extensions.lives_ok(
   $$insert into storage.objects(id,bucket_id,name,owner,owner_id,metadata,version)
     values (
-      '99600000-0000-4000-8500-000000000011', 'transaction-proofs',
+      '99600000-0000-4000-8500-000000000011', 'pgtap-freeze-probe',
       'freeze-admin-other', '99600000-0000-4000-8000-000000000005',
       '99600000-0000-4000-8000-000000000005',
       '{"size":1,"mimetype":"application/pdf"}', 'freeze-v1'

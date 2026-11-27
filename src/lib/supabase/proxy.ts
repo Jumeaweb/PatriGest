@@ -3,7 +3,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseConfig } from "./config";
 import {
   isProtectedApplicationRoute,
+  isSuspendedApplicationRoute,
   requiresApplicationAccess,
+  requiresBusinessRedirectForAdministrator,
 } from "./proxy-route-policy";
 import type { Database } from "@/types/database";
 
@@ -48,10 +50,11 @@ export async function updateSession(request: NextRequest) {
   if (data?.claims) {
     const userId = data.claims.sub;
     const requiresAuthorizedAccess = requiresApplicationAccess(pathname, true);
-    const [{ data: administrator }, { data: authorization }, trialStateResult] = await Promise.all([
+    const [{ data: administrator }, { data: authorization }, trialStateResult, businessAccessResult] = await Promise.all([
       supabase.from("platform_administrators").select("user_id").eq("user_id", userId).maybeSingle(),
       supabase.from("application_user_authorizations").select("status").eq("user_id", userId).maybeSingle(),
       supabase.rpc("get_current_account_trial_state"),
+      supabase.rpc("current_commercial_access_restricted"),
     ]);
     const hasApplicationAccess = Boolean(administrator) || authorization?.status === "active";
 
@@ -66,21 +69,23 @@ export async function updateSession(request: NextRequest) {
     const trialRestricted = !administrator
       && trialState?.enforcement_enabled === true
       && (trialState.state === "suspended" || trialState.state === "deletion_due");
-    if (requiresAuthorizedAccess && trialRestricted) {
+    const restrictedRoute = !administrator && isSuspendedApplicationRoute(
+      pathname,
+      request.nextUrl.searchParams.get("vue"),
+      businessAccessResult.data ?? null,
+      trialRestricted,
+    );
+    if (requiresAuthorizedAccess && restrictedRoute) {
       if (pathname.startsWith("/api")) {
         return NextResponse.json(
           { error: "L’accès métier est suspendu. Consultez votre abonnement." },
           { status: 403 },
         );
       }
-      const isSubscriptionRoute = pathname === "/parametres/compte"
-        && request.nextUrl.searchParams.get("vue") === "abonnement";
-      if (!isSubscriptionRoute) {
-        const subscriptionUrl = request.nextUrl.clone();
-        subscriptionUrl.pathname = "/parametres/compte";
-        subscriptionUrl.search = "?vue=abonnement";
-        return NextResponse.redirect(subscriptionUrl);
-      }
+      const subscriptionUrl = request.nextUrl.clone();
+      subscriptionUrl.pathname = "/parametres/compte";
+      subscriptionUrl.search = "?vue=abonnement";
+      return NextResponse.redirect(subscriptionUrl);
     }
 
     if (isAccessWaitingRoute && hasApplicationAccess) {
@@ -90,9 +95,7 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(dashboardUrl);
     }
 
-    const isBusinessRoute = pathname.startsWith("/dossiers") || pathname.startsWith("/parametres/categories");
-
-    if (administrator && isBusinessRoute) {
+    if (administrator && requiresBusinessRedirectForAdministrator(pathname)) {
       const administrationUrl = request.nextUrl.clone();
       administrationUrl.pathname = "/administration";
       administrationUrl.search = "";

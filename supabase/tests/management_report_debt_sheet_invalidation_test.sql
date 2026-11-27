@@ -151,12 +151,16 @@ select extensions.ok(
     from public.management_reports where id = '99500000-0000-4000-8300-000000000005'),
   'Le CRG définitif reste figé');
 
-insert into storage.objects(bucket_id, name, owner, owner_id, metadata) values (
+insert into storage.objects(bucket_id, name, owner, owner_id, metadata, version) values (
   'management-reports',
   'protected-persons/99500000-0000-4000-8100-000000000001/management-reports/99500000-0000-4000-8300-000000000001/management-report.pdf',
   '99500000-0000-4000-8000-000000000001', '99500000-0000-4000-8000-000000000001',
-  '{"size":100,"mimetype":"application/pdf"}'
+  '{"size":100,"mimetype":"application/pdf"}', 'fixture'
 );
+insert into public.management_report_final_verifications(storage_object_id, report_id, storage_version, byte_count, sha256)
+select object.id, '99500000-0000-4000-8300-000000000001', object.version, 100, repeat('a',64)
+from storage.objects object where object.bucket_id = 'management-reports'
+  and object.name = 'protected-persons/99500000-0000-4000-8100-000000000001/management-reports/99500000-0000-4000-8300-000000000001/management-report.pdf';
 
 set local role authenticated;
 select extensions.throws_ok($$select public.finalize_management_report(

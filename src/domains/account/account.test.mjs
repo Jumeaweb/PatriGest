@@ -525,11 +525,27 @@ test("pointe la navigation permanente vers la route canonique", () => {
   assert.doesNotMatch(source, /label: "Mon compte", href: "\/mon-compte"/);
 });
 
-test("protège la route canonique tout en la laissant accessible au platform admin", () => {
-  const source = readFileSync(new URL("../../lib/supabase/proxy.ts", import.meta.url), "utf8");
-  assert.match(source, /"\/parametres"/);
-  assert.match(source, /pathname\.startsWith\("\/parametres\/categories"\)/);
-  assert.doesNotMatch(source, /pathname\.startsWith\("\/parametres\/compte"\)/);
+test("protège la route canonique tout en la laissant accessible au platform admin", async () => {
+  const { isProtectedApplicationRoute, requiresBusinessRedirectForAdministrator } =
+    await import("../../lib/supabase/proxy-route-policy.ts");
+  assert.equal(isProtectedApplicationRoute("/parametres/compte"), true);
+  assert.equal(requiresBusinessRedirectForAdministrator("/parametres/compte"), false);
+  assert.equal(requiresBusinessRedirectForAdministrator("/parametres/categories"), true);
+  assert.equal(requiresBusinessRedirectForAdministrator("/dossiers/identifiant"), true);
+});
+
+test("les exemptions du proxy diffèrent entre suspension commerciale et essai historique", async () => {
+  const { isSuspendedApplicationRoute } = await import("../../lib/supabase/proxy-route-policy.ts");
+  for (const route of ["/dossiers/nouveau", "/api/dossiers/identifiant", "/tableau-de-bord"]) {
+    assert.equal(isSuspendedApplicationRoute(route, null, true, false), true);
+    assert.equal(isSuspendedApplicationRoute(route, null, null, false), false);
+  }
+  assert.equal(isSuspendedApplicationRoute("/parametres/compte", "abonnement", true, true), false);
+  assert.equal(isSuspendedApplicationRoute("/parametres/compte", null, true, false), false);
+  assert.equal(isSuspendedApplicationRoute("/mon-compte", null, true, false), false);
+  assert.equal(isSuspendedApplicationRoute("/mon-compte-prive", null, true, false), true);
+  assert.equal(isSuspendedApplicationRoute("/parametres/compte", null, null, true), true);
+  assert.equal(isSuspendedApplicationRoute("/parametres/compte", "abonnement", null, true), false);
 });
 
 function deletionHarness({

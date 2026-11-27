@@ -48,7 +48,8 @@ test("le journal conserve les annulations visibles et permet leur exclusion expl
 test("la route expose les versions courantes et historiques sans chemin public", () => {
   assert.match(route, /searchParams\.get\("history"\) === "1"/);
   assert.match(route, /searchParams\.get\("versionId"\)/);
-  assert.match(route, /createSignedUrl\(proof\.storagePath/);
+  assert.match(route, /protectedStorageResponse\(\{ request, bucket: "transaction-proofs", storagePath: proof\.storagePath/);
+  assert.doesNotMatch(route, /createSignedUrl|signedUrl/);
   assert.match(reads, /transaction_proof_versions/);
   assert.match(reads, /transaction_document_history/);
   assert.match(reads, /can|readableTransaction/);

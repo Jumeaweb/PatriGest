@@ -124,15 +124,19 @@ test("une réservation refusée ou invalide est rejetée sans détail SQL", asyn
   );
 });
 
-test("création, ajout, remplacement et suppression du PDF utilisent le moteur commun", () => {
-  assert.match(writeService, /intent: "create"/);
-  assert.match(writeService, /intent = documentMetadata\(input\.statement\) \? "replace" : "attach"/);
-  assert.match(writeService, /intent: "delete"/);
+test("les écritures PDF courantes utilisent les transitions versionnées", () => {
+  const transition = source("./bank-statement-file-transition.ts");
+  assert.match(writeService, /publishBankStatementFile/);
+  assert.match(writeService, /detach_unreconciled_bank_statement_file/);
+  assert.match(writeService, /delete_unreconciled_bank_statement/);
+  assert.match(transition, /verify_staged_bank_statement_file/);
+  assert.match(transition, /publish_unreconciled_bank_statement_file/);
+  assert.doesNotMatch(writeService, /storage\.from/);
   assert.match(durable, /reserveBankStatementOperation\(input\.client, input\)/);
   assert.match(durable, /createServerDocumentOperationEngine\(\)/);
   assert.match(durable, /bankStatementOperation\(/);
   assert.doesNotMatch(durable, /storage\.from|bank_statements|objectPath|bucketId/);
-  assert.match(writeService, /if \(!input\.pdf\) \{[\s\S]*?from\("bank_statements"\)\.insert/);
+  assert.match(writeService, /if \(input\.pdf\) return savePdf[\s\S]*?from\("bank_statements"\)\.insert/);
 });
 
 test("le parcours HTTP et l’interface conservent les lectures et séparent les suppressions", () => {

@@ -31,6 +31,7 @@ export type OwnedDossierCapacity =
 
 export type DossierCapacityErrorCode =
   | "quota_reached"
+  | "account_suspended"
   | "subscription_missing"
   | "configuration_unavailable"
   | "access_denied"
@@ -69,6 +70,7 @@ export interface DossierCapacityRpcGateway {
 
 export const DOSSIER_CAPACITY_ERROR_MESSAGES = {
   quota_reached: "Vous avez atteint le nombre maximal de dossiers actifs autorisé par votre abonnement.",
+  account_suspended: "Vos droits sont suspendus. Consultez Mon compte > Abonnement.",
   subscription_missing: "Aucun abonnement actif ne permet actuellement de créer ou de restaurer un dossier.",
   configuration_unavailable: "La capacité de votre abonnement est temporairement indisponible.",
   access_denied: "Vous ne disposez pas des droits nécessaires pour consulter cette capacité.",
@@ -163,6 +165,8 @@ export function mapDossierCapacityRpcError(
       return failure("subscription_missing");
     case "P4D03":
       return failure("configuration_unavailable");
+    case "P4D04":
+      return failure("account_suspended");
     case "42501":
       return failure("access_denied");
     case "PGRST202":
@@ -180,10 +184,32 @@ export function classifyDossierCapacityMutationError(
     case "P4D01":
     case "P4D02":
     case "P4D03":
+    case "P4D04":
     case "42501":
       return new DossierCapacityServiceError(mapDossierCapacityRpcError(error));
     default:
       return null;
+  }
+}
+
+export type OwnedDossierQuotaGate = {
+  active_dossier_limit: number | null;
+  active_dossier_count: number;
+  remaining_dossier_count: number | null;
+  block_reason: string | null;
+};
+
+export function getDossierQuotaBlockMessage(gate: Pick<OwnedDossierQuotaGate, "block_reason"> | null) {
+  switch (gate?.block_reason) {
+    case "account_suspended":
+      return DOSSIER_CAPACITY_ERROR_MESSAGES.account_suspended;
+    case "quota_reached":
+      return "Le nombre maximal de dossiers actifs est atteint.";
+    case null:
+    case undefined:
+      return null;
+    default:
+      return DOSSIER_CAPACITY_ERROR_MESSAGES.configuration_unavailable;
   }
 }
 

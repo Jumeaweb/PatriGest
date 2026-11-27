@@ -261,7 +261,7 @@ select extensions.throws_ok($$update public.bank_statements
   'les métadonnées d une version épinglée ne peuvent pas être modifiées');
 select extensions.throws_ok($$delete from public.bank_statements
   where id='9b000000-0000-4000-8400-000000000004'$$,
-  '55000','Le document historique du relevé est définitivement figé.',
+  '55000','Le document du relevé est figé.',
   'un relevé référencé par un compte de gestion ne peut pas être supprimé');
 select extensions.ok(exists(select 1 from public.bank_statement_document_versions version
   join public.management_report_bank_statement_document_versions pinned

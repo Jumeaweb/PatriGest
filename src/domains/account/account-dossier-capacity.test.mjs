@@ -93,7 +93,8 @@ test("isole l’erreur de capacité sans inventer de valeur de secours", () => {
 test("n’appelle la RPC que dans l’onglet Abonnement pour un mode éligible", () => {
   const page = readFileSync(new URL("../../app/parametres/compte/page.tsx", import.meta.url), "utf8");
   assert.match(page, /current === "subscription" \? getPrivateAccessContext\(\) : Promise\.resolve\(null\)/);
-  assert.match(page, /if \(accessContext && shouldLoadOwnedDossierCapacity\(accessContext\)\)/);
+  assert.match(page, /accessContext\?\.canCreateDossier \? await getOwnedDossierQuotaGate\(\) : null/);
+  assert.match(page, /if \(accessContext && shouldLoadOwnedDossierCapacity\(accessContext\) && !commercialAccessSuspended\)/);
   assert.match(page, /await getOwnedDossierCapacity\(\)/);
   assert.doesNotMatch(page, /from\("account_subscriptions"\)|service_role|ownerId/);
 });

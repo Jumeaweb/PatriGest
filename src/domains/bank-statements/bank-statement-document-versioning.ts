@@ -96,16 +96,22 @@ export async function getBankStatementDocumentVersion(
 }
 
 async function verifyInitialVersionIfNeeded(input: {
-  client: SupabaseClient<Database>;
   version: BankStatementDocumentVersion;
   storagePath: string;
-  bytes: Uint8Array;
 }) {
   if (input.version.integrityStatus === "verified") return;
-  const info = await input.client.storage.from("bank-statements").info(input.storagePath);
-  if (info.error || !info.data) return;
-  const sha256 = createHash("sha256").update(input.bytes).digest("hex");
   const admin = createAdminClient();
+  const storage = admin.storage.from("bank-statements");
+  const info = await storage.info(input.storagePath);
+  if (info.error || !info.data) return;
+  const downloaded = await storage.download(input.storagePath);
+  if (downloaded.error || !downloaded.data) throw new BankStatementDocumentError("Impossible de vérifier le relevé historique.", 503);
+  const bytes = await downloaded.data.arrayBuffer();
+  const current = await storage.info(input.storagePath);
+  if (current.error || current.data?.id !== info.data.id || current.data.version !== info.data.version) {
+    throw new BankStatementDocumentError("Le fichier a changé pendant la vérification. Réessayez.", 409);
+  }
+  const sha256 = createHash("sha256").update(new Uint8Array(bytes)).digest("hex");
   const { error } = await admin.rpc("verify_bank_statement_document_version_integrity", {
     p_version_id: input.version.versionId,
     p_storage_object_id: info.data.id,
@@ -122,18 +128,11 @@ export async function downloadBankStatementDocument(input: {
 }) {
   const version = await getBankStatementDocumentVersion(input.client, input.statementId, input.versionId);
   if (!version) return null;
-  const downloaded = await input.client.storage.from("bank-statements").download(version.storagePath);
-  if (downloaded.error || !downloaded.data) {
-    throw new BankStatementDocumentError("Impossible de télécharger le relevé.", 500);
-  }
-  const bytes = new Uint8Array(await downloaded.data.arrayBuffer());
   await verifyInitialVersionIfNeeded({
-    client: input.client,
     version: version.public,
     storagePath: version.storagePath,
-    bytes,
   });
-  return { version: version.public, bytes };
+  return { version: version.public, storagePath: version.storagePath };
 }
 
 export async function correctValidatedBankStatementDocument(input: {
@@ -170,10 +169,10 @@ export async function correctValidatedBankStatementDocument(input: {
     throw new BankStatementDocumentError("Cette correction documentaire nécessite une vérification administrative.", 409);
   }
 
-  const bucket = input.client.storage.from("bank-statements");
-  let info = await bucket.info(reservation.storagePath);
+  const storage = createAdminClient().storage.from("bank-statements");
+  let info = await storage.info(reservation.storagePath);
   if (info.error) {
-    const upload = await bucket.upload(reservation.storagePath, input.bytes, {
+    const upload = await input.client.storage.from("bank-statements").upload(reservation.storagePath, input.bytes, {
       contentType: "application/pdf",
       metadata: { sha256 },
       upsert: false,
@@ -181,12 +180,12 @@ export async function correctValidatedBankStatementDocument(input: {
     if (upload.error) {
       throw new BankStatementDocumentError("Le nouveau PDF n’a pas pu être téléversé. L’ancien document reste actif.", 500);
     }
-    info = await bucket.info(reservation.storagePath);
+    info = await storage.info(reservation.storagePath);
   }
   if (info.error || !info.data) {
     throw new BankStatementDocumentError("Le téléversement doit être vérifié avant la finalisation. Vous pouvez réessayer sans changer le fichier.", 500);
   }
-  const existing = await bucket.download(reservation.storagePath);
+  const existing = await storage.download(reservation.storagePath);
   if (existing.error || !existing.data) {
     throw new BankStatementDocumentError("Le nouveau PDF ne peut pas être vérifié. L’ancien document reste actif.", 500);
   }

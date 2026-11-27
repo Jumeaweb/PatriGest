@@ -23,7 +23,7 @@ test("le tableau de bord sans dossier explique l'absence d'accès et garde la li
 
 test("le CTA direct du tableau de bord crée le premier dossier uniquement si autorisé", () => {
   assert.match(dashboard, /\{canCreate && <Link className="button button-primary" href="\/dossiers\/nouveau">Créer mon premier dossier<\/Link>\}/);
-  assert.match(dashboard, /<DossiersSection dossiers=\{data\.dossiers\} dossierCount=\{data\.activeDossierCount\} canCreate=\{canCreateDossier\} \/>/);
+  assert.match(dashboard, /<DossiersSection dossiers=\{data\.dossiers\} dossierCount=\{data\.activeDossierCount\} canCreate=\{canCreateDossier && !quota\?\.block_reason\} \/>/);
   assert.match(dashboard, /if \(isPlatformAdmin\) redirect\("\/administration"\)/);
 });
 
@@ -36,8 +36,10 @@ test("la liste formule l'état vide en termes d'accès et non de création", () 
 });
 
 test("la liste cache ses deux CTA de création sans droit, mais les conserve avec droit", () => {
-  assert.match(list, /\{canCreate && <Link href="\/dossiers\/nouveau"[^>]*>[^<]*<Plus[^>]*\/>Nouveau dossier<\/Link>\}/);
-  assert.match(list, /\{!archived && canCreate && <Link href="\/dossiers\/nouveau"[^>]*>[^<]*<Plus[^>]*\/>Créer mon premier dossier<\/Link>\}/);
+  assert.match(list, /const canCreateHere = canCreate && !quotaMessage/);
+  assert.match(list, /\{canCreateHere && <Link href="\/dossiers\/nouveau"[^>]*>[^<]*<Plus[^>]*\/>Nouveau dossier<\/Link>\}/);
+  assert.match(list, /\{!archived && canCreateHere && <Link href="\/dossiers\/nouveau"[^>]*>[^<]*<Plus[^>]*\/>Créer mon premier dossier<\/Link>\}/);
+  assert.match(list, /quotaMessage && <button[^>]+disabled aria-describedby="dossier-quota"/);
 });
 
 test("les deux pages de liste réutilisent le contexte d'autorisation existant", () => {
@@ -47,7 +49,8 @@ test("les deux pages de liste réutilisent le contexte d'autorisation existant",
   assert.match(context, /canCreateDossier: !isPlatformAdmin && accountMode !== "collaborator"/);
   for (const page of [dossierPage, compatibilityPage]) {
     assert.match(page, /getPrivateAccessContext\(\)/);
-    assert.match(page, /<ProtectedPersonList persons=\{persons\} canCreate=\{canCreateDossier\} (?:currentView=\{currentView\}|currentView="active") \/>/);
+    assert.match(page, /getOwnedDossierQuotaGate\(\)/);
+    assert.match(page, /<ProtectedPersonList persons=\{persons\} canCreate=\{canCreateDossier\} (?:currentView=\{currentView\}|currentView="active") quota=\{quota\} \/>/);
   }
   assert.match(service, /if \(administrator\) throw new Error\("Un administrateur de plateforme ne peut pas créer de dossier\."\)/);
 });

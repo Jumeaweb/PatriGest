@@ -123,7 +123,7 @@ test("la route raccorde génération, reprise et finalisation sans contourner le
   assert.match(route, /intent: "generate"/);
   assert.match(route, /intent: "finalize"/);
   assert.match(route, /intent: "resume"/);
-  assert.match(route, /deterministicCreationDate: durableEnabled \? preview\.report\.updated_at : undefined/);
+  assert.match(route, /deterministicCreationDate: preview\.report\.updated_at/);
   assert.match(route, /finalizeManagementReportProjectSnapshot\(draft\.preview_snapshot, draft\.snapshot_schema_version\)/);
   assert.match(route, /Aucun repli vers l’ancien parcours n’a été effectué/);
   assert.match(route, /x-patrigest-request-id/);

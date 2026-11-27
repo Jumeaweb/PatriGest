@@ -5,6 +5,7 @@ import { bankStatementContentDisposition } from "@/domains/bank-statements/helpe
 import { getBankStatementAccountContext } from "@/domains/bank-statements/server";
 import { getBankStatement } from "@/domains/bank-statements/services";
 import { getAuthenticatedUser } from "@/domains/protected-persons/services/authenticated-user";
+import { protectedStorageResponse } from "@/lib/supabase/protected-storage-response";
 
 type Params = { params: Promise<{ protectedPersonId: string; accountId: string; statementId: string; versionId: string }> };
 
@@ -24,13 +25,9 @@ export async function GET(request: Request, { params }: Params) {
     if (!document) return NextResponse.json({ message: "Version documentaire introuvable." }, { status: 404 });
     const download = new URL(request.url).searchParams.get("download") === "1";
     const name = document.version.originalFileName;
-    return new Response(document.bytes, {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": download ? bankStatementContentDisposition(name) : `inline; filename*=UTF-8''${encodeURIComponent(name)}`,
-        "Content-Length": String(document.bytes.byteLength),
-        "Cache-Control": "private, no-store",
-      },
+    return protectedStorageResponse({
+      request, bucket: "bank-statements", storagePath: document.storagePath, contentType: "application/pdf",
+      contentDisposition: download ? bankStatementContentDisposition(name) : `inline; filename*=UTF-8''${encodeURIComponent(name)}`,
     });
   } catch {
     return NextResponse.json({ message: "Impossible de charger cette version documentaire." }, { status: 500 });

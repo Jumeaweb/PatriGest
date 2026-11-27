@@ -12,14 +12,20 @@ import {
 } from "@/domains/management-reports/management-report-durable-availability";
 import { executeDurableManagementReportOperation } from "@/domains/management-reports/management-report-durable";
 import { createManagementReportRequestId } from "@/domains/management-reports/management-report-durable-reservation";
+import { cleanRetiredReportDocuments, inspectUnpublishedReportPdf, resolveUncertainReportFinalization, verifyUnpublishedReportPdf } from "@/domains/management-reports/report-document-retirement";
+import { protectedStorageResponse } from "@/lib/supabase/protected-storage-response";
 
 export const runtime = "nodejs";
 type Params = { params: Promise<{ protectedPersonId: string; reportId: string }> };
-type Supabase = Awaited<ReturnType<typeof getAuthenticatedUser>>["supabase"];
 type ReservationClient = Parameters<typeof executeDurableManagementReportOperation>[0]["client"];
 
 async function identifiers(params: Params["params"]) { const value = await params; return [value.protectedPersonId, value.reportId].every((id) => z.uuid().safeParse(id).success) ? value : null; }
-async function restoreFile(supabase: Supabase, path: string, bytes: ArrayBuffer) { return supabase.storage.from(MANAGEMENT_REPORT_BUCKET).upload(path, new Uint8Array(bytes), { contentType: "application/pdf", upsert: false }); }
+type PublishFinalRpc = {
+  rpc(name: "publish_verified_management_report_final", args: {
+    p_report_id: string; p_storage_object_id: string; p_file_name: string; p_file_size: number;
+    p_preview_snapshot: ReturnType<typeof toJsonValue>; p_snapshot_schema_version: number;
+  }): PromiseLike<{ error: unknown }>;
+};
 async function livePreview(personId: string, reportId: string, targetStatus: "generated" | "finalized") {
   const snapshot = await getManagementReportSnapshot(personId, reportId);
   if (!snapshot) return { success: false as const, reason: "context_unavailable" as const, issuePaths: [] };
@@ -39,6 +45,9 @@ export async function POST(request: Request, { params }: Params) {
   const ids = await identifiers(params);
   if (!ids) return NextResponse.json({ message: "Compte de gestion introuvable." }, { status: 404 });
   try {
+    const { supabase } = await getAuthenticatedUser();
+    const { data: capabilities } = await supabase.rpc("get_management_report_commercial_capabilities", { p_protected_person_id: ids.protectedPersonId });
+    if (!capabilities?.[0]?.can_generate) return NextResponse.json({ message: "La génération du PDF nécessite un abonnement. Votre préparation est conservée." }, { status: 403 });
     const generated = await livePreview(ids.protectedPersonId, ids.reportId, "generated");
     if (!generated.success) {
       console.error("MANAGEMENT_REPORT_PROJECT_CONTEXT_FAILURE", {
@@ -63,20 +72,33 @@ export async function POST(request: Request, { params }: Params) {
     const previewSnapshot = toJsonValue(preview);
     const pdf = await generateManagementReportPdf(preview, {
       mode: "draft",
-      deterministicCreationDate: durableEnabled ? preview.report.updated_at : undefined,
+      deterministicCreationDate: preview.report.updated_at,
     });
     const storagePath = managementReportStoragePath(ids.protectedPersonId, ids.reportId, "draft");
     const fileName = managementReportDownloadName(preview.report.report_year, preview.person.first_name, preview.person.last_name, "draft");
-    const { supabase } = await getAuthenticatedUser();
+    await cleanRetiredReportDocuments(ids.reportId);
     return runManagementReportDocumentWrite(
       durableEnabled,
       async () => {
-        const upload = await supabase.storage.from(MANAGEMENT_REPORT_BUCKET).upload(storagePath, new Uint8Array(pdf), { contentType: "application/pdf", upsert: false });
-        if (upload.error) return NextResponse.json({ message: "Impossible d’archiver le PDF projet." }, { status: 500 });
-        const transition = await supabase.rpc("finalize_management_report_draft_generation", { p_report_id: ids.reportId, p_storage_path: storagePath, p_file_name: fileName, p_mime_type: "application/pdf", p_file_size: pdf.length, p_preview_snapshot: previewSnapshot, p_snapshot_schema_version: MANAGEMENT_REPORT_SNAPSHOT_SCHEMA_VERSION });
-        if (transition.error) {
-          const compensation = await supabase.storage.from(MANAGEMENT_REPORT_BUCKET).remove([storagePath]);
-          return NextResponse.json({ message: compensation.error ? "La génération a échoué et le fichier temporaire n’a pas pu être nettoyé. Contactez l’administrateur." : "La génération du projet n’a pas pu être finalisée. Aucun document n’a été conservé." }, { status: 500 });
+        const bytes = new Uint8Array(pdf);
+        let objectId: string | null = null;
+        try {
+          const upload = await supabase.storage.from(MANAGEMENT_REPORT_BUCKET).upload(storagePath, bytes, { contentType: "application/pdf", upsert: false });
+          objectId = upload.data?.id ?? null;
+        } catch {
+          // The upload may have been committed before the response was lost.
+        }
+        objectId ??= (await inspectUnpublishedReportPdf(storagePath, bytes))?.id ?? null;
+        if (!objectId) return NextResponse.json({ message: "Impossible de confirmer l’archivage du PDF projet." }, { status: 503 });
+        let confirmed = false;
+        try {
+          const transition = await supabase.rpc("finalize_management_report_draft_generation", { p_report_id: ids.reportId, p_storage_path: storagePath, p_file_name: fileName, p_mime_type: "application/pdf", p_file_size: pdf.length, p_preview_snapshot: previewSnapshot, p_snapshot_schema_version: MANAGEMENT_REPORT_SNAPSHOT_SCHEMA_VERSION });
+          confirmed = !transition.error;
+        } catch {
+          // PostgreSQL determines whether this exact object was published.
+        }
+        if (!confirmed && await resolveUncertainReportFinalization(ids.reportId, objectId, "project") !== "published") {
+          return NextResponse.json({ message: "La génération du projet n’a pas pu être confirmée. Vérifiez son état avant de réessayer." }, { status: 409 });
         }
         return NextResponse.json({ message: "Le projet du compte de gestion a été généré." });
       },
@@ -113,6 +135,9 @@ export async function POST(request: Request, { params }: Params) {
 export async function PATCH(request: Request, { params }: Params) {
   const ids = await identifiers(params);
   if (!ids) return NextResponse.json({ message: "Compte de gestion introuvable." }, { status: 404 });
+  const { supabase } = await getAuthenticatedUser();
+  const { data: capabilities } = await supabase.rpc("get_management_report_commercial_capabilities", { p_protected_person_id: ids.protectedPersonId });
+  if (!capabilities?.[0]?.can_finalize) return NextResponse.json({ message: "La finalisation nécessite un abonnement. Votre projet est conservé." }, { status: 403 });
   const context = await getManagementReportPreviewState(ids.protectedPersonId, ids.reportId);
   if (!context) return NextResponse.json({ message: "Compte de gestion introuvable." }, { status: 404 });
   if (context.person.accessRole === "read_only") return NextResponse.json({ message: "Vous ne pouvez pas finaliser ce compte de gestion." }, { status: 403 });
@@ -125,31 +150,47 @@ export async function PATCH(request: Request, { params }: Params) {
   const { preview, snapshot } = finalized;
   if (!preview.complete || !preview.checks.consistent) return NextResponse.json({ message: "Les contrôles du projet ne permettent pas sa finalisation." }, { status: 409 });
   const durableEnabled = isManagementReportDurableOperationsEnabled();
-  const { supabase } = await getAuthenticatedUser();
   const finalPdf = await generateManagementReportPdf(preview, {
     mode: "final",
-    deterministicCreationDate: durableEnabled ? preview.report.updated_at : undefined,
+    deterministicCreationDate: preview.report.updated_at,
   });
   const finalPath = managementReportStoragePath(ids.protectedPersonId, ids.reportId, "final");
   const finalName = managementReportDownloadName(preview.report.report_year, preview.person.first_name, preview.person.last_name, "final");
   return runManagementReportDocumentWrite(
     durableEnabled,
     async () => {
-      const storedDraft = await supabase.storage.from(MANAGEMENT_REPORT_BUCKET).download(draft.storage_path);
-      if (storedDraft.error || !storedDraft.data) return NextResponse.json({ message: "Impossible de sécuriser le PDF projet avant finalisation." }, { status: 500 });
-      const draftBytes = await storedDraft.data.arrayBuffer();
-      const finalUpload = await supabase.storage.from(MANAGEMENT_REPORT_BUCKET).upload(finalPath, new Uint8Array(finalPdf), { contentType: "application/pdf", upsert: false });
-      if (finalUpload.error) return NextResponse.json({ message: "Impossible d’archiver le PDF final." }, { status: 500 });
-      const draftRemoval = await supabase.storage.from(MANAGEMENT_REPORT_BUCKET).remove([draft.storage_path]);
-      if (draftRemoval.error) {
-        const finalCleanup = await supabase.storage.from(MANAGEMENT_REPORT_BUCKET).remove([finalPath]);
-        return NextResponse.json({ message: finalCleanup.error ? "La finalisation a été annulée, mais le fichier final temporaire n’a pas pu être nettoyé. Contactez l’administrateur." : "Le PDF projet n’a pas pu être remplacé. La finalisation a été annulée." }, { status: 500 });
+      await cleanRetiredReportDocuments(ids.reportId);
+      const bytes = new Uint8Array(finalPdf);
+      try {
+        await supabase.storage.from(MANAGEMENT_REPORT_BUCKET).upload(finalPath, bytes, { contentType: "application/pdf", upsert: false });
+      } catch {
+        // Storage may have committed the upload before a connection failure.
       }
-      const transition = await supabase.rpc("finalize_management_report", { p_report_id: ids.reportId, p_storage_path: finalPath, p_file_name: finalName, p_mime_type: "application/pdf", p_file_size: finalPdf.length, p_preview_snapshot: snapshot, p_snapshot_schema_version: MANAGEMENT_REPORT_SNAPSHOT_SCHEMA_VERSION });
-      if (transition.error) {
-        const [finalCleanup, draftRestore] = await Promise.all([supabase.storage.from(MANAGEMENT_REPORT_BUCKET).remove([finalPath]), restoreFile(supabase, draft.storage_path, draftBytes)]);
-        return NextResponse.json({ message: finalCleanup.error || draftRestore.error ? "La finalisation a échoué et la restauration des fichiers nécessite une intervention." : "La finalisation a échoué. Le PDF projet a été restauré." }, { status: 500 });
+      let objectId: string | null;
+      try {
+        objectId = await verifyUnpublishedReportPdf(ids.reportId, finalPath, bytes);
+      } catch {
+        objectId = null;
       }
+      if (!objectId) return NextResponse.json({ message: "Le PDF définitif n’a pas pu être vérifié. Le PDF projet a été conservé." }, { status: 503 });
+      let confirmed = false;
+      try {
+        const transition = await (supabase as unknown as PublishFinalRpc).rpc("publish_verified_management_report_final", {
+          p_report_id: ids.reportId, p_storage_object_id: objectId, p_file_name: finalName,
+          p_file_size: bytes.length, p_preview_snapshot: snapshot, p_snapshot_schema_version: MANAGEMENT_REPORT_SNAPSHOT_SCHEMA_VERSION,
+        });
+        confirmed = !transition.error;
+      } catch {
+        // An uncertain result must be reconciled in PostgreSQL before removal.
+      }
+      if (!confirmed) {
+        const outcome = await resolveUncertainReportFinalization(ids.reportId, objectId);
+        if (outcome !== "published") {
+          return NextResponse.json({ message: outcome === "retired"
+            ? "La finalisation a été refusée. Le PDF projet a été conservé."
+            : "La finalisation n’a pas pu être confirmée. Vérifiez l’état du compte de gestion avant de réessayer." }, { status: 409 });
+        }
+      } else await cleanRetiredReportDocuments(ids.reportId);
       return NextResponse.json({ message: "Le compte de gestion a été finalisé." });
     },
     async () => {
@@ -199,13 +240,14 @@ export async function DELETE(request: Request, { params }: Params) {
   return runManagementReportDocumentWrite(
     durableEnabled,
     async () => {
-      const stored = await supabase.storage.from(MANAGEMENT_REPORT_BUCKET).download(draft.storage_path);
-      if (stored.error || !stored.data) return NextResponse.json({ message: "Impossible de sécuriser le PDF projet avant sa suppression." }, { status: 500 });
-      const backup = await stored.data.arrayBuffer();
-      const removal = await supabase.storage.from(MANAGEMENT_REPORT_BUCKET).remove([draft.storage_path]);
-      if (removal.error) return NextResponse.json({ message: "Impossible de supprimer le PDF projet." }, { status: 500 });
-      const transition = await supabase.rpc("resume_management_report_preparation", { p_report_id: ids.reportId });
-      if (transition.error) { const restored = await restoreFile(supabase, draft.storage_path, backup); return NextResponse.json({ message: restored.error ? "La reprise a échoué et le PDF projet n’a pas pu être restauré." : "La reprise a échoué. Le PDF projet a été restauré." }, { status: 500 }); }
+      try {
+        const transition = await supabase.rpc("resume_management_report_preparation", { p_report_id: ids.reportId });
+        if (transition.error) throw transition.error;
+      } catch {
+        await cleanRetiredReportDocuments(ids.reportId);
+        return NextResponse.json({ message: "La reprise n’a pas pu être confirmée. Vérifiez l’état du compte de gestion avant de réessayer." }, { status: 409 });
+      }
+      await cleanRetiredReportDocuments(ids.reportId);
       return NextResponse.json({ message: "Le compte de gestion est de nouveau en préparation." });
     },
     async () => {
@@ -248,9 +290,8 @@ export async function GET(request: Request, { params }: Params) {
   const mode: ManagementReportPdfMode = context.report.status === "generated" ? "draft" : "final";
   const document = await getManagementReportDocument(ids.protectedPersonId, ids.reportId, mode === "draft" ? "management_report_draft" : "management_report");
   if (!document) return NextResponse.json({ message: "Document introuvable." }, { status: 404 });
-  const { supabase } = await getAuthenticatedUser();
-  const stored = await supabase.storage.from(MANAGEMENT_REPORT_BUCKET).download(document.storage_path);
-  if (stored.error || !stored.data) return NextResponse.json({ message: "Impossible de lire le document." }, { status: 500 });
   const download = new URL(request.url).searchParams.get("download") === "1";
-  return new Response(await stored.data.arrayBuffer(), { headers: { "Content-Type": "application/pdf", "Content-Disposition": managementReportContentDisposition(document.file_name, download), "Content-Length": String(document.file_size), "Cache-Control": "private, no-store" } });
+  return protectedStorageResponse({ request, bucket: MANAGEMENT_REPORT_BUCKET, storagePath: document.storage_path,
+    contentType: "application/pdf",
+    contentDisposition: managementReportContentDisposition(document.file_name, download) });
 }

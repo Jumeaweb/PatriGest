@@ -25,6 +25,8 @@ import { getProtectedPersonRegulatoryCompleteness, getProtectionMeasureRegulator
 import { getMeasureLabel } from "@/domains/protected-persons/schemas/protection-measure-schema";
 import { getProtectedPerson } from "@/domains/protected-persons/services/protected-person-service";
 import { getProtectedPersonArchiveChanges } from "@/domains/protected-persons/services/protected-person-archive-history-service";
+import { getDossierQuotaBlockMessage } from "@/domains/subscriptions/dossier-capacity";
+import { getOwnedDossierQuotaGate } from "@/domains/subscriptions/services";
 import type { ManagementReportStatus } from "@/types/database";
 
 export const metadata: Metadata = { title: "Fiche dossier" };
@@ -69,6 +71,9 @@ export default async function ProtectedPersonDetailPage({
     archiveLifecycleEnabled,
     person.accessRole,
   );
+  const restoreBlockedMessage = isArchived && canChangeArchiveState
+    ? getDossierQuotaBlockMessage(await getOwnedDossierQuotaGate())
+    : null;
   const canManage = person.accessRole !== "read_only" && !isArchived;
   const canDelete = isOwner && !isArchived;
   const currentView: DossierInformationView = requestedView === "patrimoine"
@@ -121,6 +126,7 @@ export default async function ProtectedPersonDetailPage({
           personName={`${person.first_name} ${person.last_name}`}
           archiveRevision={person.archive_revision}
           archived={isArchived}
+          restoreBlockedMessage={restoreBlockedMessage}
         />}
       </div>
       {!archiveLifecycleEnabled && <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-[#64748B]">{PROTECTED_PERSON_ARCHIVE_LIFECYCLE_DISABLED_MESSAGE}</p>}

@@ -69,7 +69,7 @@ test("la réservation utilise la signature SQL exacte et un identifiant d’idem
   });
   assert.deepEqual(result, reservation);
   assert.deepEqual(calls, [{
-    name: "reserve_transaction_proof_version",
+    name: "reserve_transaction_proof_for_storage",
     args: {
       p_protected_person_id: "22222222-2222-4222-8222-222222222222",
       p_transaction_id: "33333333-3333-4333-8333-333333333333",
@@ -115,7 +115,7 @@ test("une réservation refusée ou invalide ne lance pas une opération ambiguë
 });
 
 test("création et remplacement utilisent exclusivement le contrat DOC2 authentifié", () => {
-  assert.match(service, /intent: existing \? "replace" : "create"/);
+  assert.match(service, /const intent = existing \? "replace" : "create"/);
   assert.match(durable, /reserveTransactionProofOperation\(input\.client, input\)/);
   assert.match(durable, /\.storage\.from\("transaction-proofs"\)\.upload\(/);
   assert.match(durable, /upsert: false/);
@@ -129,7 +129,8 @@ test("création et remplacement utilisent exclusivement le contrat DOC2 authenti
 
 test("la suppression dédiée reste inaccessible par défaut et conserve les lectures", () => {
   assert.match(route, /export async function GET/);
-  assert.match(route, /createSignedUrl/);
+  assert.match(route, /protectedStorageResponse/);
+  assert.doesNotMatch(route, /createSignedUrl|signedUrl/);
   assert.match(route, /export async function DELETE/);
   assert.match(service, /Le retrait sécurisé des anciennes versions n’est pas encore disponible\./);
   assert.match(route, /headers: error\.status === 405 \? \{ Allow: "GET, POST" \}/);

@@ -17,6 +17,7 @@ import {
   getManagementReportTransmission,
 } from "@/domains/management-reports/services";
 import { formatFinancialDate } from "@/domains/financial-accounts/utils/financial-account-utils";
+import { getAuthenticatedUser } from "@/domains/protected-persons/services/authenticated-user";
 export const dynamic = "force-dynamic";
 export default async function Page({
   params,
@@ -34,6 +35,8 @@ export default async function Page({
   );
   if (!result) notFound();
   const { person, report, state } = result;
+  const { supabase } = await getAuthenticatedUser();
+  const { data: capabilities } = await supabase.rpc("get_management_report_commercial_capabilities", { p_protected_person_id: protectedPersonId });
   const preparationSnapshot = ["draft", "ready"].includes(report.status) && state.availability === "available"
     ? state.liveSnapshot
     : null;
@@ -137,6 +140,8 @@ export default async function Page({
         reportId={reportId}
         status={report.status}
         canManage={person.accessRole !== "read_only"}
+        canGenerate={capabilities?.[0]?.can_generate === true}
+        canFinalize={capabilities?.[0]?.can_finalize === true}
         hasDocument={Boolean(document)}
         refreshRequiredAt={report.refresh_required_at}
       />

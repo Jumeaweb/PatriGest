@@ -64,7 +64,7 @@ export async function reserveTransactionProofOperation(
   },
 ) {
   const { data, error } = await client.rpc(
-    "reserve_transaction_proof_version",
+    "reserve_transaction_proof_for_storage",
     {
       p_protected_person_id: input.personId,
       p_transaction_id: input.transactionId,

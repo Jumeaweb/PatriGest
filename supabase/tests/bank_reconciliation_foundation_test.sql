@@ -534,7 +534,7 @@ set local "request.jwt.claim.sub" = '30000000-0000-4000-8000-000000000001';
 set local "request.jwt.claims" = '{"sub":"30000000-0000-4000-8000-000000000001","role":"authenticated"}';
 set local role authenticated;
 
-select extensions.lives_ok(
+select extensions.throws_ok(
   $$ insert into storage.objects (id, bucket_id, name, owner, owner_id, metadata)
      values (
        '30000000-0000-4000-8000-000000000701', 'bank-statements',
@@ -542,7 +542,7 @@ select extensions.lives_ok(
        '30000000-0000-4000-8000-000000000001',
        '30000000-0000-4000-8000-000000000001', '{"size":10}'::jsonb
      ) $$,
-  'owner adds a PDF before reconciliation validation'
+  '42501', null, 'owner must reserve a PDF before uploading'
 );
 
 select extensions.results_eq(
@@ -551,8 +551,8 @@ select extensions.results_eq(
        where id = '30000000-0000-4000-8000-000000000701'
        returning 1
      ) select count(*)::bigint from changed $$,
-  $$ values (1::bigint) $$,
-  'owner replaces PDF metadata before validation'
+  $$ values (0::bigint) $$,
+  'owner cannot alter Storage metadata directly'
 );
 
 select extensions.ok(
@@ -565,22 +565,24 @@ select extensions.ok(
   'storage delete policy preserves owner and manager authorization'
 );
 
-select extensions.lives_ok(
-  $$ insert into storage.objects (id, bucket_id, name, owner, owner_id, metadata)
+reset role;
+insert into storage.objects (id, bucket_id, name, owner, owner_id, metadata)
      values (
        '30000000-0000-4000-8000-000000000702', 'bank-statements',
        'protected-persons/30000000-0000-4000-8000-000000000101/accounts/30000000-0000-4000-8000-000000000301/statements/30000000-0000-4000-8000-000000000509/statement',
        '30000000-0000-4000-8000-000000000001',
        '30000000-0000-4000-8000-000000000001', '{"size":10}'::jsonb
      );
-     insert into public.bank_reconciliations (id, bank_statement_id, created_by)
+set local role authenticated;
+select extensions.lives_ok(
+  $$ insert into public.bank_reconciliations (id, bank_statement_id, created_by)
      values (
        '30000000-0000-4000-8000-000000000609',
        '30000000-0000-4000-8000-000000000509',
        '30000000-0000-4000-8000-000000000001'
      );
      select public.validate_bank_reconciliation('30000000-0000-4000-8000-000000000609') $$,
-  'owner adds a PDF and validates its reconciliation'
+  'owner validates a reconciliation with an existing PDF'
 );
 
 select extensions.results_eq(
@@ -603,11 +605,13 @@ select extensions.ok(
   'storage delete policy protects validated statement PDFs'
 );
 
+reset role;
 select extensions.is(
   (select count(*) from storage.objects where id = '30000000-0000-4000-8000-000000000702'),
   1::bigint,
   'validated statement PDF remains stored'
 );
+set local role authenticated;
 
 select extensions.throws_ok(
   $$ insert into storage.objects (id, bucket_id, name, owner, owner_id, metadata)

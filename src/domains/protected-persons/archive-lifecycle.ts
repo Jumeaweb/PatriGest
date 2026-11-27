@@ -26,6 +26,7 @@ export type ProtectedPersonArchiveTransitionErrorCode =
   | "incompatible_state"
   | "stale_revision"
   | "quota_reached"
+  | "account_suspended"
   | "subscription_missing"
   | "configuration_unavailable"
   | "rpc_unavailable"
@@ -39,6 +40,7 @@ export const PROTECTED_PERSON_ARCHIVE_TRANSITION_ERROR_MESSAGES = {
   incompatible_state: "Le dossier n’est pas dans un état compatible avec cette opération.",
   stale_revision: "Ce dossier a changé depuis l’ouverture du formulaire. Actualisez la page puis réessayez.",
   quota_reached: "Vous avez atteint le nombre maximal de dossiers actifs autorisé par votre abonnement.",
+  account_suspended: "Vos droits sont suspendus. Consultez Mon compte > Abonnement.",
   subscription_missing: "Aucun abonnement actif ne permet actuellement de créer ou de restaurer un dossier.",
   configuration_unavailable: "La capacité de votre abonnement est temporairement indisponible.",
   rpc_unavailable: "Le service d’archivage des dossiers est temporairement indisponible.",
@@ -95,6 +97,8 @@ export function mapProtectedPersonArchiveRpcError(
       return new ProtectedPersonArchiveTransitionError("incompatible_state");
     case "P4A05":
       return new ProtectedPersonArchiveTransitionError("stale_revision");
+    case "P4D04":
+      return new ProtectedPersonArchiveTransitionError("account_suspended");
     case "P4D01":
     case "P4D02":
     case "P4D03": {

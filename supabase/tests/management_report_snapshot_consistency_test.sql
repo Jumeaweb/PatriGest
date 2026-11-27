@@ -165,6 +165,14 @@ insert into storage.objects(id,bucket_id,name,owner,owner_id,metadata,version) v
  '99100000-0000-4000-8000-000000000001','99100000-0000-4000-8000-000000000001',
  '{"size":100,"mimetype":"application/pdf"}','v1');
 
+-- These synthetic Storage rows have no backing bytes. Register the exact
+-- version, size and synthetic digest to exercise the existing snapshot checks.
+insert into public.management_report_final_verifications(storage_object_id, report_id, storage_version, byte_count, sha256)
+select object.id, report.id, object.version, 100, repeat('a', 64)
+from storage.objects object join public.management_reports report
+  on object.name = 'protected-persons/' || report.protected_person_id || '/management-reports/' || report.id || '/management-report.pdf'
+where report.id::text like '99100000-0000-4000-8600-%' and object.bucket_id = 'management-reports';
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub','99100000-0000-4000-8000-000000000001',true);
 select set_config('request.jwt.claims','{"sub":"99100000-0000-4000-8000-000000000001","role":"authenticated"}',true);

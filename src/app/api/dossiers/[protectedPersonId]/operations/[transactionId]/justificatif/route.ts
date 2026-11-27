@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/domains/protected-persons/services/authenticated-user";
 import { prepareProofFile, ProofFileError } from "@/domains/transactions/services/transaction-proof-file";
 import { deleteTransactionProof, ProofServiceError, saveTransactionProof } from "@/domains/transactions/services/transaction-proof-service";
 import { getTransactionProofDescriptor, listTransactionProofHistory } from "@/domains/transactions/services/transaction-proof-read-service";
+import { managementReportContentDisposition } from "@/domains/management-reports/document-helpers";
+import { protectedStorageResponse } from "@/lib/supabase/protected-storage-response";
 
 type RouteParams = { params: Promise<{ protectedPersonId: string; transactionId: string }> };
 
@@ -16,11 +17,10 @@ export async function GET(request: Request, { params }: RouteParams) {
   const proof = await getTransactionProofDescriptor(protectedPersonId, transactionId, url.searchParams.get("versionId"));
   if (!proof) return NextResponse.json({ message: "Justificatif introuvable." }, { status: 404 });
   if (proof.availabilityStatus === "missing") return NextResponse.json({ message: "Ce document est actuellement indisponible." }, { status: 410 });
-  const { supabase } = await getAuthenticatedUser();
   const download = url.searchParams.get("download") === "1";
-  const { data, error } = await supabase.storage.from("transaction-proofs").createSignedUrl(proof.storagePath, 60, download ? { download: proof.fileName } : undefined);
-  if (error || !data) return NextResponse.json({ message: "Ce document est actuellement indisponible." }, { status: 503 });
-  return NextResponse.redirect(data.signedUrl);
+  return protectedStorageResponse({ request, bucket: "transaction-proofs", storagePath: proof.storagePath,
+    contentType: proof.mimeType,
+    contentDisposition: managementReportContentDisposition(proof.fileName, download) });
 }
 
 export async function POST(request: Request, { params }: RouteParams) {

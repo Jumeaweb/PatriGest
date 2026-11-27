@@ -241,6 +241,10 @@ select extensions.ok((public.finalize_transaction_proof_version(
   'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   '99600000-0000-4000-8700-000000000001')->>'idempotent')::boolean,
   'une double finalisation identique est sûre');
+select extensions.is((public.reserve_transaction_proof_for_storage(
+  '99600000-0000-4000-8100-000000000001','99600000-0000-4000-8400-000000000001',
+  'replace','99600000-0000-4000-8600-000000000001')->>'intent'), 'create',
+  'le rejeu après publication conserve la réservation de création déjà enregistrée');
 select extensions.throws_ok($$select public.finalize_transaction_proof_version(
   (select (payload->>'operationId')::uuid from proof_engine_result
     where payload ? 'storagePath' limit 1),1,
@@ -279,9 +283,11 @@ select extensions.is((select state from public.transaction_proof_replacement_ret
   where replacement_version_id=(select id from public.transaction_proof_versions
     where storage_object_id='99600000-0000-4000-8700-000000000002')),
   'pending_secure_deletion','le retrait physique reste différé et traçable');
+reset role;
 select extensions.is((select count(*) from storage.objects where id in (
   '99600000-0000-4000-8700-000000000001','99600000-0000-4000-8700-000000000002')),2::bigint,
   'le remplacement SQL ne supprime aucun objet physique');
+set local role authenticated;
 select extensions.is((select count(distinct storage_path) from public.transaction_proof_versions
   where proof_document_id=(select proof_document_id from public.transaction_documents
     where transaction_id='99600000-0000-4000-8400-000000000001')),2::bigint,
@@ -314,6 +320,24 @@ select extensions.is((select count(*) from public.transaction_proof_replacement_
   where proof_document_id=(select proof_document_id from public.transaction_documents
     where transaction_id='99600000-0000-4000-8400-000000000001')),1::bigint,
   'un remplacement échoué ne crée aucun retrait supplémentaire');
+
+reset role;
+insert into public.management_periods(protected_person_id,start_date,end_date,status,closed_at)
+values ('99600000-0000-4000-8100-000000000001','2026-10-01','2026-10-31','closed',now());
+set local role authenticated;
+select extensions.throws_ok($$select public.finalize_transaction_proof_version(
+  (select (payload->>'operationId')::uuid from proof_engine_result),
+  (select (payload->>'operationRevision')::bigint from proof_engine_result),
+  'preuve-v3.pdf','application/pdf',130,
+  'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+  '99600000-0000-4000-8700-000000000003')$$,'P4O03',
+  'Un exercice clôturé ne peut pas être modifié.',
+  'une clôture après réservation et téléversement bloque la publication');
+select extensions.is((select storage_object_id from public.transaction_proof_versions
+  where lifecycle_state='current' and proof_document_id=(select proof_document_id
+    from public.transaction_documents where transaction_id='99600000-0000-4000-8400-000000000001')),
+  '99600000-0000-4000-8700-000000000002'::uuid,
+  'la version de référence reste inchangée après clôture concurrente');
 
 reset role;
 select * from extensions.finish();

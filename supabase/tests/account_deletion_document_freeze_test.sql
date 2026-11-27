@@ -93,6 +93,7 @@ reset role;
 -- Instrumentation locale, annulée avec la transaction, pour isoler l’effet
 -- des politiques restrictives des politiques métier permissives existantes.
 grant select, insert, update, delete on storage.objects to authenticated;
+insert into storage.buckets(id,name,public) values ('pgtap-freeze-probe','pgtap-freeze-probe',false);
 create policy account_deletion_freeze_test_select
 on storage.objects for select to authenticated using (true);
 create policy account_deletion_freeze_test_insert
@@ -200,7 +201,7 @@ select extensions.lives_ok(
   $$insert into storage.objects(id,bucket_id,name,owner,owner_id,metadata,version)
     values (
       '99400000-0000-4000-8600-000000000004',
-      'transaction-proofs', 'unfrozen-object',
+      'pgtap-freeze-probe', 'unfrozen-object',
       '99400000-0000-4000-8000-000000000004',
       '99400000-0000-4000-8000-000000000004',
       '{"size":1,"mimetype":"application/pdf"}', 'unfrozen-v1'

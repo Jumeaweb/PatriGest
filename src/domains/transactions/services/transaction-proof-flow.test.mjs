@@ -6,6 +6,8 @@ import { createTransactionWithOptionalProof } from "./transaction-proof-create.t
 
 const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const service = source("./transaction-proof-service.ts");
+const durableService = source("./transaction-proof-durable.ts");
+const reservation = source("./transaction-proof-durable-reservation.ts");
 const route = source("../../../app/api/dossiers/[protectedPersonId]/operations/[transactionId]/justificatif/route.ts");
 const action = source("../actions.ts");
 const form = source("../components/transaction-form.tsx");
@@ -29,7 +31,9 @@ test("un exercice clôturé interdit ajout et remplacement côté service", () =
   assert.equal(getProofWriteDenial({ ...allowed, closed: true }), "closed");
   assert.match(service, /getProofWriteDenial\(/);
   assert.match(service, /isDateInClosedPeriod\(context\.transaction\.transaction_date, context\.person\.managementPeriods\)/);
-  assert.match(service, /writeDocument: async \(\) => \{[\s\S]*?getProofWriteDenial\(/);
+  assert.match(service, /if \(denial === "closed"\)[\s\S]*?await executeDurableTransactionProofOperation/);
+  assert.match(reservation, /rpc\(\s*"reserve_transaction_proof_for_storage"/);
+  assert.match(durableService, /rpc\("finalize_transaction_proof_version"/);
 });
 
 test("la route API existante utilise les validations et le service partagés", () => {
@@ -37,9 +41,10 @@ test("la route API existante utilise les validations et le service partagés", (
   assert.match(route, /await saveTransactionProof\(protectedPersonId, transactionId, proof,/);
   assert.match(route, /getTransactionProofDescriptor\(protectedPersonId, transactionId/);
   assert.match(route, /listTransactionProofHistory\(protectedPersonId, transactionId\)/);
-  assert.match(service, /protected-persons\/\$\{personId\}\/transactions\/\$\{transactionId\}/);
-  assert.match(service, /storage\.upload\(path, file\.bytes/);
-  assert.match(service, /\.from\("transaction_documents"\)/);
+  assert.match(service, /await executeDurableTransactionProofOperation\(/);
+  assert.match(durableService, /\.upload\(\s*reservation\.storagePath,\s*input\.file\.bytes,/);
+  assert.match(durableService, /upsert: false/);
+  assert.doesNotMatch(service, /\.from\("transaction_documents"\)|\.storage\.from\(/);
   assert.match(route, /await deleteTransactionProof\(protectedPersonId, transactionId\)/);
 });
 

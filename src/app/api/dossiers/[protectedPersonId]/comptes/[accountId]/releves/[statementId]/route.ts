@@ -19,6 +19,7 @@ import {
 import { getBankStatement } from "@/domains/bank-statements/services";
 import { downloadBankStatementDocument } from "@/domains/bank-statements/bank-statement-document-versioning";
 import { getAuthenticatedUser } from "@/domains/protected-persons/services/authenticated-user";
+import { protectedStorageResponse } from "@/lib/supabase/protected-storage-response";
 
 type Params = {
   params: Promise<{
@@ -62,15 +63,9 @@ export async function GET(request: Request, { params }: Params) {
     if (!document) {
       return NextResponse.json({ message: "Aucun PDF n’est associé à ce relevé." }, { status: 404 });
     }
-    return new Response(document.bytes, {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": download
-          ? bankStatementContentDisposition(name)
-          : `inline; filename*=UTF-8''${encodeURIComponent(name)}`,
-        "Content-Length": String(document.bytes.byteLength),
-        "Cache-Control": "private, no-store",
-      },
+    return protectedStorageResponse({
+      request, bucket: "bank-statements", storagePath: document.storagePath, contentType: "application/pdf",
+      contentDisposition: download ? bankStatementContentDisposition(name) : `inline; filename*=UTF-8''${encodeURIComponent(name)}`,
     });
   } catch {
     return NextResponse.json({ message: download ? "Impossible de télécharger le relevé." : "Impossible d’ouvrir le relevé." }, { status: 500 });
@@ -133,6 +128,7 @@ export async function DELETE(request: Request, { params }: Params) {
     }
 
     await deleteBankStatement({
+      personId: value.protectedPersonId,
       accountId: value.accountId,
       statement: value.statement,
     });

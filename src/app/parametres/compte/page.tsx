@@ -16,7 +16,7 @@ import { EmailForm } from "@/domains/account/components/email-form";
 import { PasswordForm } from "@/domains/account/components/password-form";
 import { ProfileForm } from "@/domains/account/components/profile-form";
 import { getAccountData } from "@/domains/account/services";
-import { getOwnedDossierCapacity } from "@/domains/subscriptions/services";
+import { getOwnedDossierCapacity, getOwnedDossierQuotaGate } from "@/domains/subscriptions/services";
 import { getCurrentAccountTrialState } from "@/domains/trials/services";
 import { isAccountTrialRestricted } from "@/domains/trials/trial-state";
 
@@ -38,8 +38,10 @@ export default async function AccountPage({
     current === "subscription" ? getPrivateAccessContext() : Promise.resolve(null),
   ]);
   let dossierCapacity: AccountDossierCapacityResult | null = null;
+  const quota = accessContext?.canCreateDossier ? await getOwnedDossierQuotaGate() : null;
+  const commercialAccessSuspended = quota?.block_reason === "account_suspended";
 
-  if (accessContext && shouldLoadOwnedDossierCapacity(accessContext)) {
+  if (accessContext && shouldLoadOwnedDossierCapacity(accessContext) && !commercialAccessSuspended) {
     try {
       dossierCapacity = { status: "ready", capacity: await getOwnedDossierCapacity() };
     } catch {
@@ -109,7 +111,12 @@ export default async function AccountPage({
             </section>
           )}
 
-          {current === "subscription" && <AccountSubscriptionView dossierCapacity={dossierCapacity} trialState={trialState} />}
+          {current === "subscription" && <>
+            {commercialAccessSuspended && <p role="status" className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              Vos droits sont suspendus. La création et la restauration de dossiers sont indisponibles. Vos dossiers restent conservés.
+            </p>}
+            <AccountSubscriptionView dossierCapacity={dossierCapacity} trialState={trialState} />
+          </>}
           {current === "invoices" && <AccountInvoicesView />}
           {current === "cancellation" && <AccountCancellationView />}
           {current === "data" && <AccountDataView />}

@@ -8,6 +8,7 @@ const component = source("./components/bank-statement-manager.tsx");
 const currentRoute = source("../../app/api/dossiers/[protectedPersonId]/comptes/[accountId]/releves/[statementId]/route.ts");
 const versionsRoute = source("../../app/api/dossiers/[protectedPersonId]/comptes/[accountId]/releves/[statementId]/versions/route.ts");
 const historicalRoute = source("../../app/api/dossiers/[protectedPersonId]/comptes/[accountId]/releves/[statementId]/versions/[versionId]/route.ts");
+const protectedResponse = source("../../lib/supabase/protected-storage-response.ts");
 const migration = source("../../../supabase/migrations/20261115100000_version_bank_statement_documents.sql");
 const reportPage = source("../../app/dossiers/[protectedPersonId]/comptes-de-gestion/[reportId]/page.tsx");
 const reportPreview = source("../management-reports/preview.tsx");
@@ -43,7 +44,8 @@ test("le téléversement est immuable, vérifié et relançable avec la même de
 test("les routes servent les octets sans exposer le chemin Storage", () => {
   assert.match(currentRoute, /downloadBankStatementDocument/);
   assert.match(historicalRoute, /downloadBankStatementDocument/);
-  assert.match(historicalRoute, /Cache-Control": "private, no-store"/);
+  assert.match(historicalRoute, /protectedStorageResponse/);
+  assert.match(protectedResponse, /Cache-Control": "private, no-store/);
   assert.doesNotMatch(component, /storagePath/);
   assert.doesNotMatch(versionsRoute, /storagePath/);
 });

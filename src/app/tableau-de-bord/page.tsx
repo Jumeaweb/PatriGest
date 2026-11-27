@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { ArrowRight, CalendarDays, UserRound } from "lucide-react";
 import { PrivateShell } from "@/components/layout/private-shell";
 import { getPrivateAccessContext } from "@/domains/administration/services/private-access-context";
+import { getOwnedDossierQuotaGate } from "@/domains/subscriptions/services";
 import { getDashboardData, type DashboardDossier, type DashboardReportSummary, type DashboardTask } from "@/domains/dashboard/services/dashboard-service";
 import { getCurrentAccountTrialState } from "@/domains/trials/services";
 import { formatFinancialDate } from "@/domains/financial-accounts/utils/financial-account-utils";
@@ -16,6 +17,7 @@ const reportStatusLabels = { draft: "En préparation", ready: "Prêt", generated
 
 export default async function DashboardPage() {
   const { isPlatformAdmin, canCreateDossier } = await getPrivateAccessContext();
+  const quota = canCreateDossier ? await getOwnedDossierQuotaGate() : null;
   if (isPlatformAdmin) redirect("/administration");
   const [data, trial] = await Promise.all([
     getDashboardData(),
@@ -29,14 +31,14 @@ export default async function DashboardPage() {
           Votre essai gratuit est en cours
         </p>
         <p className="mt-1">
-          Il vous reste <strong>{trial.remainingDays} jours</strong> d'essai,
-          jusqu'au <strong>{new Intl.DateTimeFormat("fr-FR", {
+          Il vous reste <strong>{trial.remainingDays} jours</strong> d&apos;essai,
+          jusqu&apos;au <strong>{new Intl.DateTimeFormat("fr-FR", {
             day: "numeric",
             month: "long",
             year: "numeric",
             timeZone: "Europe/Paris",
           }).format(new Date(trial.endsAt))}</strong>.
-          Vous pouvez gérer jusqu'à <strong>{trial.activeDossierLimit} dossiers actifs</strong>.
+          Vous pouvez gérer jusqu&apos;à <strong>{trial.activeDossierLimit} dossiers actifs</strong>.
         </p>
         <Link href="/parametres/compte?vue=abonnement" className="mt-2 inline-block font-semibold text-blue-700 hover:underline">
           Consulter mon abonnement →
@@ -44,7 +46,7 @@ export default async function DashboardPage() {
       </div>
     )}
     <div className="mt-5 grid items-start gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(19rem,0.85fr)]">
-      <DossiersSection dossiers={data.dossiers} dossierCount={data.activeDossierCount} canCreate={canCreateDossier} />
+      <DossiersSection dossiers={data.dossiers} dossierCount={data.activeDossierCount} canCreate={canCreateDossier && !quota?.block_reason} />
       <TasksSection tasks={data.tasks} />
     </div>
   </PrivateShell>;

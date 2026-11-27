@@ -73,6 +73,15 @@ export async function getOwnedDossierCapacity() {
   return loadOwnedDossierCapacity(createDossierCapacityRpcGateway(supabase));
 }
 
+export async function getOwnedDossierQuotaGate() {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_owned_dossier_quota_gate").maybeSingle();
+  // The previous schema has no commercial quota projection.
+  if (error?.code === "PGRST202" || error?.code === "42883") return null;
+  if (error) throw new Error("Impossible de vérifier la capacité de dossiers.");
+  return data;
+}
+
 export async function getDossierFeatureCapabilities(protectedPersonId: string) {
   const supabase = await createClient();
   return loadDossierFeatureCapabilities(

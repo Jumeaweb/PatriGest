@@ -9,10 +9,10 @@ test("la création d'un relevé accepte l'absence de PDF sans appeler Storage", 
   const writeService = source("./bank-statement-write.ts");
   assert.match(route, /readPdf\(form, false\)/);
   assert.match(route, /pdf: pdf\.file && pdf\.bytes \? \{ file: pdf\.file, bytes: pdf\.bytes \} : null/);
-  assert.match(writeService, /if \(!input\.pdf\) \{[\s\S]*?original_file_name: null/);
+  assert.match(writeService, /if \(input\.pdf\) return savePdf[\s\S]*?original_file_name: null/);
   const noPdfBranch = writeService.slice(
-    writeService.indexOf("if (!input.pdf)"),
-    writeService.indexOf("await runBankStatementDocumentWrite"),
+    writeService.indexOf("if (input.pdf) return savePdf"),
+    writeService.indexOf("export async function updateBankStatement"),
   );
   assert.doesNotMatch(noPdfBranch, /storage\.from|reserveBankStatementOperation/);
 });
@@ -25,7 +25,8 @@ test("un relevé sans PDF n'expose pas d'action document ni d'appel Storage", ()
   assert.match(component, /Aucun PDF/);
   assert.match(route, /Aucun PDF n’est associé à ce relevé/);
   assert.match(route, /deleteBankStatement\(/);
-  assert.match(writeService, /if \(!durableEnabled && documentMetadata\(input\.statement\)\)/);
+  assert.match(writeService, /delete_unreconciled_bank_statement/);
+  assert.doesNotMatch(writeService, /\.storage\.from/);
 });
 
 test("le champ PDF est facultatif à la création comme à la modification", () => {

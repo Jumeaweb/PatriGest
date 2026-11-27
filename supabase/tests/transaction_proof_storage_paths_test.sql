@@ -100,8 +100,8 @@ set local role authenticated;
 
 select extensions.is(
   (select count(*) from storage.objects where id = '99500000-0000-4000-8600-000000000001'),
-  1::bigint,
-  'le propriétaire lit un justificatif canonique'
+  0::bigint,
+  'le propriétaire ne lit plus un justificatif directement dans Storage'
 );
 select extensions.is(
   (select count(*) from storage.objects where id in (
@@ -111,7 +111,7 @@ select extensions.is(
   0::bigint,
   'les chemins non canoniques et les dossiers étrangers restent invisibles'
 );
-select extensions.lives_ok(
+select extensions.throws_like(
   $$insert into storage.objects (id, bucket_id, name, owner, owner_id, metadata, version)
     values (
       '99500000-0000-4000-8600-000000000004', 'transaction-proofs',
@@ -119,7 +119,8 @@ select extensions.lives_ok(
       '99500000-0000-4000-8000-000000000001', '99500000-0000-4000-8000-000000000001',
       '{"size":10,"mimetype":"application/pdf"}', 'v1'
     )$$,
-  'le propriétaire crée un justificatif canonique'
+  '%row-level security policy%',
+  'le propriétaire ne peut plus écrire sur le chemin canonique sans réservation'
 );
 select extensions.throws_like(
   $$insert into storage.objects (id, bucket_id, name, owner, owner_id, metadata, version)
@@ -175,8 +176,8 @@ select extensions.results_eq(
       where id = '99500000-0000-4000-8600-000000000001'
       returning 1
     ) select count(*)::bigint from changed$$,
-  $$values (1::bigint)$$,
-  'le propriétaire conserve le remplacement du justificatif canonique'
+  $$values (0::bigint)$$,
+  'le propriétaire ne peut plus écraser le justificatif canonique'
 );
 
 reset role;
@@ -184,7 +185,7 @@ set local "request.jwt.claim.sub" = '99500000-0000-4000-8000-000000000002';
 set local "request.jwt.claims" = '{"sub":"99500000-0000-4000-8000-000000000002","role":"authenticated"}';
 set local role authenticated;
 
-select extensions.lives_ok(
+select extensions.throws_like(
   $$insert into storage.objects (id, bucket_id, name, owner, owner_id, metadata, version)
     values (
       '99500000-0000-4000-8600-000000000005', 'transaction-proofs',
@@ -192,7 +193,8 @@ select extensions.lives_ok(
       '99500000-0000-4000-8000-000000000002', '99500000-0000-4000-8000-000000000002',
       '{"size":10,"mimetype":"application/pdf"}', 'v1'
     )$$,
-  'le gestionnaire conserve son droit de création'
+  '%row-level security policy%',
+  'le gestionnaire doit utiliser une réservation pour déposer le justificatif'
 );
 select set_config('storage.allow_delete_query', 'true', true);
 select extensions.results_eq(
@@ -201,8 +203,8 @@ select extensions.results_eq(
       where id = '99500000-0000-4000-8600-000000000005'
       returning 1
     ) select count(*)::bigint from removed$$,
-  $$values (1::bigint)$$,
-  'le gestionnaire conserve son droit de suppression canonique'
+  $$values (0::bigint)$$,
+  'le gestionnaire ne peut plus supprimer directement un objet canonique'
 );
 select set_config('storage.allow_delete_query', 'false', true);
 
@@ -213,8 +215,8 @@ set local role authenticated;
 
 select extensions.is(
   (select count(*) from storage.objects where id = '99500000-0000-4000-8600-000000000001'),
-  1::bigint,
-  'le lecteur conserve son droit de consultation'
+  0::bigint,
+  'le lecteur doit passer par la route de consultation'
 );
 select extensions.throws_like(
   $$insert into storage.objects (id, bucket_id, name, owner, owner_id, metadata, version)

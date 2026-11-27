@@ -472,6 +472,20 @@ export type Database = {
     Functions: {
       is_platform_admin: { Args: Record<string, never>; Returns: boolean };
       is_application_user_active: { Args: Record<string, never>; Returns: boolean };
+      current_commercial_access_restricted: { Args: Record<string, never>; Returns: boolean | null };
+      get_owned_dossier_quota_gate: {
+        Args: Record<string, never>;
+        Returns: {
+          active_dossier_limit: number | null;
+          active_dossier_count: number;
+          remaining_dossier_count: number | null;
+          block_reason: string | null;
+        }[];
+      };
+      get_management_report_commercial_capabilities: {
+        Args: { p_protected_person_id: string };
+        Returns: { can_generate: boolean; can_finalize: boolean; can_print: boolean }[];
+      };
       record_account_trial_terms_acceptance: { Args: { p_user_id: string; p_terms_version: string }; Returns: undefined };
       complete_own_autonomous_trial_registration: { Args: Record<string, never>; Returns: undefined };
       get_current_account_trial_state: { Args: Record<string, never>; Returns: Array<{ state: AccountTrialStateName; terms_version: string | null; terms_accepted_at: string | null; started_at: string | null; ends_at: string | null; deletion_eligible_at: string | null; remaining_days: number; active_dossier_limit: number; active_dossier_count: number; enforcement_enabled: boolean }> };
@@ -556,6 +570,7 @@ export type Database = {
       correct_internal_transfer: { Args: { p_protected_person_id: string; p_transfer_id: string; p_expected_revision: number; p_source_account_id: string; p_destination_account_id: string; p_transfer_date: string; p_amount: number; p_label: string | null; p_comment: string | null; p_reason: string; p_request_id: string }; Returns: Json };
       cancel_internal_transfer_v2: { Args: { p_protected_person_id: string; p_transfer_id: string; p_expected_revision: number; p_reason: string; p_request_id: string }; Returns: Json };
       reserve_transaction_proof_version: { Args: { p_protected_person_id: string; p_transaction_id: string; p_intent: "create" | "replace"; p_client_request_id: string }; Returns: Json };
+      reserve_transaction_proof_for_storage: { Args: { p_protected_person_id: string; p_transaction_id: string; p_intent: "create" | "replace"; p_client_request_id: string }; Returns: Json };
       finalize_transaction_proof_version: { Args: { p_operation_id: string; p_expected_operation_revision: number; p_file_name: string; p_mime_type: string; p_file_size: number; p_sha256: string; p_storage_object_id: string }; Returns: Json };
       finalize_management_report_draft_generation: { Args: { p_report_id: string; p_storage_path: string; p_file_name: string; p_mime_type: string; p_file_size: number; p_preview_snapshot: Json; p_snapshot_schema_version: number }; Returns: string };
       resume_management_report_preparation: { Args: { p_report_id: string }; Returns: undefined };

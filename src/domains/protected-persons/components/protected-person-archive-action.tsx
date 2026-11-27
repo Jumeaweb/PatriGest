@@ -18,6 +18,7 @@ type Props = {
   personName: string;
   archiveRevision: number;
   archived: boolean;
+  restoreBlockedMessage?: string | null;
 };
 
 export function ProtectedPersonArchiveAction({
@@ -25,6 +26,7 @@ export function ProtectedPersonArchiveAction({
   personName,
   archiveRevision,
   archived,
+  restoreBlockedMessage,
 }: Props) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
@@ -36,6 +38,7 @@ export function ProtectedPersonArchiveAction({
   );
   const completed = state.status === "success";
   const formId = `protected-person-${operation}-${protectedPersonId}`;
+  const blockMessage = archived ? restoreBlockedMessage : null;
 
   function close() {
     if (pending) return;
@@ -44,14 +47,19 @@ export function ProtectedPersonArchiveAction({
   }
 
   return <>
+    <div className="sm:text-right">
     <button
       type="button"
       className={`button gap-2 ${archived ? "button-primary" : "button-secondary text-amber-800"}`}
+      disabled={Boolean(blockMessage)}
+      aria-describedby={blockMessage ? `${formId}-quota` : undefined}
       onClick={() => setOpen(true)}
     >
       {archived ? <ArchiveRestore aria-hidden="true" size={16} /> : <Archive aria-hidden="true" size={16} />}
       {archived ? "Restaurer le dossier" : "Archiver le dossier"}
     </button>
+    {blockMessage && <p id={`${formId}-quota`} className="mt-1 text-sm text-slate-700">{blockMessage}</p>}
+    </div>
     <AppConfirmDialog
       open={open}
       onClose={close}
