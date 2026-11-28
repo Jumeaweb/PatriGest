@@ -62,6 +62,17 @@ export function SignupForm({ invitationToken, email, firstName, lastName, collab
   const [state, action] = useActionState(signupAction, initialAuthState);
   const loginHref = invitationToken ? getDossierInvitationLoginPath(invitationToken) : "/connexion";
   const recoveryHref = invitationToken ? `/mot-de-passe-oublie?next=${encodeURIComponent(getDossierInvitationPath(invitationToken))}` : "/mot-de-passe-oublie";
+  const fieldMessages = Object.entries({
+    email: "Adresse email",
+    firstName: "Prénom",
+    lastName: "Nom",
+    password: "Mot de passe",
+    passwordConfirmation: "Confirmation du mot de passe",
+    ...(!collaboratorInvitation && { trialTermsAccepted: "Conditions de l’essai gratuit" }),
+  }).flatMap(([id, label]) => {
+    const message = state.fieldErrors?.[id]?.[0];
+    return message ? [{ id, label, message }] : [];
+  });
   if (state.status === "success") {
     return <div className="rounded-xl bg-green-50 px-4 py-4 text-green-900" role="status" aria-live="polite">
       <h2 className="font-bold">Consultez votre messagerie</h2>
@@ -97,7 +108,7 @@ export function SignupForm({ invitationToken, email, firstName, lastName, collab
         </label>
         <div id="trialTermsAccepted-error"><FieldError messages={state.fieldErrors?.trialTermsAccepted} /></div>
       </div>}
-      <FormMessage state={state} />
+      <FormMessage state={state} fieldMessages={fieldMessages} />
       <SubmitButton pendingLabel="Création…">{invitationToken ? "Créer ou finaliser mon compte" : "Créer mon compte"}</SubmitButton>
       <p className="text-center text-sm text-[#64748B]">Déjà inscrit ? <Link className="auth-link" href={loginHref}>Se connecter</Link></p>
       <Link className="auth-back-link" href="/">Retour à l’accueil</Link>

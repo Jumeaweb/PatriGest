@@ -25,15 +25,15 @@ import { ACCOUNT_TRIAL_TERMS_VERSION } from "@/domains/trials/constants";
 import { trySendPendingRegistrationNotification } from "@/domains/administration/services/registration-review-notification-service";
 
 const emailSchema = z.email("Saisissez une adresse email valide.").trim();
-const passwordSchema = z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères.").max(72, "Le mot de passe ne peut pas dépasser 72 caractères.");
+const passwordSchema = z.string("Saisissez votre mot de passe.").min(8, "Le mot de passe doit contenir au moins 8 caractères.").max(72, "Le mot de passe ne peut pas dépasser 72 caractères.");
 const loginSchema = z.object({ email: emailSchema, password: z.string().min(1, "Saisissez votre mot de passe.") });
 const signupSchema = z.object({
   email: emailSchema,
-  firstName: z.string().trim().min(1, "Saisissez votre prénom.").max(80),
-  lastName: z.string().trim().min(1, "Saisissez votre nom.").max(80),
+  firstName: z.string("Saisissez votre prénom.").trim().min(1, "Saisissez votre prénom.").max(80, "Le prénom ne peut pas dépasser 80 caractères."),
+  lastName: z.string("Saisissez votre nom.").trim().min(1, "Saisissez votre nom.").max(80, "Le nom ne peut pas dépasser 80 caractères."),
   password: passwordSchema,
-  passwordConfirmation: z.string(),
-  trialTermsAccepted: z.string().optional(),
+  passwordConfirmation: z.string("Confirmez votre mot de passe."),
+  trialTermsAccepted: z.string("Acceptez les conditions de l’essai gratuit pour poursuivre.").optional(),
 }).refine((data) => data.password === data.passwordConfirmation, {
   message: "Les mots de passe ne correspondent pas.",
   path: ["passwordConfirmation"],
@@ -109,7 +109,7 @@ export async function signupAction(_state: AuthActionState, formData: FormData):
     lastName: formData.get("lastName"),
     password: formData.get("password"),
     passwordConfirmation: formData.get("passwordConfirmation"),
-    trialTermsAccepted: formData.get("trialTermsAccepted"),
+    trialTermsAccepted: formData.get("trialTermsAccepted") ?? undefined,
   });
   if (!parsed.success) return validationError(parsed.error);
   if (registrationIntent === "autonomous" && parsed.data.trialTermsAccepted !== "on") {
