@@ -20,10 +20,13 @@ export default async function AccessWaitingPage({
   if (!userId) redirect("/connexion");
 
   const [{ data: authorization }, { data: administrator }] = await Promise.all([
-    supabase.from("application_user_authorizations").select("status").eq("user_id", userId).maybeSingle(),
+    supabase.from("application_user_authorizations").select("status,registration_intent").eq("user_id", userId).maybeSingle(),
     supabase.from("platform_administrators").select("user_id").eq("user_id", userId).maybeSingle(),
   ]);
   if (administrator || authorization?.status === "active") redirect("/tableau-de-bord");
+  if (authorization?.status === "pending" && authorization.registration_intent === "collaborator") {
+    redirect("/invitations");
+  }
   let hasInvitationRecovery = false;
   if (authorization?.status === "pending") {
     try {

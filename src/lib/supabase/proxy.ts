@@ -38,12 +38,13 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const pathname = request.nextUrl.pathname;
   const isAccessWaitingRoute = pathname.startsWith("/acces-en-attente");
+  const isInvitationRecoveryRoute = pathname === "/invitations";
   const isProtectedRoute = isProtectedApplicationRoute(pathname);
 
   if (isProtectedRoute && !data?.claims) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/connexion";
-    loginUrl.search = "";
+    loginUrl.search = isInvitationRecoveryRoute ? "?next=%2Finvitations" : "";
     return NextResponse.redirect(loginUrl);
   }
 
@@ -58,7 +59,7 @@ export async function updateSession(request: NextRequest) {
     ]);
     const hasApplicationAccess = Boolean(administrator) || authorization?.status === "active";
 
-    if (requiresAuthorizedAccess && !hasApplicationAccess) {
+    if (requiresAuthorizedAccess && !hasApplicationAccess && !isInvitationRecoveryRoute) {
       const waitingUrl = request.nextUrl.clone();
       waitingUrl.pathname = "/acces-en-attente";
       waitingUrl.search = "";

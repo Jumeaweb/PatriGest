@@ -9,7 +9,7 @@ import {
   acceptRecoveredDossierInvitationAction,
   declineDossierInvitationAction,
 } from "@/domains/access/actions";
-import { initialAccessState } from "@/domains/access/state";
+import { initialAccessState, type AccessActionState } from "@/domains/access/state";
 
 type InvitationReference =
   | { token: string }
@@ -27,6 +27,12 @@ export function InvitationDecisionActions({
     declineDossierInvitationAction.bind(null, reference),
     initialAccessState,
   );
+  const [acceptState, acceptAction, accepting] = useActionState<AccessActionState, FormData>(
+    () => "token" in reference
+      ? acceptDossierInvitationAction(reference.token)
+      : acceptRecoveredDossierInvitationAction(reference.invitationId),
+    initialAccessState,
+  );
 
   if (declineState.status === "success") {
     return <div className="mt-3 rounded-xl bg-green-50 p-3 text-sm text-green-800" role="status" aria-live="polite">
@@ -35,15 +41,12 @@ export function InvitationDecisionActions({
     </div>;
   }
 
-  const acceptAction = "token" in reference
-    ? acceptDossierInvitationAction.bind(null, reference.token)
-    : acceptRecoveredDossierInvitationAction.bind(null, reference.invitationId);
-
   return <div className="mt-3 grid gap-2 sm:grid-cols-2">
+    {acceptState.status === "error" && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 sm:col-span-2" role="alert">{acceptState.message}</p>}
     <form action={acceptAction}>
-      <button className="button button-primary w-full" type="submit">{acceptLabel}</button>
+      <button className="button button-primary w-full" type="submit" disabled={accepting}>{accepting ? "Acceptation…" : acceptLabel}</button>
     </form>
-    <button className="button button-secondary w-full text-red-700" type="button" onClick={() => setDialogOpen(true)}>
+    <button className="button button-secondary w-full text-red-700" type="button" disabled={accepting} onClick={() => setDialogOpen(true)}>
       Refuser l’invitation
     </button>
     <form action={declineAction}>

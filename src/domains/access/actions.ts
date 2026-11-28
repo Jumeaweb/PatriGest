@@ -44,7 +44,7 @@ function invitationCreationErrorMessage(
 function invitationAcceptanceErrorMessage(error: { code?: string; message?: string } | null) {
   return error?.code === "P4M01" || error?.message?.includes("Un compte autonome ne peut pas devenir collaborateur.")
     ? "Ce compte autonome ne peut pas accepter une invitation collaborateur. Connectez-vous avec une adresse électronique distincte."
-    : "Invitation invalide ou expirée.";
+    : "L’invitation est invalide, a expiré ou a été annulée. Vérifiez le lien reçu ou demandez-en un nouveau au propriétaire.";
 }
 
 const requestSchema = z.object({ firstName: z.string().trim().min(1).max(80), lastName: z.string().trim().min(1).max(80), email: z.email().trim().toLowerCase(), message: z.string().trim().max(1000).optional() });
@@ -250,18 +250,18 @@ function createDossierInvitationSecret() {
   };
 }
 
-export async function acceptDossierInvitationAction(token: string): Promise<void> {
+export async function acceptDossierInvitationAction(token: string): Promise<AccessActionState> {
   const supabase = await createClient();
   const { data: claims } = await supabase.auth.getClaims();
   const userId = claims?.claims?.sub;
-  if (!userId) throw new Error("Authentification requise.");
+  if (!userId) return { status: "error", message: "Votre session a expiré. Reconnectez-vous depuis le lien d’invitation." };
   const { data: administrator } = await supabase.from("platform_administrators").select("user_id").eq("user_id", userId).maybeSingle();
-  if (administrator) throw new Error("Un Administrateur PatriGest ne peut pas accepter une invitation métier.");
+  if (administrator) return { status: "error", message: "Un Administrateur PatriGest ne peut pas accepter une invitation métier." };
   const { data, error } = await supabase.rpc("accept_protected_person_invitation", { p_token_hash: createHash("sha256").update(token).digest("hex") });
-  if (error || !data) throw new Error(invitationAcceptanceErrorMessage(error));
+  if (error || !data) return { status: "error", message: invitationAcceptanceErrorMessage(error) };
   revalidatePath("/dossiers");
   const { redirect } = await import("next/navigation");
-  redirect(`/dossiers/${data}/tableau-de-bord`);
+  return redirect(`/dossiers/${data}/tableau-de-bord`);
 }
 
 const declineInvitationReferenceSchema = z.union([
@@ -323,17 +323,18 @@ export async function declineDossierInvitationAction(
   }
 }
 
-export async function acceptRecoveredDossierInvitationAction(invitationId: string): Promise<void> {
+export async function acceptRecoveredDossierInvitationAction(invitationId: string): Promise<AccessActionState> {
   const supabase = await createClient();
   const { data: claims } = await supabase.auth.getClaims();
   const userId = claims?.claims?.sub;
-  if (!userId) throw new Error("Authentification requise.");
-  const tokenHash = await getRecoverableInvitationTokenHash(userId, invitationId);
+  if (!userId) return { status: "error", message: "Votre session a expiré. Reconnectez-vous pour retrouver vos invitations." };
+  const tokenHash = await getRecoverableInvitationTokenHash(userId, invitationId).catch(() => null);
+  if (!tokenHash) return { status: "error", message: invitationAcceptanceErrorMessage(null) };
   const { data, error } = await supabase.rpc("accept_protected_person_invitation", { p_token_hash: tokenHash });
-  if (error || !data) throw new Error(invitationAcceptanceErrorMessage(error));
+  if (error || !data) return { status: "error", message: invitationAcceptanceErrorMessage(error) };
   revalidatePath("/dossiers");
   const { redirect } = await import("next/navigation");
-  redirect(`/dossiers/${data}/tableau-de-bord`);
+  return redirect(`/dossiers/${data}/tableau-de-bord`);
 }
 
 export async function continueDossierInvitationAsIntendedUserAction(token: string): Promise<void> {

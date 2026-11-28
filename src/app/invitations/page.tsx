@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { logoutAction } from "@/app/(auth)/actions";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { InvitationDecisionActions } from "@/domains/access/components/invitation-decision-actions";
 import { getRecoverableDossierInvitations } from "@/domains/access/services";
@@ -16,10 +18,22 @@ export default async function PendingInvitationsPage({ searchParams }: { searchP
   const userId = claims?.claims?.sub;
   if (!userId) redirect("/connexion?next=%2Finvitations");
 
-  const invitations = await getRecoverableDossierInvitations(userId);
+  const invitations = await getRecoverableDossierInvitations(userId).catch(() => null);
+  if (!invitations) {
+    return <AuthShell title="Vérification des invitations indisponible" description="Réessayez dans quelques instants ou ouvrez le lien reçu par e-mail.">
+      <Link className="button button-primary" href="/invitations" prefetch={false}>Réessayer</Link>
+    </AuthShell>;
+  }
   if (!invitations.length) {
-    const { data: authorization } = await supabase.from("application_user_authorizations").select("status").eq("user_id", userId).maybeSingle();
-    redirect(authorization?.status === "active" ? "/tableau-de-bord" : "/acces-en-attente");
+    const { data: authorization } = await supabase.from("application_user_authorizations").select("status,registration_intent").eq("user_id", userId).maybeSingle();
+    return <AuthShell
+      title="Aucune invitation active"
+      description="Vérifiez l’adresse utilisée pour vous connecter. Si l’invitation a expiré ou a été annulée, demandez un nouveau lien au propriétaire du dossier."
+    >
+      {authorization?.status === "active" && <Link className="button button-primary" href="/tableau-de-bord">Retour au tableau de bord</Link>}
+      {authorization?.status === "pending" && authorization.registration_intent === "autonomous" && <Link className="button button-primary" href="/acces-en-attente">Voir l’état de mon inscription</Link>}
+      <form action={logoutAction}><button className="button button-secondary" type="submit">Se déconnecter pour changer de compte</button></form>
+    </AuthShell>;
   }
   const { invitation: preferredInvitationId } = await searchParams;
   const displayedInvitations = selectRecoverableInvitations(invitations, preferredInvitationId);
