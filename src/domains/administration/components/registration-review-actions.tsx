@@ -47,10 +47,10 @@ export function ResendActivationEmailButton({ userId, email }: { userId: string;
   const [state, action] = useActionState(resendApplicationActivationEmailAction, initialRegistrationReviewState);
   const succeeded = state.status === "success";
   return <>
-    <button type="button" className="button button-secondary" onClick={() => setOpen(true)}>Renvoyer l’e-mail d’activation</button>
+    <button type="button" className="button button-secondary" onClick={() => setOpen(true)}>Renvoyer la notification d’activation</button>
     <form action={action}>
       <input type="hidden" name="userId" value={userId} />
-      <AppConfirmDialog open={open} onClose={() => setOpen(false)} title="Renvoyer l’e-mail d’activation ?" description={succeeded ? "L’e-mail d’activation a été renvoyé." : "Un nouvel e-mail d’activation va être envoyé à cette adresse."} subject={email} cancelLabel={succeeded ? "Fermer" : "Annuler"} actions={succeeded ? null : <ResendSubmit />}>
+      <AppConfirmDialog open={open} onClose={() => setOpen(false)} title="Renvoyer la notification d’activation ?" description={succeeded ? "La notification d’activation a été renvoyée." : "Un e-mail rappelant que l’accès est déjà activé va être envoyé à cette adresse."} subject={email} cancelLabel={succeeded ? "Fermer" : "Annuler"} actions={succeeded ? null : <ResendSubmit />}>
         {state.message && <p className={`text-sm font-semibold ${state.status === "error" ? "text-red-700" : "text-green-700"}`} role={state.status === "error" ? "alert" : "status"} aria-live="polite">{state.message}</p>}
       </AppConfirmDialog>
     </form>
@@ -64,5 +64,5 @@ function ReviewSubmit({ label }: { label: string }) {
 
 function ResendSubmit() {
   const { pending } = useFormStatus();
-  return <button type="submit" className="button button-primary" disabled={pending}>{pending ? "Envoi…" : "Renvoyer l’e-mail"}</button>;
+  return <button type="submit" className="button button-primary" disabled={pending}>{pending ? "Envoi…" : "Renvoyer la notification"}</button>;
 }

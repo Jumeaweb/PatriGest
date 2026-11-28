@@ -27,11 +27,11 @@ const subscriptionStatusLabels: Record<AccountSubscriptionStatus, string> = {
 const blockCodeLabels: Record<AdministrativeEntitlementBlockCode, string> = {
   platform_administrator: "Compte administrateur non modifiable",
   authorization_inactive: "Autorisation utilisateur inactive",
-  account_not_autonomous: "Compte collaborateur non éligible",
+  account_not_autonomous: "Réservé aux comptes autonomes.",
   purge_in_progress: "Suppression de compte en cours",
   commercial_subscription_active: "Abonnement commercial à préserver",
   active_override_must_be_revoked: "Dérogation active à traiter d’abord",
-  entitlement_base_required: "Base commerciale ou administrative requise",
+  entitlement_base_required: "Un abonnement commercial ou une attribution administrative est nécessaire pour créer une dérogation.",
 };
 
 export function AdministrationUsersTable({ users }: { users: PlatformUserSummary[] }) {
@@ -148,17 +148,33 @@ function CommercialSubscriptionSummary({ user }: { user: PlatformUserSummary }) 
 }
 function AdministrativeAssignmentSummary({ user, editingUserId, onEdit }: UserRowProps) {
   const assignment = user.entitlements?.administrativeAssignment;
-  const allowed = user.entitlements?.planAssignmentBlockCode === null;
+  const blockCode = user.entitlements?.planAssignmentBlockCode;
+  const allowed = blockCode === null && user.accountMode !== "collaborator";
   const disabled = editingUserId !== null && editingUserId !== user.id;
-  if (!assignment) return <div className="space-y-2"><MutedText>Aucune attribution</MutedText>{allowed && <EntitlementButton disabled={disabled} onClick={() => onEdit({ user, entityType: "plan", operation: "assign" })}>Attribuer</EntitlementButton>}</div>;
-  return <div className="space-y-2"><div className="space-y-1"><p className="font-bold">{planLabels[assignment.planKey]}</p><p>{billingLabels[assignment.billingPeriod]} · {formatAdministrativeCapacity(assignment.dossierCapacityKey)}</p><p className="text-[#64748B]">Attribution active</p></div>{allowed && <div className="flex flex-wrap gap-2"><EntitlementButton disabled={disabled} onClick={() => onEdit({ user, entityType: "plan", operation: "replace" })}>Modifier</EntitlementButton><EntitlementButton destructive disabled={disabled} onClick={() => onEdit({ user, entityType: "plan", operation: "revoke" })}>Révoquer</EntitlementButton></div>}</div>;
+  return <div className="space-y-2">
+    {assignment ? <div className="space-y-1"><p className="font-bold">{planLabels[assignment.planKey]}</p><p>{billingLabels[assignment.billingPeriod]} · {formatAdministrativeCapacity(assignment.dossierCapacityKey)}</p><p className="text-[#64748B]">Attribution active</p></div> : <MutedText>Aucune attribution</MutedText>}
+    <EntitlementBlockMessage user={user} blockCode={blockCode} />
+    {allowed && (assignment
+      ? <div className="flex flex-wrap gap-2"><EntitlementButton disabled={disabled} onClick={() => onEdit({ user, entityType: "plan", operation: "replace" })}>Modifier</EntitlementButton><EntitlementButton destructive disabled={disabled} onClick={() => onEdit({ user, entityType: "plan", operation: "revoke" })}>Révoquer</EntitlementButton></div>
+      : <EntitlementButton disabled={disabled} onClick={() => onEdit({ user, entityType: "plan", operation: "assign" })}>Attribuer</EntitlementButton>)}
+  </div>;
 }
 function AdministrativeOverrideSummary({ user, editingUserId, onEdit }: UserRowProps) {
   const entitlementOverride = user.entitlements?.administrativeOverride;
-  const allowed = user.entitlements?.entitlementOverrideBlockCode === null;
+  const blockCode = user.entitlements?.entitlementOverrideBlockCode;
+  const allowed = blockCode === null && user.accountMode !== "collaborator";
   const disabled = editingUserId !== null && editingUserId !== user.id;
-  if (!entitlementOverride) return <div className="space-y-2"><MutedText>Aucune dérogation</MutedText>{allowed && <EntitlementButton disabled={disabled} onClick={() => onEdit({ user, entityType: "override", operation: "assign" })}>Attribuer</EntitlementButton>}</div>;
-  return <div className="space-y-2"><div className="space-y-1"><p className="font-bold">Base {entitlementOverride.baseSource === "commercial" ? "commerciale" : "administrative"}</p>{entitlementOverride.featurePlanKey && <p>Fonctions : {planLabels[entitlementOverride.featurePlanKey]}</p>}{entitlementOverride.dossierCapacityKey && <p>Capacité : {formatAdministrativeCapacity(entitlementOverride.dossierCapacityKey)}</p>}</div>{allowed && <div className="flex flex-wrap gap-2"><EntitlementButton disabled={disabled} onClick={() => onEdit({ user, entityType: "override", operation: "replace" })}>Modifier</EntitlementButton><EntitlementButton destructive disabled={disabled} onClick={() => onEdit({ user, entityType: "override", operation: "revoke" })}>Révoquer</EntitlementButton></div>}</div>;
+  return <div className="space-y-2">
+    {entitlementOverride ? <div className="space-y-1"><p className="font-bold">Base {entitlementOverride.baseSource === "commercial" ? "commerciale" : "administrative"}</p>{entitlementOverride.featurePlanKey && <p>Fonctions : {planLabels[entitlementOverride.featurePlanKey]}</p>}{entitlementOverride.dossierCapacityKey && <p>Capacité : {formatAdministrativeCapacity(entitlementOverride.dossierCapacityKey)}</p>}</div> : <MutedText>Aucune dérogation</MutedText>}
+    <EntitlementBlockMessage user={user} blockCode={blockCode} />
+    {allowed && (entitlementOverride
+      ? <div className="flex flex-wrap gap-2"><EntitlementButton disabled={disabled} onClick={() => onEdit({ user, entityType: "override", operation: "replace" })}>Modifier</EntitlementButton><EntitlementButton destructive disabled={disabled} onClick={() => onEdit({ user, entityType: "override", operation: "revoke" })}>Révoquer</EntitlementButton></div>
+      : <EntitlementButton disabled={disabled} onClick={() => onEdit({ user, entityType: "override", operation: "assign" })}>Attribuer</EntitlementButton>)}
+  </div>;
+}
+function EntitlementBlockMessage({ user, blockCode }: { user: PlatformUserSummary; blockCode?: AdministrativeEntitlementBlockCode | null }) {
+  if (user.accountMode === "collaborator") return <MutedText>Non applicable aux comptes collaborateurs.</MutedText>;
+  return blockCode ? <p className="text-xs text-amber-800">{blockCodeLabels[blockCode]}</p> : null;
 }
 function EffectiveEntitlementsSummary({ user }: { user: PlatformUserSummary }) {
   if (user.isPlatformAdmin) return <div className="space-y-1"><p className="font-bold">Administration de la plateforme</p><p className="text-[#64748B]">Hors formule utilisateur</p></div>;
@@ -188,9 +204,7 @@ function DossierSummary({ user }: { user: PlatformUserSummary }) {
   return <p className="font-semibold">{user.ownedDossiers} <span className="font-normal text-[#64748B]">({user.activeOwnedDossiers} actif{user.activeOwnedDossiers === 1 ? "" : "s"})</span></p>;
 }
 function UserRowActions({ user }: { user: PlatformUserSummary }) {
-  const blockCode = user.entitlements?.planAssignmentBlockCode ?? user.entitlements?.entitlementOverrideBlockCode;
   return <div className="flex flex-col items-start gap-2">
-    {blockCode && <p className="max-w-64 text-xs text-amber-800">{blockCodeLabels[blockCode]}</p>}
     {user.canResendActivationEmail && <ResendActivationEmailButton userId={user.id} email={user.email} />}
     {user.canDelete ? <DeleteUserButton userId={user.id} name={getUserName(user)} email={user.email} /> : <div className="max-w-64 text-left"><p className="text-xs font-bold text-[#64748B]">Suppression indisponible</p><ul className="mt-1 list-disc pl-4 text-xs leading-5 text-[#64748B]">{user.deletionBlockReasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>}
   </div>;

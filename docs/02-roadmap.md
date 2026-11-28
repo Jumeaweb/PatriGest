@@ -231,6 +231,15 @@ Stabiliser l'application.
 
 Publication officielle de PatriGest Version 1.0.
 
+## PAT-SEC-SUPPRESSION-01 — Sécurisation SQL de la suppression des comptes utilisateurs
+
+Contrôle de sécurité à réaliser avant commercialisation. Étudier une défense SQL supplémentaire contre les suppressions accidentelles, compatible avec les purges légitimes.
+
+- Recenser les protections SQL, les cascades et les dépendances entre Auth et les données métier, notamment les partages détenus par les collaborateurs.
+- Distinguer la suppression administrative des purges automatiques autorisées et vérifier la compatibilité avec J60 et la purge après 12 mois de conservation.
+- Analyser la concurrence entre la création de dépendances et la suppression, puis définir les exigences de traçabilité.
+- Prévoir des tests de non-régression pour les refus, la concurrence, les purges légitimes et la conservation de l’audit.
+
 ---
 
 # Ã‰volutions futures

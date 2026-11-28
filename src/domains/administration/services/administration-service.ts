@@ -120,18 +120,42 @@ export async function reviewApplicationRegistration(userId: string, decision: "a
   }
 }
 
+function canResendActivationNotification(
+  user: Pick<User, "email" | "banned_until">,
+  authorization: { status: ApplicationUserAuthorizationStatus; account_mode: AccountMode | null } | null | undefined,
+  trialState: AccountTrialStateName | undefined,
+  isPlatformAdmin: boolean,
+) {
+  return authorization?.status === "active"
+    && authorization.account_mode === "autonomous"
+    && !isPlatformAdmin
+    && Boolean(user.email)
+    && (!user.banned_until || Date.parse(user.banned_until) <= Date.now())
+    && trialState !== undefined
+    && trialState !== "not_authorized"
+    && trialState !== "suspended"
+    && trialState !== "deletion_due";
+}
+
 export async function resendApplicationActivationEmail(userId: string) {
-  await requirePlatformAdministrator();
+  const { supabase } = await requirePlatformAdministrator();
   const admin = createAdminClient();
-  const [{ data: targetResult, error: targetError }, { data: authorization, error: authorizationError }, { data: profile, error: profileError }] = await Promise.all([
+  const [target, authorization, profile, administrator, trial] = await Promise.all([
     admin.auth.admin.getUserById(userId),
-    admin.from("application_user_authorizations").select("status").eq("user_id", userId).maybeSingle(),
+    admin.from("application_user_authorizations").select("status,account_mode").eq("user_id", userId).maybeSingle(),
     admin.from("profiles").select("first_name,last_name").eq("id", userId).maybeSingle(),
+    admin.from("platform_administrators").select("user_id").eq("user_id", userId).maybeSingle(),
+    supabase.rpc("list_administrative_account_trial_states", { p_user_ids: [userId] }),
   ]);
-  if (targetError || !targetResult.user || authorizationError || profileError) throw new Error("Compte utilisateur introuvable.");
-  if (authorization?.status !== "active") throw new Error("L’accès de ce compte n’est pas actif.");
-  if (!targetResult.user.email) throw new Error("Aucune adresse e-mail n’est disponible pour ce compte.");
-  await sendApplicationActivationEmail({ email: targetResult.user.email, firstName: profile?.first_name ?? "", lastName: profile?.last_name ?? "" });
+  if (target.error || !target.data.user || authorization.error || profile.error) throw new Error("Compte utilisateur introuvable.");
+  if (administrator.error || trial.error) throw new Error("Impossible de vérifier l’éligibilité à la notification.");
+  const user = target.data.user;
+  if (!user.email) throw new Error("Aucune adresse e-mail n’est disponible pour ce compte.");
+  const trialState = trial.data?.find((row) => row.user_id === userId)?.state;
+  if (!canResendActivationNotification(user, authorization.data, trialState, Boolean(administrator.data))) {
+    throw new Error("Le renvoi de la notification est réservé aux comptes autonomes actifs et non suspendus.");
+  }
+  await sendApplicationActivationEmail({ email: user.email, firstName: profile.data?.first_name ?? "", lastName: profile.data?.last_name ?? "" });
 }
 
 export type PlatformUserSummary = {
@@ -370,7 +394,7 @@ export async function getPlatformUsers(requestedPage = 1) {
       effectiveSharedAccess: isCollaborator && validEffectiveShares
         ? { total: effectiveShares.total_count, manager: effectiveShares.manager_count, readOnly: effectiveShares.read_only_count }
         : null,
-      canResendActivationEmail: authorization?.status === "active" && !administratorIds.has(user.id),
+      canResendActivationEmail: canResendActivationNotification(user, authorization, trial?.state, isPlatformAdmin),
       canDelete: reasons.size === 0,
       deletionBlockReasons: [...reasons],
     };

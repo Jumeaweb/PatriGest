@@ -87,9 +87,9 @@ export async function resendApplicationActivationEmailAction(_state: Registratio
   if (!parsed.success) return { status: "error", message: "Compte utilisateur invalide." };
   try {
     await resendApplicationActivationEmail(parsed.data.userId);
-    return { status: "success", message: "E-mail d’activation renvoyé." };
+    return { status: "success", message: "Notification d’activation renvoyée." };
   } catch (error) {
-    return { status: "error", message: error instanceof Error ? error.message : "Impossible de renvoyer l’e-mail d’activation." };
+    return { status: "error", message: error instanceof Error ? error.message : "Impossible de renvoyer la notification d’activation." };
   }
 }
 

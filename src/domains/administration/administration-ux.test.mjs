@@ -153,11 +153,12 @@ test("expose les motifs backend connus avant de proposer la suppression", () => 
 });
 
 test("confirme le renvoi d’activation et conserve seulement Fermer après réussite", () => {
-  assert.match(registrationActions, /Renvoyer l’e-mail d’activation \?/);
+  assert.match(registrationActions, /Renvoyer la notification d’activation<\/button>/);
+  assert.match(registrationActions, /Renvoyer la notification d’activation \?/);
   assert.match(registrationActions, /subject=\{email\}/);
   assert.match(registrationActions, /cancelLabel=\{succeeded \? "Fermer" : "Annuler"\}/);
   assert.match(registrationActions, /actions=\{succeeded \? null : <ResendSubmit/);
-  assert.match(service, /authorization\?\.status !== "active"/);
+  assert.match(service, /canResendActivationNotification\(user, authorization\.data, trialState, Boolean\(administrator\.data\)\)/);
 });
 
 test("déplace la communication de release sans toucher à ses règles", () => {
