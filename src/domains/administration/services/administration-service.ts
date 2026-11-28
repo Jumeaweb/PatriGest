@@ -12,7 +12,6 @@ import type {
   AdministrativeDossierCapacityKey,
   AdministrativeEntitlementBlockCode,
   ApplicationUserAuthorizationStatus,
-  SharedAccessRole,
   SubscriptionDossierCapacityKey,
   SubscriptionPlanKey,
 } from "@/types/database";
@@ -188,7 +187,8 @@ export type PlatformUserSummary = {
       dossierCapacityKey: Exclude<AdministrativeDossierCapacityKey, "included"> | null;
     } | null;
   } | null;
-  sharedAccesses: Array<{ protectedPersonId: string; protectedPersonName: string; role: SharedAccessRole }>;
+  sharedAccessCount: number | null;
+  effectiveSharedAccess: { total: number; manager: number; readOnly: number } | null;
   canResendActivationEmail: boolean;
   canDelete: boolean;
   deletionBlockReasons: string[];
@@ -208,7 +208,10 @@ export async function getPlatformUsers(requestedPage = 1) {
   const ids = users.map((user) => user.id);
   const emails = users.flatMap((user) => user.email ? [user.email.trim().toLowerCase()] : []);
   const now = new Date().toISOString();
-  const results = await Promise.all([
+  const [effectiveSharesResult, ...results] = await Promise.all([
+    ids.length
+      ? Promise.resolve(supabase.rpc("list_administrative_collaborator_access_counts", { p_user_ids: ids })).catch(() => ({ data: null, error: true }))
+      : Promise.resolve({ data: [], error: null }),
     ids.length ? admin.from("profiles").select("id,first_name,last_name").in("id", ids) : Promise.resolve({ data: [] }),
     ids.length ? admin.from("protected_persons").select("id,owner_id,status").in("owner_id", ids) : Promise.resolve({ data: [] }),
     ids.length ? admin.from("platform_administrators").select("user_id,appointed_by").in("user_id", ids) : Promise.resolve({ data: [] }),
@@ -217,7 +220,7 @@ export async function getPlatformUsers(requestedPage = 1) {
     ids.length ? supabase.rpc("list_administrative_account_trial_states", { p_user_ids: ids }) : Promise.resolve({ data: [] }),
     ids.length ? supabase.rpc("list_administrative_account_entitlement_states", { p_user_ids: ids }) : Promise.resolve({ data: [] }),
     ids.length ? supabase.from("account_subscriptions").select("id,owner_id,plan_key,dossier_capacity_key,custom_active_dossier_limit,status,current_period_started_at,current_period_ends_at,canceled_at").in("owner_id", ids).is("ended_at", null) : Promise.resolve({ data: [] }),
-    ids.length ? admin.from("protected_person_access").select("user_id,protected_person_id,role").in("user_id", ids) : Promise.resolve({ data: [] }),
+    ids.length ? admin.from("protected_person_access").select("user_id").in("user_id", ids) : Promise.resolve({ data: [] }),
     ids.length ? admin.from("protected_person_invitations").select("invited_by,email").in("invited_by", ids).is("accepted_at", null).is("revoked_at", null).gt("expires_at", now) : Promise.resolve({ data: [] }),
     emails.length ? admin.from("protected_person_invitations").select("invited_by,email").in("email", emails).is("accepted_at", null).is("revoked_at", null).gt("expires_at", now) : Promise.resolve({ data: [] }),
     ids.length ? admin.from("categories").select("owner_id").in("owner_id", ids) : Promise.resolve({ data: [] }),
@@ -238,11 +241,11 @@ export async function getPlatformUsers(requestedPage = 1) {
   const appointed = appointedResult.data ?? [];
   const authorizations = authorizationsResult.data ?? [];
   const accesses = accessesResult.data ?? [];
-  const protectedPersonIds = [...new Set(accesses.map((access) => access.protected_person_id))];
-  const personResult = protectedPersonIds.length
-    ? await admin.from("protected_persons").select("id,first_name,last_name").in("id", protectedPersonIds)
-    : { data: [], error: null };
-  if (personResult.error) throw new Error("Impossible de charger les accès partagés.");
+  const sharedAccessCounts = new Map<string, number>();
+  for (const access of accesses) sharedAccessCounts.set(access.user_id, (sharedAccessCounts.get(access.user_id) ?? 0) + 1);
+  const effectiveSharesByUserId = new Map(
+    (effectiveSharesResult.error ? [] : effectiveSharesResult.data ?? []).map((counts) => [counts.user_id, counts]),
+  );
 
   const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
   const counts = new Map<string, number>();
@@ -257,7 +260,6 @@ export async function getPlatformUsers(requestedPage = 1) {
   const trialByUserId = new Map((trialsResult.data ?? []).map((trial) => [trial.user_id, trial]));
   const entitlementByUserId = new Map((entitlementsResult.data ?? []).map((entitlement) => [entitlement.user_id, entitlement]));
   const subscriptionByOwnerId = new Map((subscriptionsResult.data ?? []).map((subscription) => [subscription.owner_id, subscription]));
-  const personById = new Map((personResult.data ?? []).map((person) => [person.id, person]));
   const activeInvitationUserIds = new Set((invitationsByUserResult.data ?? []).flatMap((invitation) => invitation.invited_by ? [invitation.invited_by] : []));
   const activeInvitationEmails = new Set((invitationsByEmailResult.data ?? []).map((invitation) => invitation.email.trim().toLowerCase()));
   const businessUserIds = new Set<string>();
@@ -274,20 +276,19 @@ export async function getPlatformUsers(requestedPage = 1) {
     const subscription = subscriptionByOwnerId.get(user.id);
     const entitlement = entitlementByUserId.get(user.id);
     const isPlatformAdmin = administratorIds.has(user.id);
-    const sharedAccesses = accesses.filter((access) => access.user_id === user.id).map((access) => {
-      const person = personById.get(access.protected_person_id);
-      return {
-        protectedPersonId: access.protected_person_id,
-        protectedPersonName: person ? `${person.first_name} ${person.last_name}`.trim() : "Dossier accessible",
-        role: access.role,
-      };
-    });
+    const isCollaborator = authorization?.account_mode === "collaborator";
+    const sharedAccessCount = sharedAccessCounts.get(user.id) ?? 0;
+    const effectiveShares = effectiveSharesByUserId.get(user.id);
+    const validEffectiveShares = effectiveShares
+      && [effectiveShares.total_count, effectiveShares.manager_count, effectiveShares.read_only_count]
+        .every((count) => Number.isSafeInteger(count) && count >= 0)
+      && effectiveShares.total_count === effectiveShares.manager_count + effectiveShares.read_only_count;
     const reasons = new Set<string>();
     if (user.id === currentUserId) reasons.add("Compte administrateur actuellement connecté");
     if (administratorIds.has(user.id)) reasons.add("Administrateur PatriGest");
     if (appointedByIds.has(user.id)) reasons.add("Relation d’administration conservée");
     if ((counts.get(user.id) ?? 0) > 0) reasons.add("Dossier possédé");
-    if (sharedAccesses.length > 0) reasons.add("Accès à un dossier partagé");
+    if (sharedAccessCount > 0) reasons.add("Accès à un dossier partagé");
     if (activeInvitationUserIds.has(user.id) || (user.email && activeInvitationEmails.has(user.email.trim().toLowerCase()))) reasons.add("Invitation de partage active");
     if (businessUserIds.has(user.id)) reasons.add("Données métier associées");
     return {
@@ -365,7 +366,10 @@ export async function getPlatformUsers(requestedPage = 1) {
             }
           : null,
       } : null,
-      sharedAccesses,
+      sharedAccessCount: isCollaborator ? null : sharedAccessCount,
+      effectiveSharedAccess: isCollaborator && validEffectiveShares
+        ? { total: effectiveShares.total_count, manager: effectiveShares.manager_count, readOnly: effectiveShares.read_only_count }
+        : null,
       canResendActivationEmail: authorization?.status === "active" && !administratorIds.has(user.id),
       canDelete: reasons.size === 0,
       deletionBlockReasons: [...reasons],

@@ -62,7 +62,8 @@ test("affiche uniquement des libellés français pour l’historique des inscrip
 
 test("affiche séparément les quatre catégories de droits et active seulement les droits administratifs", () => {
   assert.match(service, /select\("user_id,status,account_mode"\)/);
-  assert.match(service, /select\("user_id,protected_person_id,role"\)/);
+  assert.match(service, /rpc\("list_administrative_collaborator_access_counts", \{ p_user_ids: ids \}\)/);
+  assert.doesNotMatch(service, /select\("user_id,protected_person_id,role"\)/);
   assert.match(service, /select\("id,owner_id,plan_key,dossier_capacity_key,custom_active_dossier_limit,status,current_period_started_at,current_period_ends_at,canceled_at"\)/);
   assert.match(usersTable, />Utilisateur<\/th>/);
   for (const heading of ["Essai gratuit", "Abonnement commercial", "Attribution administrative", "Dérogation active", "Droits effectifs", "Accès partagés", "Dossiers", "Résiliation", "Actions"]) {

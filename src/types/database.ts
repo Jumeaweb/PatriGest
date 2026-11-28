@@ -490,6 +490,10 @@ export type Database = {
       complete_own_autonomous_trial_registration: { Args: Record<string, never>; Returns: undefined };
       get_current_account_trial_state: { Args: Record<string, never>; Returns: Array<{ state: AccountTrialStateName; terms_version: string | null; terms_accepted_at: string | null; started_at: string | null; ends_at: string | null; deletion_eligible_at: string | null; remaining_days: number; active_dossier_limit: number; active_dossier_count: number; enforcement_enabled: boolean }> };
       list_administrative_account_trial_states: { Args: { p_user_ids: string[] }; Returns: Array<{ user_id: string; state: AccountTrialStateName; started_at: string | null; ends_at: string | null; deletion_eligible_at: string | null }> };
+      list_administrative_collaborator_access_counts: {
+        Args: { p_user_ids: string[] };
+        Returns: Array<{ user_id: string; total_count: number; manager_count: number; read_only_count: number }>;
+      };
       list_administrative_account_entitlement_states: {
         Args: { p_user_ids: string[] };
         Returns: Array<{

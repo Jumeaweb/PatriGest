@@ -79,7 +79,7 @@ function DesktopUserRow({ user, editingUserId, onEdit }: UserRowProps) {
     <td className="border-l border-[#CBD5E1] px-3 py-2"><AdministrativeOverrideSummary user={user} editingUserId={editingUserId} onEdit={onEdit} /></td>
     <td className="border-l border-[#CBD5E1] px-3 py-2"><EffectiveEntitlementsSummary user={user} /></td>
     <td className="border-l border-[#CBD5E1] px-3 py-2"><DossierSummary user={user} /></td>
-    <td className="px-3 py-2 text-center"><InformativeCheckbox label={`Accès partagés existants pour ${getUserName(user)}`} checked={user.sharedAccesses.length > 0} /></td>
+    <td className="px-3 py-2 text-center"><SharedAccessSummary user={user} checkbox /></td>
     <td className="px-3 py-2">{user.subscription?.canceledAt ? formatDate(user.subscription.canceledAt) : "—"}</td>
     <td className="px-3 py-2"><UserRowActions user={user} /></td>
   </tr>;
@@ -95,7 +95,7 @@ function MobileUserCard({ user, editingUserId, onEdit }: UserRowProps) {
       <SummaryBlock title="Dérogation active"><AdministrativeOverrideSummary user={user} editingUserId={editingUserId} onEdit={onEdit} /></SummaryBlock>
       <SummaryBlock title="Droits effectifs"><EffectiveEntitlementsSummary user={user} /></SummaryBlock>
       <SummaryBlock title="Dossiers"><DossierSummary user={user} /></SummaryBlock>
-      <SummaryBlock title="Accès partagés"><span>{user.sharedAccesses.length > 0 ? `Oui — ${user.sharedAccesses.length}` : "Aucun"}</span></SummaryBlock>
+      <SummaryBlock title="Accès partagés"><SharedAccessSummary user={user} /></SummaryBlock>
       <SummaryBlock title="Date de résiliation"><span>{user.subscription?.canceledAt ? formatDate(user.subscription.canceledAt) : "—"}</span></SummaryBlock>
     </dl>
     <div className="mt-4 border-t border-[#E2E8F0] pt-4"><UserRowActions user={user} /></div>
@@ -109,12 +109,14 @@ function UserIdentity({ user }: { user: PlatformUserSummary }) {
   return <><p className="font-bold">{getUserName(user)}</p><p className="mt-0.5 break-all text-[#475569]">{user.email || "Adresse e-mail indisponible"}</p><p className="mt-0.5 text-[#64748B]">Inscription : {formatDate(user.createdAt)}</p></>;
 }
 function TrialSummary({ user }: { user: PlatformUserSummary }) {
+  if (user.accountMode === "collaborator") return <MutedText>Non applicable</MutedText>;
   const active = user.accountAccessKind === "trial_active";
   if (!user.trial) return <MutedText>Aucun essai enregistré</MutedText>;
   const label = user.accountAccessKind === "trial_expired" ? "Expiré" : active ? "En cours" : user.accountAccessKind === "legacy_access" ? "Accès historique" : user.accountAccessKind === "trial_pending" ? "Non démarré" : user.accountAccessKind === "commercial_subscription" ? "Terminé — abonnement actif" : "Aucun essai actif";
   return <div className="space-y-1"><p className="flex items-center gap-2 font-semibold"><InformativeCheckbox label={`Essai gratuit en cours pour ${getUserName(user)}`} checked={active} />{label}</p>{user.trial.endsAt && <p className="text-[#64748B]">Fin : {formatDate(user.trial.endsAt)}</p>}</div>;
 }
 function CommercialSubscriptionSummary({ user }: { user: PlatformUserSummary }) {
+  if (user.accountMode === "collaborator") return <MutedText>Non applicable</MutedText>;
   const subscription = user.subscription;
   if (!subscription?.planKey) return <MutedText>Aucun abonnement commercial</MutedText>;
   return <div className="space-y-1"><p className="font-bold">{planLabels[subscription.planKey]}</p><p>{formatCommercialCapacity(subscription.dossierCapacityKey, subscription.customActiveDossierLimit)}</p><p className="text-[#64748B]">{subscriptionStatusLabels[subscription.status]}</p></div>;
@@ -135,9 +137,27 @@ function AdministrativeOverrideSummary({ user, editingUserId, onEdit }: UserRowP
 }
 function EffectiveEntitlementsSummary({ user }: { user: PlatformUserSummary }) {
   if (user.isPlatformAdmin) return <div className="space-y-1"><p className="font-bold">Administration de la plateforme</p><p className="text-[#64748B]">Hors formule utilisateur</p></div>;
+  if (user.accountMode === "collaborator") {
+    const counts = user.effectiveSharedAccess;
+    return <div className="space-y-1">
+      <p className="font-bold">Accès partagés uniquement</p>
+      {counts ? <>
+        <p>{counts.total === 0 ? "Aucun dossier partagé" : counts.total === 1 ? "1 dossier partagé" : `${counts.total} dossiers partagés`}</p>
+        <p>Gestionnaire : {counts.manager}</p>
+        <p>Lecture seule : {counts.readOnly}</p>
+      </> : <MutedText>Compteurs des accès partagés indisponibles</MutedText>}
+    </div>;
+  }
   const entitlements = user.entitlements;
   if (!entitlements) return <MutedText>Droits indisponibles</MutedText>;
   return <div className="space-y-1"><p className="font-bold">{accessSourceLabels[entitlements.accessSource]}</p><p>{entitlements.effectivePlanKey ? planLabels[entitlements.effectivePlanKey] : "Aucune formule"}</p><p>{entitlements.effectiveActiveDossierLimit === null ? "Capacité non attribuée" : `${entitlements.effectiveActiveDossierLimit} dossiers actifs`}</p></div>;
+}
+function SharedAccessSummary({ user, checkbox = false }: { user: PlatformUserSummary; checkbox?: boolean }) {
+  const count = user.accountMode === "collaborator" ? user.effectiveSharedAccess?.total : user.sharedAccessCount;
+  if (count === undefined || count === null) return <MutedText>Indisponible</MutedText>;
+  return checkbox
+    ? <InformativeCheckbox label={`Accès partagés existants pour ${getUserName(user)}`} checked={count > 0} />
+    : <span>{count > 0 ? `Oui — ${count}` : "Aucun"}</span>;
 }
 function DossierSummary({ user }: { user: PlatformUserSummary }) {
   return <p className="font-semibold">{user.ownedDossiers} <span className="font-normal text-[#64748B]">({user.activeOwnedDossiers} actif{user.activeOwnedDossiers === 1 ? "" : "s"})</span></p>;
