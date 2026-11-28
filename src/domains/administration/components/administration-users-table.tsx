@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import type {
   AccountEntitlementAccessSource,
   AccountSubscriptionStatus,
@@ -37,31 +37,56 @@ const blockCodeLabels: Record<AdministrativeEntitlementBlockCode, string> = {
 export function AdministrationUsersTable({ users }: { users: PlatformUserSummary[] }) {
   const [editor, setEditor] = useState<EntitlementEditorRequest | null>(null);
   const editingUserId = editor?.user.id ?? null;
+  const scrollRegionId = useId();
+  const scrollRegion = useRef<HTMLDivElement>(null);
+
+  function scrollColumns(direction: -1 | 1) {
+    const region = scrollRegion.current;
+    if (region) region.scrollBy({ left: direction * region.clientWidth * 0.6 });
+  }
+
   return <>
     <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/60 px-4 py-3 text-sm leading-6 text-blue-950">
       <p className="font-semibold">Gestion des droits administratifs</p>
       <p>Les abonnements commerciaux et les essais restent en lecture seule. Les attributions et dérogations sont modifiables un compte à la fois, avec confirmation et motif audité.</p>
     </div>
-    <div className="mt-4 hidden overflow-x-auto rounded-xl border border-[#E2E8F0] bg-white pb-1 [scrollbar-color:#94A3B8_#E2E8F0] [scrollbar-width:auto] lg:block" tabIndex={0} aria-label="Tableau des comptes utilisateurs, défilement horizontal disponible">
-      <table className="min-w-[1770px] table-fixed text-left text-xs">
-        <colgroup>
-          <col className="w-[230px]" /><col className="w-[185px]" /><col className="w-[145px]" />
-          <col className="w-[190px]" /><col className="w-[205px]" /><col className="w-[205px]" /><col className="w-[205px]" />
-          <col className="w-[115px]" /><col className="w-[100px]" /><col className="w-[115px]" /><col className="w-[230px]" />
-        </colgroup>
-        <thead className="bg-slate-50 text-[#475569]"><tr className="border-b border-[#CBD5E1]">
-          <th scope="col" className="sticky left-0 z-30 bg-slate-50 px-3 py-2 font-bold shadow-[4px_0_6px_-5px_rgba(15,23,42,0.55)]">Utilisateur</th>
-          <th scope="col" className="px-3 py-2 font-bold">Statut</th><th scope="col" className="px-3 py-2 font-bold">Essai gratuit</th>
-          <th scope="col" className="border-l border-[#CBD5E1] px-3 py-2 font-bold">Abonnement commercial</th>
-          <th scope="col" className="border-l border-[#CBD5E1] px-3 py-2 font-bold">Attribution administrative</th>
-          <th scope="col" className="border-l border-[#CBD5E1] px-3 py-2 font-bold">Dérogation active</th>
-          <th scope="col" className="border-l border-[#CBD5E1] px-3 py-2 font-bold">Droits effectifs</th>
-          <th scope="col" className="border-l border-[#CBD5E1] px-3 py-2 font-bold">Dossiers</th>
-          <th scope="col" className="px-3 py-2 text-center font-bold">Accès partagés</th><th scope="col" className="px-3 py-2 font-bold">Résiliation</th>
-          <th scope="col" className="px-3 py-2 font-bold">Actions</th>
-        </tr></thead>
-        <tbody>{users.map((user) => <DesktopUserRow key={user.id} user={user} editingUserId={editingUserId} onEdit={setEditor} />)}</tbody>
-      </table>
+    <div className="mt-4 hidden w-full min-w-0 max-w-full lg:block">
+      <div className="mb-2 flex justify-end gap-2" role="group" aria-label="Défilement des colonnes">
+        <button type="button" className="button button-secondary" aria-controls={scrollRegionId} onClick={() => scrollColumns(-1)}>
+          <span aria-hidden="true">←</span> Colonnes précédentes
+        </button>
+        <button type="button" className="button button-secondary" aria-controls={scrollRegionId} onClick={() => scrollColumns(1)}>
+          Colonnes suivantes <span aria-hidden="true">→</span>
+        </button>
+      </div>
+      <div
+        id={scrollRegionId}
+        ref={scrollRegion}
+        className="max-h-[min(65dvh,42rem)] overflow-auto overscroll-x-contain scroll-pl-[230px] rounded-xl border border-[#E2E8F0] bg-white [scrollbar-color:#94A3B8_#E2E8F0] [scrollbar-width:auto] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-accent"
+        tabIndex={0}
+        role="region"
+        aria-label="Tableau des comptes utilisateurs"
+      >
+        <table className="min-w-[1770px] table-fixed text-left text-xs">
+          <colgroup>
+            <col className="w-[230px]" /><col className="w-[185px]" /><col className="w-[145px]" />
+            <col className="w-[190px]" /><col className="w-[205px]" /><col className="w-[205px]" /><col className="w-[205px]" />
+            <col className="w-[115px]" /><col className="w-[100px]" /><col className="w-[115px]" /><col className="w-[230px]" />
+          </colgroup>
+          <thead className="sticky top-0 z-20 bg-slate-50 text-[#475569]"><tr className="border-b border-[#CBD5E1]">
+            <th scope="col" className="sticky left-0 z-30 bg-slate-50 px-3 py-2 font-bold shadow-[4px_0_6px_-5px_rgba(15,23,42,0.55)]">Utilisateur</th>
+            <th scope="col" className="px-3 py-2 font-bold">Statut</th><th scope="col" className="px-3 py-2 font-bold">Essai gratuit</th>
+            <th scope="col" className="border-l border-[#CBD5E1] px-3 py-2 font-bold">Abonnement commercial</th>
+            <th scope="col" className="border-l border-[#CBD5E1] px-3 py-2 font-bold">Attribution administrative</th>
+            <th scope="col" className="border-l border-[#CBD5E1] px-3 py-2 font-bold">Dérogation active</th>
+            <th scope="col" className="border-l border-[#CBD5E1] px-3 py-2 font-bold">Droits effectifs</th>
+            <th scope="col" className="border-l border-[#CBD5E1] px-3 py-2 font-bold">Dossiers</th>
+            <th scope="col" className="px-3 py-2 text-center font-bold">Accès partagés</th><th scope="col" className="px-3 py-2 font-bold">Résiliation</th>
+            <th scope="col" className="px-3 py-2 font-bold">Actions</th>
+          </tr></thead>
+          <tbody>{users.map((user) => <DesktopUserRow key={user.id} user={user} editingUserId={editingUserId} onEdit={setEditor} />)}</tbody>
+        </table>
+      </div>
     </div>
     <div className="mt-4 grid gap-4 lg:hidden">{users.map((user) => <MobileUserCard key={user.id} user={user} editingUserId={editingUserId} onEdit={setEditor} />)}</div>
     {editor && <AdministrationUserEntitlementEditor key={`${editor.user.id}-${editor.entityType}-${editor.operation}`} request={editor} onClose={() => setEditor(null)} />}

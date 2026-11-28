@@ -70,8 +70,10 @@ test("affiche séparément les quatre catégories de droits et active seulement 
     assert.ok(usersTable.includes(heading), `${heading} doit rester visible`);
   }
   assert.match(usersPage, /<AdministrationUsersTable users=\{result\.users\}/);
-  assert.match(usersTable, /overflow-x-auto/);
-  assert.equal(usersTable.match(/overflow-x-auto/g)?.length, 1);
+  assert.match(usersTable, /max-h-\[min\(65dvh,42rem\)\] overflow-auto/);
+  assert.equal(usersTable.match(/overflow-auto/g)?.length, 1);
+  assert.equal(usersTable.match(/aria-controls=\{scrollRegionId\}/g)?.length, 2);
+  assert.match(usersTable, /tabIndex=\{0\}\s+role="region"\s+aria-label="Tableau des comptes utilisateurs"/);
   assert.match(usersTable, /\[scrollbar-color:#94A3B8_#E2E8F0\]/);
   assert.match(usersTable, /sticky left-0 z-30 bg-slate-50/);
   assert.match(usersTable, /sticky left-0 z-10 bg-white/);
