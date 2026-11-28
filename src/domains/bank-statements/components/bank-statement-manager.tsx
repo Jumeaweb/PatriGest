@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Download, ExternalLink, FileClock, FilePenLine, FilePlus2, FileX2, History, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
@@ -68,7 +68,7 @@ function DocumentCorrectionDialog({ endpoint, item, open, close }: { endpoint: s
   const [busy, setBusy] = useState(false), [loading, setLoading] = useState(true), [message, setMessage] = useState(""), [success, setSuccess] = useState(false), [revision, setRevision] = useState<number | null>(null), [confirmed, setConfirmed] = useState(false);
   const requestId = useRef(crypto.randomUUID());
   const fileInput = useRef<HTMLInputElement>(null);
-  const formId = `statement-correction-${item.id}`;
+  const formId = useId();
   useEffect(() => {
     if (!open) return;
     fetch(`${endpoint}/versions`, { cache: "no-store" }).then(async (response) => {
@@ -112,7 +112,9 @@ function DocumentHistoryDialog({ endpoint, open, close }: { endpoint: string; op
 }
 
 function StatementDialog({ personId, accountId, item, open, close }: { personId: string; accountId: string; item?: BankStatement; open: boolean; close: () => void }) {
-  const router = useRouter(); const [busy, setBusy] = useState(false), [message, setMessage] = useState(""); const input = useRef<HTMLInputElement>(null); const clientRequestId = useRef<string | null>(null); const formId = `statement-${item?.id ?? "new"}`; const endpoint = item ? `/api/dossiers/${personId}/comptes/${accountId}/releves/${item.id}` : `/api/dossiers/${personId}/comptes/${accountId}/releves`;
+  const router = useRouter(); const [busy, setBusy] = useState(false), [message, setMessage] = useState(""); const input = useRef<HTMLInputElement>(null); const clientRequestId = useRef<string | null>(null); const endpoint = item ? `/api/dossiers/${personId}/comptes/${accountId}/releves/${item.id}` : `/api/dossiers/${personId}/comptes/${accountId}/releves`;
+  // The desktop row and mobile card are both mounted for each statement.
+  const formId = useId();
   async function submit(form: FormData) { setBusy(true); setMessage(""); if (!item) { clientRequestId.current ??= crypto.randomUUID(); form.set("clientRequestId", clientRequestId.current); } try { const response = await fetch(endpoint, { method: "POST", body: form }); const result = await response.json() as { message?: string }; if (!response.ok) throw new Error(result.message || "Impossible d’enregistrer le relevé."); if (input.current) input.current.value = ""; clientRequestId.current = null; close(); router.refresh(); } catch (error) { setMessage(error instanceof Error ? error.message : "Impossible d’enregistrer le relevé."); } finally { setBusy(false); } }
   return <AppConfirmDialog open={open} onClose={close} title={item ? "Modifier le relevé" : "Ajouter un relevé"} description={item ? "Modifiez les informations ou choisissez un PDF pour ajouter ou remplacer le document." : "Renseignez le relevé et ajoutez éventuellement son PDF."} actions={<button className="button button-primary" type="submit" form={formId} disabled={busy}>{busy ? "Enregistrement…" : "Enregistrer"}</button>}><form id={formId} action={submit} className="grid gap-3 sm:grid-cols-2"><Field name="statementStartDate" label="Date de début (facultative)" type="date" value={item?.statement_start_date} /><Field name="statementEndDate" label="Date de fin" type="date" value={item?.statement_end_date} required /><Field name="statementBalance" label="Solde final (facultatif)" type="number" value={item?.statement_balance} /><Field name="note" label="Note (facultative)" value={item?.note} /><label className="sm:col-span-2"><span className="auth-label">Fichier PDF (facultatif)</span><input ref={input} className="block max-w-full text-xs file:mr-2 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:font-semibold" name="file" type="file" accept="application/pdf" /></label>{message && <p role="alert" className="sm:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{message}</p>}</form></AppConfirmDialog>;
 }
